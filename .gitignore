@@ -1,0 +1,106 @@
+# ==========================================
+# TOGG HEALTH MVP - GITIGNORE
+# Public Repository Privacy & Cleanliness
+# ==========================================
+
+# Environment & Secrets (CRITICAL FOR PUBLIC REPO)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+!*.env.example
+*.pem
+*.key
+*.cert
+*.crt
+secrets.json
+credentials.json
+token.json
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+jspm_packages/
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.nyc_output
+coverage/
+
+# Next.js & Frontend Build Outputs
+.next/
+out/
+.turbo/
+.vercel
+
+# Databases & Local Storage (Privacy - No personal health data)
+*.sqlite
+*.sqlite3
+*.db
+local_storage/
+data/sessions/
+data/cache/
+
+# Temporary Media & Sensor Data (Camera frames, audio recordings)
+captures/
+recordings/
+temp_audio/
+temp_frames/
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.mp4
+*.raw
+
+# Operating System & IDE
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
