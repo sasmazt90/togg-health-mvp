@@ -29,9 +29,9 @@ export default function RootLayout({
               <div className="flex items-center gap-4 text-[11px] text-slate-500">
                 <span>Acil Çağrı: 112</span>
                 <span>•</span>
-                <span>Sağlık Danışma: 182</span>
+                <span>MHRS Randevu: 182</span>
                 <span>•</span>
-                <span>Lisans: MIT & Apache-2.0</span>
+                <span>Gizlilik Öncelikli (Local-First)</span>
               </div>
             </div>
           </footer>

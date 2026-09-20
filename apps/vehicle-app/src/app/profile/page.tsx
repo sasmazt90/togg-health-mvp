@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useVehicle } from '../../context/VehicleContext';
 import { mockInitialHealthProfile } from '@packages/health-profile/mockData';
 import {
@@ -53,6 +54,13 @@ export default function ProfilePage() {
             <FileText className="w-4 h-4" />
             <span>Hekimle Paylaşılabilir Özet</span>
           </button>
+          <Link
+            href="/privacy"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-semibold transition-all min-h-touch"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Gizlilik & İzinleri Yönet</span>
+          </Link>
         </div>
       </div>
 
@@ -64,14 +72,11 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center gap-4 text-slate-400 text-[11px]">
           <span className="flex items-center gap-1 text-emerald-400">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Kamera İzni Verildi
+            <CheckCircle2 className="w-3.5 h-3.5" /> Sıfır Ham Veri Saklama
           </span>
-          <span className="flex items-center gap-1 text-emerald-400">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Mikrofon İzni Verildi
-          </span>
-          <span className="flex items-center gap-1 text-emerald-400">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Sağlık Geçmişi Korunuyor
-          </span>
+          <Link href="/privacy" className="text-cyan-400 hover:underline">
+            Ayarları Değiştir →
+          </Link>
         </div>
       </div>
 

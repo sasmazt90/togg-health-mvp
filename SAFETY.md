@@ -68,12 +68,13 @@ Kullanıcının son seanslarında stres, yoğun kaygı, uyku problemleri gibi te
 
 ### 3.3. Acil Durum ve Kriz Protokolü
 Asistan; kendine zarar verme, intihar düşüncesi veya akut şiddet belirten anahtar ifadeler tespit ettiğinde standart sohbeti derhal durdurur ve acil destek yönlendirmesi yapar:
-> *"Söyledikleriniz benim için çok önemli ve şu an zor bir an yaşadığınızı anlıyorum. Ancak ben bir acil durum veya sağlık servisi değilim. Lütfen hemen profesyonel destek hatlarıyla iletişime geçin:*
+> *"Söyledikleriniz benim için çok önemli ve şu an zor bir an yaşadığınızı anlıyorum. Ancak ben bir acil durum veya sağlık servisi değilim. Lütfen güvende kalmak için hemen 112 Acil Çağrı Merkezi ile iletişime geçin:*
 > - *Acil Çağrı Merkezi: **112***
-> - *Sağlık Bakanlığı Danışma Hattı: **182***
-> - *Psikososyal Destek Hattı*"
 
----
+> [!IMPORTANT]
+> **Kriz Hattı ve 182 Ayrımı:**
+> - ALO 182 bir kriz danışma hattı **değildir**; Sağlık Bakanlığı MHRS randevu sistemidir. Bu nedenle kriz mesajlarında asla 182 veya doğrulanmamış hayali hat isimleri kullanılmaz. 182 yalnızca kriz dışı, rutin hekim randevusu planlama aşamasında listelenebilir.
+> - **Araç Hareket Halindeyken Kriz:** Sürücüden ekrana bakması kesinlikle istenmez. Asistan sesli olarak sürücüye aracını güvenli bir yerde durdurmasını ve derhal 112'yi aramasını tavsiye eder.
 
 ## 4. Otonom Randevu Asistanı Sınırları & Açık Onay Kapısı
 

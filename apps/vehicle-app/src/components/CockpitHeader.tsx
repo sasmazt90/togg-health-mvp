@@ -30,6 +30,7 @@ export const CockpitHeader: React.FC = () => {
     { href: '/mental', label: 'Ruhsal İyi Oluş', icon: HeartPulse },
     { href: '/care', label: 'Uzman & Randevu', icon: CalendarCheck },
     { href: '/profile', label: 'Sağlık Geçmişim', icon: User },
+    { href: '/privacy', label: 'Gizlilik & İzinler', icon: ShieldCheck },
   ];
 
   return (

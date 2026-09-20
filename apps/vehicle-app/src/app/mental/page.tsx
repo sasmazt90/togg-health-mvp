@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useVehicle } from '../../context/VehicleContext';
 import {
   HeartPulse,
   Mic,
   MicOff,
   Volume2,
+  VolumeX,
   TrendingUp,
   AlertCircle,
   ShieldCheck,
@@ -15,7 +17,10 @@ import {
   Clock,
   Sparkles,
   ArrowRight,
-  PhoneCall
+  PhoneCall,
+  Info,
+  CheckCircle2,
+  MessageSquare
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -23,12 +28,39 @@ interface ChatMessage {
   text: string;
   time: string;
   isCrisis?: boolean;
+  providerBadge?: string;
+}
+
+interface MentalSessionItem {
+  sessionId: string;
+  date: string;
+  durationSeconds: number;
+  moodBefore: string;
+  moodAfter: string;
+  recurringThemes: string[];
+  summaryText: string;
+  clinicalEscalationSuggested: boolean;
 }
 
 export default function MentalPage() {
+  const router = useRouter();
   const { isParked, state } = useVehicle();
+
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [speechSupported, setSpeechSupported] = useState<boolean>(true);
+  const [voiceSpeechEnabled, setVoiceSpeechEnabled] = useState<boolean>(true);
   const [inputText, setInputText] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [providerInfo, setProviderInfo] = useState<{
+    providerName: string;
+    isLiveLLM: boolean;
+    apiKeyConfigured: boolean;
+  }>({
+    providerName: 'Yerel Kural Motoru (Demo)',
+    isLiveLLM: false,
+    apiKeyConfigured: false
+  });
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       sender: 'AI',
@@ -39,7 +71,128 @@ export default function MentalPage() {
     }
   ]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  const [sessionHistory, setSessionHistory] = useState<MentalSessionItem[]>([
+    {
+      sessionId: 'men-001',
+      date: '2026-09-14T08:30:00Z',
+      durationSeconds: 240,
+      moodBefore: 'STRESSED',
+      moodAfter: 'FOCUSED',
+      recurringThemes: ['iş yoğunluğu', 'toplantı trafiği'],
+      summaryText: 'Sabah trafiğinde yoğun iş temposu üzerine konuşuldu. Kısa odaklanma desteği sağlandı.',
+      clinicalEscalationSuggested: false
+    },
+    {
+      sessionId: 'men-002',
+      date: '2026-09-19T19:10:00Z',
+      durationSeconds: 380,
+      moodBefore: 'TIRED',
+      moodAfter: 'TIRED',
+      recurringThemes: ['uyku düzensizliği', 'süregelen yorgunluk', 'stres'],
+      summaryText: 'Son 4 seans boyunca uyku kalitesi ve kronikleşen yorgunluk hissi tekrar eden ortak tema olarak öne çıktı.',
+      clinicalEscalationSuggested: true
+    }
+  ]);
+
+  const recognitionRef = useRef<any>(null);
+  const chatBottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Sağlayıcı durumunu sorgula
+  useEffect(() => {
+    fetch('http://localhost:8000/api/mental/provider-status')
+      .then((res) => res.json())
+      .then((data) => {
+        setProviderInfo({
+          providerName: data.providerName || 'Yerel Kural Motoru (Demo)',
+          isLiveLLM: data.isLiveLLM || false,
+          apiKeyConfigured: data.apiKeyConfigured || false
+        });
+      })
+      .catch(() => {
+        // Çevrimdışı fallback
+        setProviderInfo({
+          providerName: 'Yerel Kural Motoru (Demo - API Key Yok)',
+          isLiveLLM: false,
+          apiKeyConfigured: false
+        });
+      });
+  }, []);
+
+  // Web Speech API başlatma
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'tr-TR';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          if (transcript) {
+            handleSendMessage(transcript);
+          }
+          setIsListening(false);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.warn('Speech recognition error:', event.error);
+          setIsListening(false);
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recognition;
+      } else {
+        setSpeechSupported(false);
+      }
+    }
+  }, []);
+
+  // Sohbet kaydırma
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Sesli okuma (SpeechSynthesis)
+  const speakReply = (text: string) => {
+    if (!voiceSpeechEnabled || typeof window === 'undefined') return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'tr-TR';
+      utterance.rate = 0.95;
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Speech synthesis error:', e);
+    }
+  };
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert('Tarayıcınızda Web Speech API desteklenmiyor veya mikrofon izni verilmedi. Metin alanından yazabilirsiniz.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        window.speechSynthesis?.cancel();
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        console.warn(e);
+        setIsListening(false);
+      }
+    }
+  };
+
+  const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text) return;
 
@@ -51,55 +204,133 @@ export default function MentalPage() {
 
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
+    setIsProcessing(true);
 
-    // Kriz filtresi
+    // Kriz filtresi (Yerel hızlı kontrol)
     const lower = text.toLowerCase();
-    if (lower.includes('intihar') || lower.includes('kendime zarar') || lower.includes('ölmek istiyorum')) {
+    const isCrisisKeyword = ['intihar', 'ölmek istiyorum', 'kendime zarar', 'yaşamak istemiyorum', 'canıma kıymak'].some((kw) =>
+      lower.includes(kw)
+    );
+
+    if (isCrisisKeyword) {
       setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: 'AI',
-            text: 'Söyledikleriniz benim için çok önemli ve şu an çok zor bir andan geçtiğinizi anlıyorum. Ancak ben acil bir sağlık servisi değilim. Lütfen şu an güvende kalmak için hemen 112 Acil Çağrı veya 182 Danışma Hattı ile görüşün. Yalnız değilsiniz.',
-            time: 'Şimdi',
-            isCrisis: true
-          }
-        ]);
-      }, 600);
+        let crisisText = '';
+        if (!isParked) {
+          crisisText =
+            'Söyledikleriniz benim için çok önemli ve zor bir andan geçtiğinizi anlıyorum. Ancak ben acil durum servisi değilim. Lütfen ekrana bakmayın. Mümkün olduğunda aracınızı hemen güvenli bir yerde durdurun ve 112 Acil Çağrı Merkezini arayın. Yalnız değilsiniz.';
+        } else {
+          crisisText =
+            'Söyledikleriniz benim için çok önemli ve şu an çok zor bir süreçten geçtiğinizi anlıyorum. Ancak ben bir acil durum veya sağlık servisi değilim. Lütfen şu an güvende kalmak için gecikmeden 112 Acil Çağrı Merkezi ile iletişime geçin. Yalnız değilsiniz, profesyonel uzmanlar size yardımcı olmak için hazır.';
+        }
+
+        const crisisMsg: ChatMessage = {
+          sender: 'AI',
+          text: crisisText,
+          time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+          isCrisis: true,
+          providerBadge: 'Kriz Güvenlik Filtresi'
+        };
+
+        setMessages((prev) => [...prev, crisisMsg]);
+        setIsProcessing(false);
+        speakReply(crisisText);
+      }, 300);
       return;
     }
 
-    // Sürüş vs. Park yanıt mantığı
-    setTimeout(() => {
-      let reply = '';
-      if (!isParked) {
-        reply = 'Sizi dinliyorum. Şu an araç hareket halinde olduğu için dikkatinizi yoldan ayırmamanız çok önemli. Derin bir nefes alın. İsterseniz bu konunun ayrıntılarını araç güvenle park edildiğinde konuşalım.';
+    // Backend FastAPI converse endpoint'ine gönder
+    try {
+      const response = await fetch('http://localhost:8000/api/mental/converse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userMessage: text,
+          history: messages.map((m) => ({
+            role: m.sender === 'AI' ? 'assistant' : 'user',
+            content: m.text
+          }))
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const aiMsg: ChatMessage = {
+          sender: 'AI',
+          text: data.reply,
+          time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+          isCrisis: data.isCrisis,
+          providerBadge: data.providerType === 'LIVE_OPENAI' ? 'OpenAI Canlı' : 'Yerel Kural Motoru (Demo)'
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+        speakReply(data.reply);
       } else {
-        reply = 'Paylaştığınız için teşekkürler. Son 4 seansımızda uyku düzensizliği ve yoğun tempo konularının tekrar ettiğini görüyorum. Kendinize bugün biraz dinlenme alanı yaratmak ve isterseniz bir uzman klinik psikologla bu süreci değerlendirmek faydalı olabilir. Randevu seçeneklerini incelemek ister misiniz?';
+        throw new Error('API yanıt vermedi');
+      }
+    } catch (err) {
+      // Çevrimdışı kural tabanlı fallback
+      let fallbackReply = '';
+      if (!isParked) {
+        fallbackReply =
+          'Sizi dinliyorum. Şu an araç hareket halinde olduğu için dikkatinizi yoldan ayırmamanız önemli. Derin bir nefes alabilirsiniz. İsterseniz bu konuyu araç güvenle park edildiğinde daha ayrıntılı konuşabiliriz.';
+      } else {
+        fallbackReply =
+          'Paylaştığınız için teşekkürler. Son görüşmelerimizde de uyku düzensizliği ve yoğun tempo öne çıkmıştı. Kendinize bugün biraz dinlenme alanı yaratmak ve isterseniz bir uzman klinik psikologla görüşmek faydalı olabilir.';
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: 'AI',
-          text: reply,
-          time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    }, 1000);
+      const aiMsg: ChatMessage = {
+        sender: 'AI',
+        text: fallbackReply,
+        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+        providerBadge: 'Yerel Motor (Offline Fallback)'
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+      speakReply(fallbackReply);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleVoiceToggle = () => {
-    if (!isListening) {
-      setIsListening(true);
-      // Simüle sesli girdi
-      setTimeout(() => {
-        setIsListening(false);
-        handleSendMessage('Bugün yoğun bir gündü, son günlerde geceleri rahat uyuyamıyorum.');
-      }, 3000);
-    } else {
-      setIsListening(false);
+  // Seansı tamamlama ve hafızaya kaydetme
+  const handleFinishSession = () => {
+    const summary = 'Kullanıcı ile günlük stres ve uyku dengesi üzerine konuşuldu.';
+    const newSession: MentalSessionItem = {
+      sessionId: `men-${Date.now()}`,
+      date: new Date().toISOString(),
+      durationSeconds: 180,
+      moodBefore: 'TIRED',
+      moodAfter: 'RELAXED',
+      recurringThemes: ['uyku kalitesi', 'iş stresi'],
+      summaryText: summary,
+      clinicalEscalationSuggested: true
+    };
+
+    setSessionHistory((prev) => [newSession, ...prev]);
+
+    try {
+      localStorage.setItem('togg_health_latest_mental', JSON.stringify(newSession));
+    } catch (e) {
+      console.warn(e);
     }
+  };
+
+  // Care Agent'a sevk aktarımı
+  const handleNavigateToCare = () => {
+    const referralContext = {
+      sourceModule: 'MENTAL',
+      specialty: 'Klinik Psikoloji',
+      reasonSummary:
+        'Son seanslarda uyku düzensizliği ve süregelen iş stresi temaları tekrar ettiği için bir klinik psikolog ile görüşme önerildi.',
+      timestamp: new Date().toISOString(),
+      metricsSummary: {
+        recurringThemes: ['uyku düzensizliği (%75)', 'süregelen iş stresi (%60)']
+      }
+    };
+    try {
+      localStorage.setItem('togg_active_referral_context', JSON.stringify(referralContext));
+    } catch (e) {
+      console.warn(e);
+    }
+    router.push('/care?specialty=Klinik%20Psikoloji&from=mental');
   };
 
   return (
@@ -113,12 +344,24 @@ export default function MentalPage() {
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-white">Ruhsal İyi Oluş & Sesli Sohbet Asistanı</h1>
             <p className="text-xs text-slate-400">
-              Oturum hafızası, eğilim analizi ve sürüş durumuna duyarlı sesli diyalog
+              Web Speech API ses tanıma/okuma, oturum hafızası ve sürüş duyarlı diyalog motoru
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* AI Sağlayıcı Durum Rozeti */}
+          <span
+            className={`text-xs px-2.5 py-1 rounded-lg border font-mono ${
+              providerInfo.isLiveLLM
+                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700'
+                : 'bg-amber-950/60 text-amber-300 border-amber-700'
+            }`}
+          >
+            {providerInfo.isLiveLLM ? 'AI: OpenAI Canlı' : 'AI: Yerel / Demo (API Key Yok)'}
+          </span>
+
+          {/* Sürüş Modu Rozeti */}
           <span
             className={`text-xs px-3 py-1.5 rounded-lg border font-medium ${
               isParked
@@ -126,14 +369,14 @@ export default function MentalPage() {
                 : 'bg-amber-950/60 text-amber-300 border-amber-800 animate-pulse'
             }`}
           >
-            {isParked ? 'Park Modu: Derinlemesine Sohbet & Analiz' : 'Sürüş Modu: Ses Odaklı / Kısa Yanıtlar'}
+            {isParked ? 'Park Modu: Derin Sohbet' : 'Sürüş Modu: Ses Odaklı / Kısa'}
           </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Sol 2 Kolon: Sesli Sohbet Arayüzü */}
-        <div className="lg:col-span-2 bg-cockpit-surface border border-cockpit-border rounded-2xl flex flex-col h-[560px] shadow-xl overflow-hidden">
+        <div className="lg:col-span-2 bg-cockpit-surface border border-cockpit-border rounded-2xl flex flex-col h-[580px] shadow-xl overflow-hidden">
           {/* Sohbet Mesaj Alanı */}
           <div className="flex-1 p-6 overflow-y-auto space-y-4">
             {messages.map((m, idx) => {
@@ -147,11 +390,16 @@ export default function MentalPage() {
                     <span>{isAi ? 'Togg Sağlık Asistanı' : state.driverName}</span>
                     <span>•</span>
                     <span>{m.time}</span>
+                    {m.providerBadge && (
+                      <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded">
+                        {m.providerBadge}
+                      </span>
+                    )}
                   </div>
                   <div
                     className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed ${
                       m.isCrisis
-                        ? 'bg-red-950/80 border border-red-700 text-red-100'
+                        ? 'bg-red-950/90 border border-red-700 text-red-100 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
                         : isAi
                         ? 'bg-slate-900 border border-slate-800 text-slate-200'
                         : 'bg-indigo-600 text-white'
@@ -162,42 +410,66 @@ export default function MentalPage() {
                 </div>
               );
             })}
+            {isProcessing && (
+              <div className="flex items-center gap-2 text-xs text-slate-400 italic">
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+                Asistan düşünüyor...
+              </div>
+            )}
+            <div ref={chatBottomRef} />
           </div>
 
           {/* Alt Sesli Kontrol ve Girdi Alanı */}
           <div className="p-4 border-t border-cockpit-border/80 bg-slate-950/70 space-y-3">
             <div className="flex items-center justify-between">
               <button
-                onClick={handleVoiceToggle}
+                onClick={toggleListening}
                 className={`flex items-center gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all min-h-touch ${
                   isListening
-                    ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_20px_rgba(244,63,94,0.4)]'
+                    ? 'bg-rose-500 text-white animate-pulse shadow-[0_0_20px_rgba(244,63,94,0.5)]'
                     : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg'
                 }`}
               >
                 {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                <span>{isListening ? 'Dinleniyor... (Konuşun)' : 'Mikrofonu Başlat'}</span>
+                <span>{isListening ? 'Dinleniyor... (Şimdi Konuşun)' : 'Mikrofonu Başlat (Web Speech)'}</span>
               </button>
 
-              <div className="flex items-center gap-2 text-xs text-slate-400">
-                <Volume2 className="w-4 h-4 text-indigo-400" />
-                <span>Sesli Yanıtlama Açık</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setVoiceSpeechEnabled((prev) => !prev)}
+                  className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                    voiceSpeechEnabled
+                      ? 'bg-indigo-950/60 text-indigo-300 border-indigo-700'
+                      : 'bg-slate-900 text-slate-400 border-slate-800'
+                  }`}
+                  title="Asistanın sesli okuma özelliğini açıp kapatın"
+                >
+                  {voiceSpeechEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  <span>{voiceSpeechEnabled ? 'Sesli Yanıt Açık' : 'Sessiz'}</span>
+                </button>
+
+                <button
+                  onClick={handleFinishSession}
+                  className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800"
+                >
+                  Seansı Tamamla & Kaydet
+                </button>
               </div>
             </div>
 
-            {/* Metin Test Girdisi (Park Halinde) */}
+            {/* Metin Test Girdisi */}
             <div className="flex gap-2">
               <input
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Mesajınızı yazın veya yukarıdaki mikrofonu kullanın..."
+                placeholder="Konuşmak için mikrofonu kullanın veya mesajınızı yazın..."
                 className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
               <button
                 onClick={() => handleSendMessage()}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold"
+                className="px-5 py-2.5 bg-indigo-700 hover:bg-indigo-600 text-white rounded-xl text-xs font-semibold"
               >
                 Gönder
               </button>
@@ -216,11 +488,11 @@ export default function MentalPage() {
 
             <div className="space-y-2 text-xs">
               <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                <div className="text-slate-400">Tekrar Eden Temalar (Son 4 Seans):</div>
-                <div className="text-indigo-300 font-semibold mt-1">
-                  • Uyku düzensizliği (%75)<br />
-                  • Süregelen iş stresi (%60)<br />
-                  • Yoğun zihinsel tempo
+                <div className="text-slate-400">Tekrar Eden Temalar (Son Seanslar):</div>
+                <div className="text-indigo-300 font-semibold mt-1 space-y-0.5">
+                  <div>• Uyku düzensizliği (%75)</div>
+                  <div>• Süregelen iş stresi (%60)</div>
+                  <div>• Yoğun zihinsel tempo</div>
                 </div>
               </div>
 
@@ -238,27 +510,30 @@ export default function MentalPage() {
                 <strong>Uzman Tavsiyesi:</strong> Tekrar eden temalar dikkate alındığında, bir klinik psikolog ile online veya yüz yüze görüşmeniz faydalı olabilir.
               </div>
 
-              <Link
-                href="/care?specialty=Klinik%20Psikoloji"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-xs transition-all shadow"
+              <button
+                onClick={handleNavigateToCare}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white font-semibold text-xs transition-all shadow cursor-pointer"
               >
-                <span>Uzman Psikolog Bul (Care Agent)</span>
+                <span>Uzman Psikologları İncele (Care Agent)</span>
                 <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              </button>
             </div>
           </div>
 
-          {/* Acil Kriz Bilgilendirme */}
+          {/* Acil Kriz Bilgilendirme - ALO 182 KESİNLİKLE KRİZDEN ÇIKARILDI */}
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-2">
             <div className="flex items-center gap-1.5 text-slate-300 font-semibold">
               <ShieldCheck className="w-4 h-4 text-slate-500" />
               <span>Ruhsal Güvenlik Politikası</span>
             </div>
             <p>
-              Asistan bir psikolog, terapist veya psikiyatrist değildir. Klinik teşhis veya tıbbi tedavi uygulamaz. Yalnızca konuşma ve iyi oluş desteği sunar.
+              Asistan bir psikolog, terapist veya doktor değildir. Klinik teşhis veya tıbbi tedavi uygulamaz. Yalnızca iyi oluş ve sohbet desteği sunar.
             </p>
-            <div className="text-slate-500 pt-1 border-t border-slate-800">
-              Acil durum hatları: <strong>112 (Acil)</strong> • <strong>182 (MHRS)</strong>
+            <div className="text-slate-400 pt-2 border-t border-slate-800">
+              Akut Tehlike / Kriz Hattı: <strong className="text-rose-400">112 Acil Çağrı</strong>
+              <div className="text-[10px] text-slate-500 mt-1">
+                (182 yalnızca hekim randevusu / MHRS için geçerlidir; acil kriz desteği değildir).
+              </div>
             </div>
           </div>
         </div>

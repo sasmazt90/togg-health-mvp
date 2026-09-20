@@ -86,6 +86,14 @@ export interface AppointmentSlot {
   bookingUrl?: string;
 }
 
+export interface ReferralContext {
+  sourceModule: 'VISION' | 'SKIN' | 'MENTAL';
+  reasonSummary: string;
+  specialty: 'Dermatoloji' | 'Göz Hastalıkları' | 'Klinik Psikoloji' | string;
+  timestamp: string;
+  metricsSummary?: Record<string, any>;
+}
+
 export interface HealthProfile {
   user: UserProfile;
   visionHistory: VisionRecord[];
@@ -94,3 +102,4 @@ export interface HealthProfile {
   activeReferrals: AppointmentSlot[];
   lastUpdated: string;
 }
+

@@ -45,7 +45,7 @@ def test_mental_assistant_crisis_guard():
     data = response.json()
     assert data["isCrisis"] is True
     assert "112" in data["reply"]
-    assert "182" in data["reply"]
+    assert "182" not in data["reply"]
 
 def test_care_appointment_matching():
     response = client.post("/api/care/match", json={"specialty": "Dermatoloji"})

@@ -33,7 +33,7 @@ Sistem bir sağlık profesyonelinin veya teşhis cihazının yerine geçmez. Tü
   - $a^*$ ekseni: Kırmızı-yeşil renk dengesi (eritem ve kızarıklık indikatörü).
   - $L^*$ ekseni: Parlaklık ve pigmentasyon kontrastı.
   - $\nabla^2 I$ (Laplacian): Cilt yüzeyi doku pürüzlülüğü ve gözenek varyansı.
-- **Eşik Değeri:** Baz çizgiye göre $\%20$ üzeri bölgesel sapmalar "Görsel Değişim" olarak işaretlenir.
+- **Eşik Değeri:** Baz çizgiye göre yapılandırılabilir (varsayılan $\%20$) bölgesel sapmalar tıbbi tanı değil, "Görsel Değişim Eğilimi" olarak işaretlenir.
 
 ---
 
@@ -41,4 +41,4 @@ Sistem bir sağlık profesyonelinin veya teşhis cihazının yerine geçmez. Tü
 
 - **Ruhsal Sohbet:** Sistem bilişsel-davranışçı yaklaşım (CBT) prensiplerini empatik ve nötr bir dinleyici olarak uygular; psikoterapi uygulamaz.
 - **Eskalasyon Eşiği:** Son 3 veya daha fazla seansta kronik uyku bozukluğu, yoğun stres veya duygusal tükenmişlik teması kaydedilirse profesyonel destek (klinik psikolog) önerilir.
-- **Acil Durum (Kriz):** İntihar, kendine zarar verme veya şiddet ifadesi tespit edildiği anda sohbet kesilir ve **112 Acil Çağrı** ile **182 Danışma Hattı** yönlendirmesi ekranda gösterilir.
+- **Acil Durum (Kriz):** İntihar, kendine zarar verme veya şiddet ifadesi tespit edildiği anda sohbet kesilir ve doğrudan **112 Acil Çağrı Merkezi** yönlendirmesi yapılır. (182 bir kriz hattı olmayıp MHRS hekim randevu sistemidir, kriz desteğinde kullanılmaz). Araç hareket halindeyse sürücünün ekrana bakmaması, güvenle durup 112'yi araması tavsiye edilir.

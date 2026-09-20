@@ -73,6 +73,7 @@ out/
 local_storage/
 data/sessions/
 data/cache/
+services/core-api/data/
 
 # Temporary Media & Sensor Data (Camera frames, audio recordings)
 captures/

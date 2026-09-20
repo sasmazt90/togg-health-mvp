@@ -1,6 +1,7 @@
 """
 Togg Health MVP - Core API (FastAPI)
 Yerel önleyici sağlık ve araç bağlamı orkestrasyon servisi.
+Lisans: UNLICENSED
 """
 
 from fastapi import FastAPI, HTTPException
@@ -8,6 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import os
+
+from mental_provider import get_active_mental_provider, check_mental_crisis
+from session_memory import SessionMemoryManager
+from care_provider import BrowserCareSearchProvider, DemoCareSearchProvider, CalendarProvider, TravelTimeProvider
 
 app = FastAPI(
     title="Togg Health MVP Core API",
@@ -67,7 +73,7 @@ profile_state = {
         "lastScanDate": "2026-09-17T18:40:00Z",
         "highestChangeRegion": "Sağ Yanak",
         "changePct": 24,
-        "baselineDiffNote": "Önceki taramanıza kıyasla sağ yanak bölgesinde kızarıklık ve doku görünümünde %24 belirgin değişim gözlendi.",
+        "baselineDiffNote": "Önceki ölçümünüze göre sağ yanak bölgesinde belirgin bir görsel değişim gözlendi. İsterseniz bir dermatologla görüşmek için uygun seçenekleri bulabilirim.",
         "referralSuggested": True
     },
     "mentalSummary": {
@@ -88,11 +94,22 @@ class SpeedUpdatePayload(BaseModel):
 class ConversePayload(BaseModel):
     userMessage: str
     sessionId: Optional[str] = None
+    history: Optional[List[Dict[str, str]]] = None
+
+class CreateSessionPayload(BaseModel):
+    summaryText: str
+    recurringThemes: List[str]
+    durationSeconds: Optional[int] = 180
+    moodBefore: Optional[str] = "TIRED"
+    moodAfter: Optional[str] = "RELAXED"
+    escalationSuggested: Optional[bool] = False
+    suggestedAction: Optional[str] = None
 
 class AppointmentMatchPayload(BaseModel):
     specialty: str
     preferredCity: Optional[str] = "İstanbul"
     maxTravelTimeMin: Optional[int] = 30
+    useBrowserAgent: Optional[bool] = True
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -104,12 +121,17 @@ def read_root():
         "service": "Togg Health MVP Core API",
         "status": "OPERATIONAL",
         "language": "tr-TR",
-        "clinicalSafety": "Non-diagnostic trend monitoring"
+        "clinicalSafety": "Non-diagnostic trend monitoring",
+        "version": "0.2.0-faz2"
     }
 
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+# ---------------------------------------------------------------------------
+# Vehicle State
+# ---------------------------------------------------------------------------
 
 @app.get("/api/vehicle/state")
 def get_vehicle_state():
@@ -147,83 +169,122 @@ def set_vehicle_speed(payload: SpeedUpdatePayload):
 def get_profile():
     return profile_state
 
+# ---------------------------------------------------------------------------
+# Mental Wellbeing Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/mental/provider-status")
+def get_mental_provider_status():
+    provider = get_active_mental_provider()
+    return {
+        "providerName": provider.get_provider_name(),
+        "isLiveLLM": provider.is_live_llm(),
+        "apiKeyConfigured": bool(os.getenv("OPENAI_API_KEY"))
+    }
+
 @app.post("/api/mental/converse")
 def converse_mental_assistant(payload: ConversePayload):
-    msg = payload.userMessage.strip().lower()
-    
-    # Crisis Guard
-    crisis_terms = ["intihar", "ölmek istiyorum", "kendime zarar", "yaşamak istemiyorum"]
-    for term in crisis_terms:
-        if term in msg:
-            return {
-                "reply": "Söyledikleriniz benim için çok önemli ve zor bir andan geçtiğinizi anlıyorum. Ancak ben acil durum servisi değilim. Lütfen şu an 112 Acil Çağrı veya 182 Danışma Hattı ile iletişime geçin. Yalnız değilsiniz.",
-                "isCrisis": True,
-                "drivingModeResponse": True
-            }
-            
-    # Driving mode constraint check
     is_driving = vehicle_state["vehicleMoving"]
-    if is_driving:
+    user_msg = payload.userMessage.strip()
+
+    # 1. Kriz Güvenlik Filtresi (Deterministik + Sürüş duyarlı)
+    crisis_check = check_mental_crisis(user_msg, is_driving)
+    if crisis_check.get("isCrisis"):
         return {
-            "reply": "Sizi dinliyorum. Şu an araç hareket halinde olduğu için dikkatinizi yoldan ayırmamanız önemli. Derin bir nefes alabilirsiniz. İsterseniz bu konuyu araç güvenle park edildiğinde daha ayrıntılı konuşabiliriz.",
-            "isDriving": True,
-            "escalationSuggested": False
+            "reply": crisis_check["reply"],
+            "isCrisis": True,
+            "drivingModeResponse": is_driving,
+            "providerType": "CRISIS_SAFETY_GUARD"
         }
-    
-    return {
-        "reply": "Paylaştığınız için teşekkür ederim. Gün içindeki tempo ve dinlenme ihtiyacı birbiriyle çok bağlantılı. Bu durum son birkaç görüşmemizde de öne çıkmıştı. Kendinize bugün biraz dinlenme alanı yaratmak ister misiniz?",
-        "isDriving": False,
-        "escalationSuggested": True,
-        "suggestedAction": "Bir klinik psikologla görüşmeniz faydalı olabilir."
-    }
+
+    # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
+    provider = get_active_mental_provider()
+    history = payload.history or []
+    driver_name = vehicle_state.get("driverName", "Ahmet Bey")
+
+    result = provider.generate_reply(
+        user_message=user_msg,
+        is_driving=is_driving,
+        history=history,
+        driver_name=driver_name
+    )
+
+    return result
+
+@app.get("/api/mental/sessions")
+def get_mental_sessions():
+    return SessionMemoryManager.get_all_sessions()
+
+@app.post("/api/mental/sessions")
+def record_mental_session(payload: CreateSessionPayload):
+    return SessionMemoryManager.add_session(
+        summary_text=payload.summaryText,
+        recurring_themes=payload.recurringThemes,
+        duration_seconds=payload.durationSeconds or 180,
+        mood_before=payload.moodBefore or "TIRED",
+        mood_after=payload.moodAfter or "RELAXED",
+        escalation_suggested=payload.escalationSuggested or False,
+        suggested_action=payload.suggestedAction
+    )
+
+# ---------------------------------------------------------------------------
+# Care Agent Endpoints (Playwright Browser + Calendar Collision + Travel)
+# ---------------------------------------------------------------------------
+
+calendar_provider = CalendarProvider()
 
 @app.post("/api/care/match")
 def match_appointments(payload: AppointmentMatchPayload):
-    """
-    Kullanıcı takvimi ve araç tahmini ulaşım süresine göre filtrelenmiş demo randevu listesi.
-    """
     specialty = payload.specialty
-    travel_time = vehicle_state["estimatedTravelTimeToDestMin"]
-    
-    options = [
-        {
-            "id": "slot-001",
-            "specialty": specialty,
-            "providerName": "Doç. Dr. Selin Kaya",
-            "title": f"{specialty} Uzmanı",
-            "clinicName": "Acıbadem Altunizade Hastanesi",
-            "locationLabel": "Altunizade (Araçla 14 dk)",
-            "dateTime": "Yarın 18:20",
-            "travelTimeMin": 14,
-            "calendarFits": True,
-            "matchScore": 96,
-            "bookingStatus": "AVAILABLE"
-        },
-        {
-            "id": "slot-002",
-            "specialty": specialty,
-            "providerName": "Prof. Dr. Emre Demir",
-            "title": f"{specialty} ve Danışman Hekim",
-            "clinicName": "Dünyagöz Etiler",
-            "locationLabel": "Etiler (Araçla 22 dk)",
-            "dateTime": "Çarşamba 17:45",
-            "travelTimeMin": 22,
-            "calendarFits": True,
-            "matchScore": 91,
-            "bookingStatus": "AVAILABLE"
-        },
-        {
-            "id": "slot-003",
-            "specialty": specialty,
-            "providerName": "Uzm. Psk. Zeynep Arslan",
-            "title": f"{specialty} Danışmanı",
-            "clinicName": "Online Görüşme",
-            "locationLabel": "Online / Araç İçi Ekran",
-            "dateTime": "Çarşamba 20:00",
-            "travelTimeMin": 0,
-            "calendarFits": True,
-            "matchScore": 95,
-            "bookingStatus": "AVAILABLE"
-        }
-    ]
-    return {"specialty": specialty, "matchedSlots": options, "currentTravelBufferMin": travel_time}
+    city = payload.preferredCity or "İstanbul"
+
+    # Browser Agent veya Demo Arama
+    if payload.useBrowserAgent:
+        provider = BrowserCareSearchProvider()
+    else:
+        provider = DemoCareSearchProvider()
+
+    search_result = provider.search_slots(specialty=specialty, city=city)
+    slots = search_result.get("slots", [])
+
+    # Her slot için gerçek takvim çakışması ve ulaşım süresi hesabı
+    processed_slots = []
+    for slot in slots:
+        date_time_str = slot.get("dateTime", "")
+        has_conflict = calendar_provider.has_conflict(date_time_str)
+
+        travel_info = TravelTimeProvider.calculate_travel_time_min(slot.get("locationLabel", ""))
+
+        processed_slots.append({
+            **slot,
+            "calendarConflict": has_conflict,
+            "calendarFits": not has_conflict,
+            "travelTimeMin": travel_info["estimatedMinutes"],
+            "trafficBadge": travel_info["trafficBadge"],
+            "matchScore": 95 if not has_conflict else 70
+        })
+
+    return {
+        "status": search_result.get("status", "SUCCESS"),
+        "specialty": specialty,
+        "city": city,
+        "providerType": search_result.get("providerType"),
+        "sourceBadge": search_result.get("sourceBadge"),
+        "handoffNote": search_result.get("handoffNote"),
+        "liveSearchUrl": search_result.get("liveSearchUrl"),
+        "matchedSlots": processed_slots,
+        "currentTravelBufferMin": vehicle_state["estimatedTravelTimeToDestMin"]
+    }
+
+# ---------------------------------------------------------------------------
+# Privacy & Data Deletion
+# ---------------------------------------------------------------------------
+
+@app.post("/api/privacy/wipe")
+def wipe_user_health_data():
+    SessionMemoryManager.clear_all()
+    return {
+        "status": "SUCCESS",
+        "message": "Tüm yerel sağlık verisi, geçmiş seans kayıtları ve önbellekler başarıyla silindi.",
+        "timestamp": datetime.utcnow().isoformat()
+    }

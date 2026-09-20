@@ -2,7 +2,7 @@
 
 > **Togg Akıllı Cihazları İçin Bütünleşik, Yapay Zekâ Destekli Önleyici Sağlık ve İyi Oluş Platformu**
 
-[![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-blue.svg)](LICENSES.md)
+[![Lisans: UNLICENSED](https://img.shields.io/badge/Lisans-UNLICENSED-red.svg)](#)
 [![Arayüz: Türkçe](https://img.shields.io/badge/Dil-T%C3%BCrk%C3%A7e-red.svg)](#)
 [![Mimari: Monorepo](https://img.shields.io/badge/Mimari-Next.js%20%2B%20FastAPI-emerald.svg)](#)
 [![Güvenlik: Non--Diagnostic](https://img.shields.io/badge/Klinik%20G%C3%BCvenlik-Tan%C4%B1%20Koymaz-orange.svg)](SAFETY.md)
@@ -60,7 +60,7 @@ Togg'un halihazırda dijital sağlık alanında ruh hali analizi, ses analizi, n
 * **Frontend:** Next.js 14+ (App Router), React, TypeScript, Tailwind CSS. Otomotiv standartlarına uygun geniş yatay ekran tasarımı, koyu tema, yüksek kontrast, büyük dokunma alanları.
 * **Backend:** Python 3.11, FastAPI, Pydantic, SQLite (local-first, sıfır harici bulut bağımlılığı).
 * **Araç Bağlamı (Vehicle Context):** `VehicleContextProvider` ve `MockVehicleProvider` arayüzü sayesinde gerçek Togg API'leri gelmeden sürüş/park modu eksiksiz simüle edilir.
-* **Açık Kaynak Lisans İzolasyonu:** FrACT GPL olduğu için kod kopyalanmamış, formülleri sıfırdan MIT olarak yazılmıştır. MediaPipe ve Playwright ise ticari kullanıma uygun Apache-2.0 lisanslıdır.
+* **Açık Kaynak Lisans İzolasyonu:** FrACT GPL olduğu için kod kopyalanmamış; uluslararası kamu malı optometri formülleri temel alınarak motor sıfırdan özgün olarak yazılmıştır. MediaPipe ve Playwright ise ticari kullanıma uygun Apache-2.0 lisanslıdır. Proje kodlarımız UNLICENSED (özel mülkiyet) olarak korunmaktadır.
 
 ---
 

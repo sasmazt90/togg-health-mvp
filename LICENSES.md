@@ -2,7 +2,8 @@
 
 Bu belge, **Togg Health MVP** projesinde kullanılan, referans alınan veya ilerleyen aşamalarda entegre edilmesi planlanan tüm kütüphane, model, veri seti ve araçların lisans durumlarını ve ticari uygunluk değerlendirmelerini içerir.
 
-Bu proje kamusal (public) bir GitHub reposunda yayınlandığı ve Togg ekosistemi için ticari ticarileştirilebilir bir ürün hedeflediği için katı bir lisans politikası uygulanmaktadır.
+> [!IMPORTANT]
+> **Proje Kodlarımızın Lisans Durumu:** Bu reponun public olması kodun açık kaynak/MIT lisanslı olduğu anlamına gelmez. `togg-health-mvp` ürün ve uygulama kodları **UNLICENSED (Telif Hakkı Saklıdır / Özel Mülkiyet)** statüsündedir. Bu belge, yalnızca kullandığımız üçüncü taraf dependency/model/dataset lisanslarının uyumluluğunu şeffaf biçimde belgelemektedir. Third-party kütüphanelerin MIT/Apache-2.0 olması, ürün kodumuzun MIT olduğu anlamına gelmez.
 
 ---
 
@@ -37,7 +38,7 @@ Bu proje kamusal (public) bir GitHub reposunda yayınlandığı ve Togg ekosiste
 ### 3.1. FrACT (Freiburg Vision Test) ve Görme Metodolojisi İncelemesi
 * **Durum:** Freiburg Visual Acuity & Contrast Test (FrACT), görme keskinliği araştırmalarında saygın bir altın standarttır. Ancak yazılımı **GNU GPL** lisanslıdır.
 * **Karar ve Çözüm:** **FrACT kaynak kodundan tek bir satır dahi bu projeye kopyalanmamıştır.**
-* **Mimarimiz:** Kamu malı (public domain) olan uluslararası optometri formülleri ($MAR = \frac{d}{D}$, $5 \text{ arcmin} = 1.0 \text{ Snellen / 0.0 LogMAR}$), Pelli-Robson kontrast basamakları ve psikofiziksel merdiven (adaptive staircase / best-PEST) algoritması **sıfırdan MIT lisansı altında özgün olarak yazılmıştır**.
+* **Mimarimiz:** Kamu malı (public domain) olan uluslararası optometri formülleri ($MAR = \frac{d}{D}$, $5 \text{ arcmin} = 1.0 \text{ Snellen / 0.0 LogMAR}$), Pelli-Robson kontrast basamakları ve psikofiziksel merdiven (adaptive staircase / best-PEST) algoritması **tamamen bağımsız ve özgün bir mimariyle sıfırdan yazılmıştır**.
 
 ### 3.2. Cilt Analizi Veri Setleri ve Yüz Bölütleme (Face Segmentation)
 * **Risk:** Birçok akademik yüz bölütleme modeli (ör. CelebAMask-HQ tabanlı ağlar) yalnızca gayri ticari (CC-BY-NC) araştırma amaçlı yayınlanmıştır. Bu modellerin ticari araç yazılımına dahil edilmesi yasal risk yaratır.

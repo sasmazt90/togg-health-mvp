@@ -7,20 +7,32 @@ Yasal ve klinik olarak açıklanabilir renk uzayı (CIELAB) ve doku analizleri i
 
 from typing import Dict, Any
 
+DEFAULT_DEMO_CHANGE_THRESHOLD = 20.0  # Konfigüre edilebilir görsel değişim/trend eşiği (% olarak)
+
 class SkinRegionAnalyzer:
     @staticmethod
     def calculate_redness_index(r: float, g: float, b: float) -> float:
         """
         Deterministik kızarıklık indeksi: 2R - G - B (normalize 0-100 aralığında).
+        Bu metrik tanısal bir eritem derecesi değil, piksel renk kanalı trend proxy'sidir.
         """
         raw_val = (2.0 * r) - g - b
         normalized = max(0.0, min(100.0, (raw_val / 255.0) * 100.0))
         return round(normalized, 2)
 
     @staticmethod
-    def compare_against_baseline(current_metrics: Dict[str, float], baseline_metrics: Dict[str, float]) -> Dict[str, Any]:
+    def compare_against_baseline(
+        current_metrics: Dict[str, float],
+        baseline_metrics: Dict[str, float],
+        change_threshold: float = DEFAULT_DEMO_CHANGE_THRESHOLD
+    ) -> Dict[str, Any]:
         """
         Baz çizgi ile yeni ölçüm arasındaki bölgesel yüzdesel değişimi hesaplar.
+        
+        ÖNEMLİ NOT:
+        Buradaki change_threshold (varsayılan %20) klinik olarak valide edilmiş bir
+        tıbbi tanı eşiği (medical decision rule) DEĞİLDİR. Bu bir MVP eğilim/demo
+        eşiğidir ve konfigüre edilebilir yapıdadır.
         """
         deltas = {}
         highest_change_region = ""
@@ -37,15 +49,17 @@ class SkinRegionAnalyzer:
                 max_delta = pct
                 highest_change_region = region
 
-        referral_needed = abs(max_delta) >= 20.0 # %20 üzeri belirgin görsel değişim
+        # Konfigüre edilebilir demo/trend eşik kontrolü
+        referral_needed = abs(max_delta) >= change_threshold
         return {
             "deltas": deltas,
             "highestChangeRegion": highest_change_region,
             "highestChangePct": max_delta,
             "referralRecommended": referral_needed,
+            "thresholdUsed": change_threshold,
             "clinicalNote": (
-                f"Önceki taramanıza göre {highest_change_region} bölgesinde görsel değişim gözlendi."
+                f"Önceki ölçümünüze göre {highest_change_region} bölgesinde belirgin bir görsel değişim gözlendi. İsterseniz bir dermatologla görüşmek için uygun seçenekleri bulabilirim."
                 if referral_needed
-                else "Bölgesel ölçümler baz çizgi referans bandında seyretmektedir."
+                else "Bölgesel görsel ölçümler baz çizgi referans bandında seyretmektedir."
             )
         }

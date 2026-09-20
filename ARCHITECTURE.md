@@ -97,7 +97,7 @@ togg-health-mvp/
 
 ## 4. Araç Bağlamı Soyutlama Katmanı (Vehicle Context)
 
-Togg'un donanım API'leri gelecekte doğrudan tak-çalıştır bağlanabilecek şekilde `IVehicleProvider` arayüzü ile soyutlanmıştır:
+Togg'un gelecekteki resmi araç yazılımı API'leri doğrudan tak-çalıştır bağlanabilecek şekilde `IVehicleProvider` / `VehicleDataProvider` arayüzü ile soyutlanmıştır (*Doğrudan fiziksel CAN-bus erişimi varsayılmaz, resmi Togg yazılım köprüleri hedeflenir*):
 
 ```typescript
 export interface VehicleState {
@@ -116,12 +116,13 @@ export interface VehicleState {
 }
 ```
 
-MVP'de bu arayüzü `MockVehicleProvider` doldurur ve geliştirici arayüzdeki durum çubuğundan aracı tek tıkla "Park Modu (0 km/s)" veya "Sürüş Modu (85 km/s)" konumuna alabilir.
+MVP'de bu arayüzü `MockVehicleProvider` doldurur ve geliştirici arayüzdeki durum çubuğundan aracı tek tıkla "Park Modu (0 km/s)" veya "Sürüş Modu (75 km/s)" konumuna alabilir.
 
 ---
 
-## 5. Gizlilik ve Veri Güvenliği (Privacy-by-Design)
+## 5. Gizlilik ve Veri Güvenliği (Privacy-by-Design & /privacy Ekranı)
 
-- Ham yüz görüntüleri veya mikrofon ses dalgaları sunucu diskine kalıcı olarak kaydedilmez; analiz tamamlandıktan sonra bellekten silinir.
-- Tüm sağlık geçmişi ve seans özetleri yerel SQLite veritabanında kullanıcının cihazında saklanır (local-first).
-- Kamusal depoya hiçbir gerçek kullanıcı verisi veya API sırrı dahil edilmez.
+- **Sıfır Ham Veri İlkesi:** Ham yüz görüntüleri, video kareleri veya mikrofon ses dalgaları sunucu diskine veya yerel depolamaya kalıcı olarak kaydedilmez; analiz tamamlandıktan hemen sonra bellekten silinir.
+- **Yerel Depolama (Local-First):** Tüm sayısal sağlık eğilimleri ve seans özetleri yerel tarayıcı depolamasında ve yerel SQLite servisinde tutulur.
+- **Gizlilik Yönetim Ekranı (`/privacy`):** Kamera/mikrofon donanım izinlerinin durumu, mental özet saklama tercihi, kayıt istatistikleri ve tek tıkla "Tüm Yerel Veriyi Sil (Geçmişimi Sıfırla)" fonksiyonu kullanıcı denetimine sunulmuştur.
+- Kamusal depoya hiçbir kullanıcı verisi veya API anahtarı dahil edilmez. Kod tabanımız UNLICENSED statüsündedir.
