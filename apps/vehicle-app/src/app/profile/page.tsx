@@ -205,7 +205,7 @@ export default function ProfilePage() {
 
               <div>
                 <strong className="text-emerald-400 font-sans">2. Cilt Bölgesel Değişimi:</strong><br />
-                Sağ yanakta CIELAB a* kırmızılık ve Laplacian doku varyansında baz çizgiye göre +%24 artış kaydedilmiştir.
+                Sağ yanakta kırmızılık indeksi (2R - G - B) ve doku varyansında referans taramaya göre +%24 artış kaydedilmiştir.
               </div>
 
               <div>

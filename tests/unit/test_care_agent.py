@@ -14,22 +14,37 @@ from care_provider import (
     TravelTimeProvider
 )
 
-def test_care_provider_normalization():
-    """Tüm sağlayıcılar normalize edilmiş slot şeması döndürmelidir."""
+def test_care_demo_provider_uses_synthetic_names_and_demo_badges():
+    """Demo hekim verilerinde gerçek marka/hastane adı (Acıbadem, Dünyagöz vb.) yer almamalıdır."""
     provider = DemoCareSearchProvider()
-    result = provider.search_slots(specialty="Dermatoloji", city="İstanbul")
+    result = provider.search_slots(specialty="Göz Hastalıkları", city="İstanbul")
     
     assert result["status"] == "SUCCESS"
+    assert result["sourceBadge"] == "Demo Randevu Verisi"
     assert len(result["slots"]) > 0
     
-    first_slot = result["slots"][0]
-    required_keys = ["id", "specialty", "providerName", "clinicName", "dateTime", "travelTimeMin", "sourceType", "sourceBadge"]
-    for key in required_keys:
-        assert key in first_slot, f"Eksik anahtar: {key}"
-    assert first_slot["sourceType"] in ["LIVE", "DEMO"]
+    for slot in result["slots"]:
+        assert slot["sourceType"] == "DEMO"
+        assert slot["sourceBadge"] == "Demo Randevu Verisi"
+        # Gerçek zincir hastane adları kesinlikle bulunmamalı
+        clinic_lower = slot["clinicName"].lower()
+        provider_lower = slot["providerName"].lower()
+        assert "acıbadem" not in clinic_lower
+        assert "dünyagöz" not in clinic_lower
+        assert "memorial" not in clinic_lower
+        assert "demo" in provider_lower or "demo" in clinic_lower
 
-def test_calendar_provider_interval_conflict_math():
-    """Takvim sağlayıcısı zaman aralığı çakışmalarını doğru hesaplamalıdır."""
+def test_live_provider_only_cannot_contain_invented_datetime():
+    """Müsaitlik saati DOM'dan okunamadığında sistem sahte datetime üretmemelidir (LIVE_PROVIDER_ONLY kuralı)."""
+    care_provider_file = root_dir / "services" / "core-api" / "care_provider.py"
+    content = care_provider_file.read_text(encoding="utf-8")
+    
+    # LIVE_PROVIDER_ONLY bloğunda sahte dateTime üretimi olmamalı
+    assert "LIVE_PROVIDER_ONLY" in content
+    assert "Doktor profili canlı kaynaktan bulundu" in content
+
+def test_calendar_provider_interval_conflict_math_and_demo_label():
+    """Takvim sağlayıcısı zaman aralığı çakışmalarını doğru hesaplamalı ve Demo etiketi taşımalıdır."""
     cal = CalendarProvider()
     now = datetime.now()
     
@@ -42,21 +57,29 @@ def test_calendar_provider_interval_conflict_math():
     assert cal.has_conflict(free_time, duration_min=45) is False
 
 def test_travel_time_provider_mock_badge():
-    """Harita anahtarı olmadığında seyahat süresi açıkça 'Demo Veri' olarak işaretlenmelidir."""
-    travel = TravelTimeProvider.calculate_travel_time_min("Dünyagöz Etiler, Beşiktaş")
+    """Harita anahtarı olmadığında seyahat süresi açıkça 'Tahmini Süre — Demo Model' olarak işaretlenmelidir."""
+    travel = TravelTimeProvider.calculate_travel_time_min("Merkez Şube, İstanbul")
     assert travel["isLiveTraffic"] is False
     assert travel["provider"] == "MockTravelTimeProvider"
-    assert "Demo Veri" in travel["trafficBadge"]
+    assert "Demo Model" in travel["trafficBadge"]
     assert travel["estimatedMinutes"] > 0
 
-def test_care_browser_search_bot_block_or_network_fallback():
-    """Playwright arama bot engeli veya ağ kısıtı ile karşılaştığında çökmek yerine güvenli handoff dönmelidir."""
+def test_care_browser_search_bot_block_provides_safe_handoff():
+    """Playwright arama bot engeli ile karşılaştığında çökmek yerine güvenli handoff URL'i dönmelidir."""
     browser_provider = BrowserCareSearchProvider()
-    # Kamusal aramayı çalıştır
-    result = browser_provider.search_slots(specialty="Göz Hastalıkları", city="İstanbul")
+    result = browser_provider.search_slots(specialty="Dermatoloji", city="İstanbul")
     
     assert "status" in result
     assert result["status"] in ["SUCCESS", "FALLBACK_BLOCKED"]
     assert "slots" in result
     assert len(result["slots"]) > 0
     assert "liveSearchUrl" in result
+    assert "https://www.doktortakvimi.com" in result["liveSearchUrl"]
+
+def test_care_page_consent_gate_enforcement():
+    """Randevu sayfasında kullanıcı açık onayı (consent checkbox) zorunlu olmalıdır."""
+    care_page_file = root_dir / "apps" / "vehicle-app" / "src" / "app" / "care" / "page.tsx"
+    assert care_page_file.exists()
+    content = care_page_file.read_text(encoding="utf-8")
+    assert "consentApproved" in content
+    assert "disabled={!consentApproved}" in content

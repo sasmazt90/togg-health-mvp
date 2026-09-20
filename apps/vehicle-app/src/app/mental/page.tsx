@@ -290,39 +290,111 @@ export default function MentalPage() {
     }
   };
 
-  // Seansı tamamlama ve hafızaya kaydetme
-  const handleFinishSession = () => {
-    const summary = 'Kullanıcı ile günlük stres ve uyku dengesi üzerine konuşuldu.';
+  // Seansı tamamlama ve hafızaya kaydetme (MentalSessionAnalyzer entegrasyonu)
+  const handleFinishSession = async () => {
+    setIsProcessing(true);
+    const userMessages = messages
+      .filter((m) => m.sender === 'USER')
+      .map((m) => m.text);
+
+    let analysis: any = null;
+    try {
+      const resp = await fetch('http://localhost:8000/api/mental/analyze-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messages.map((m) => ({
+            role: m.sender === 'USER' ? 'user' : 'assistant',
+            content: m.text
+          }))
+        })
+      });
+      if (resp.ok) {
+        analysis = await resp.json();
+      }
+    } catch (e) {
+      console.warn('Session analysis API failed, fallback to client-side extraction:', e);
+    }
+
+    if (!analysis) {
+      // İstemci tarafı dinamik tema çıkarımı (Asla sabit/ezbere tema yazmaz)
+      const combined = userMessages.join(' ').toLowerCase();
+      const themes: string[] = [];
+      if (/uyku|gece|uyan|uyuyamıyorum/.test(combined)) themes.push('uyku düzeni');
+      if (/iş|proje|toplantı|mesai|patron/.test(combined)) themes.push('iş yaşamı');
+      if (/aile|çocuk|eş|ev/.test(combined)) themes.push('sosyal ilişkiler');
+      if (/yorgun|tüken|halsiz/.test(combined)) themes.push('fiziksel yorgunluk');
+      if (/kaygı|endişe|korku|stres/.test(combined)) themes.push('stres ve kaygı');
+      if (themes.length === 0) themes.push('günlük iyi oluş paylaşımı');
+
+      analysis = {
+        summaryText: `Kullanıcı görüşmesinde ${themes.join(', ')} konuları ele alındı.`,
+        themes,
+        moodTrend: /stres|yoğun|baskı/.test(combined) ? 'STRESSED' : 'RELAXED',
+        professionalSupportSuggested: themes.length >= 2,
+        professionalSupportReason:
+          themes.length >= 2
+            ? 'Birden fazla alanda yorgunluk ve stres hissedildiği için klinik psikolog görüşmesi faydalı olabilir.'
+            : null,
+        analyzerType: 'LOCAL_FALLBACK'
+      };
+    }
+
+    // Gizlilik Tercihini Denetle
+    const allowSaving = localStorage.getItem('togg_privacy_mental_summary_allowed') !== 'false';
+
     const newSession: MentalSessionItem = {
-      sessionId: `men-${Date.now()}`,
+      sessionId: allowSaving ? `men-${Date.now()}` : 'unpersisted-privacy-off',
       date: new Date().toISOString(),
       durationSeconds: 180,
-      moodBefore: 'TIRED',
-      moodAfter: 'RELAXED',
-      recurringThemes: ['uyku kalitesi', 'iş stresi'],
-      summaryText: summary,
-      clinicalEscalationSuggested: true
+      moodBefore: analysis.moodTrend === 'STRESSED' ? 'STRESSED' : 'TIRED',
+      moodAfter: analysis.moodTrend === 'STRESSED' ? 'TIRED' : 'RELAXED',
+      recurringThemes: analysis.themes,
+      summaryText: analysis.summaryText,
+      clinicalEscalationSuggested: analysis.professionalSupportSuggested
     };
 
     setSessionHistory((prev) => [newSession, ...prev]);
 
-    try {
-      localStorage.setItem('togg_health_latest_mental', JSON.stringify(newSession));
-    } catch (e) {
-      console.warn(e);
+    if (allowSaving) {
+      try {
+        localStorage.setItem('togg_health_latest_mental', JSON.stringify(newSession));
+        await fetch('http://localhost:8000/api/mental/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            summaryText: newSession.summaryText,
+            recurringThemes: newSession.recurringThemes,
+            durationSeconds: newSession.durationSeconds,
+            moodBefore: newSession.moodBefore,
+            moodAfter: newSession.moodAfter,
+            escalationSuggested: newSession.clinicalEscalationSuggested,
+            suggestedAction: analysis.professionalSupportReason,
+            saveMentalSummaries: true
+          })
+        }).catch(() => {});
+      } catch (e) {
+        console.warn(e);
+      }
+    } else {
+      console.log('Gizlilik tercihi: Seans özeti yerel veya uzak belleğe kaydedilmedi.');
     }
+
+    setIsProcessing(false);
   };
 
-  // Care Agent'a sevk aktarımı
+  // Care Agent'a sevk aktarımı - Gerçek seans özetini kullanır
   const handleNavigateToCare = () => {
+    const latest = sessionHistory[0];
     const referralContext = {
       sourceModule: 'MENTAL',
       specialty: 'Klinik Psikoloji',
-      reasonSummary:
-        'Son seanslarda uyku düzensizliği ve süregelen iş stresi temaları tekrar ettiği için bir klinik psikolog ile görüşme önerildi.',
+      reasonSummary: latest
+        ? `Görüşmelerde öne çıkan temalar: ${latest.recurringThemes.join(', ')}. ${latest.summaryText}`
+        : 'Ruhsal iyi oluş görüşmesi; genel klinik psikoloji danışmanlığı talebi.',
       timestamp: new Date().toISOString(),
       metricsSummary: {
-        recurringThemes: ['uyku düzensizliği (%75)', 'süregelen iş stresi (%60)']
+        recurringThemes: latest ? latest.recurringThemes : ['genel iyi oluş']
       }
     };
     try {

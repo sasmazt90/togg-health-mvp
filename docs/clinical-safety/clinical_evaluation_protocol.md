@@ -41,4 +41,4 @@ Sistem bir sağlık profesyonelinin veya teşhis cihazının yerine geçmez. Tü
 
 - **Ruhsal Sohbet:** Sistem bilişsel-davranışçı yaklaşım (CBT) prensiplerini empatik ve nötr bir dinleyici olarak uygular; psikoterapi uygulamaz.
 - **Eskalasyon Eşiği:** Son 3 veya daha fazla seansta kronik uyku bozukluğu, yoğun stres veya duygusal tükenmişlik teması kaydedilirse profesyonel destek (klinik psikolog) önerilir.
-- **Acil Durum (Kriz):** İntihar, kendine zarar verme veya şiddet ifadesi tespit edildiği anda sohbet kesilir ve doğrudan **112 Acil Çağrı Merkezi** yönlendirmesi yapılır. (182 bir kriz hattı olmayıp MHRS hekim randevu sistemidir, kriz desteğinde kullanılmaz). Araç hareket halindeyse sürücünün ekrana bakmaması, güvenle durup 112'yi araması tavsiye edilir.
+- **Acil Durum (Kriz):** İntihar, kendine zarar verme veya şiddet ifadesi tespit edildiği anda sohbet kesilir ve doğrudan **112 Acil Çağrı Merkezi** yönlendirmesi yapılır. (MHRS randevu hatları poliklinik randevusu içindir, kriz desteğinde asla kullanılmaz). Araç hareket halindeyse sürücünün ekrana bakmaması, güvenle durup 112'yi araması tavsiye edilir.

@@ -1,5 +1,5 @@
 """
-Session Memory Manager (Local-First Persistence)
+Session Memory Manager (Local-First Persistence & Privacy Enforced)
 Lisans: UNLICENSED
 
 Her görüşmeden:
@@ -7,8 +7,13 @@ Her görüşmeden:
 - kısa kullanıcı onaylı özet
 - yüksek seviyeli temalar
 - mood (önce/sonra)
-saklanır.
-Ham ses veya tam konuşma dökümü KALICI OLARAK SAKLANMAZ.
+- professional support flag
+saklanabilir.
+
+GİZLİLİK KURALLARI:
+- Ham ses veya tam konuşma dökümü KESİNLİKLE KALICI OLARAK SAKLANMAZ.
+- Kullanıcı gizlilik tercihinde seans özetlerini saklamayı kapattıysa (save_mental_summaries=False),
+  oturum özeti diske/belleğe ASLA yazılmaz.
 """
 
 import json
@@ -37,10 +42,10 @@ DEFAULT_SESSIONS = [
         "durationSeconds": 380,
         "moodBefore": "TIRED",
         "moodAfter": "TIRED",
-        "recurringThemes": ["uyku düzensizliği", "süregelen yorgunluk", "stres"],
-        "summaryText": "Son 4 seans boyunca uyku kalitesi ve kronikleşen yorgunluk hissi tekrar eden ortak tema olarak öne çıktı.",
+        "recurringThemes": ["uyku düzensizliği", "fiziksel yorgunluk"],
+        "summaryText": "Son görüşmelerde uyku düzeni ve kronikleşen yorgunluk hissi tekrar eden ortak tema olarak öne çıktı.",
         "clinicalEscalationSuggested": True,
-        "suggestedActionNote": "Son görüşmelerinizde uyku ve stres temalarının tekrar ettiği gözlemlendi. Bir klinik psikolog ile görüşmek faydalı olabilir."
+        "suggestedActionNote": "Son görüşmelerinizde uyku ve yorgunluk temalarının tekrar ettiği gözlemlendi. Bir klinik psikolog ile görüşmek faydalı olabilir."
     }
 ]
 
@@ -70,8 +75,23 @@ class SessionMemoryManager:
         mood_before: str = "TIRED",
         mood_after: str = "RELAXED",
         escalation_suggested: bool = False,
-        suggested_action: Optional[str] = None
+        suggested_action: Optional[str] = None,
+        save_mental_summaries: bool = True
     ) -> Dict[str, Any]:
+        """
+        Oturum özetini kaydeder.
+        Eğer kullanıcı gizlilik tercihinde save_mental_summaries kapalıysa kayıt YAPMAZ.
+        """
+        if not save_mental_summaries:
+            return {
+                "sessionId": None,
+                "persisted": False,
+                "reason": "PRIVACY_PREFERENCE_DISABLED",
+                "summaryText": summary_text,
+                "recurringThemes": recurring_themes,
+                "message": "Kullanıcı gizlilik tercihi gereğince bu oturum özeti kalıcı olarak kaydedilmedi."
+            }
+
         cls._ensure_storage()
         sessions = cls.get_all_sessions()
         new_session = {
@@ -83,7 +103,8 @@ class SessionMemoryManager:
             "recurringThemes": recurring_themes,
             "summaryText": summary_text,
             "clinicalEscalationSuggested": escalation_suggested,
-            "suggestedActionNote": suggested_action
+            "suggestedActionNote": suggested_action,
+            "persisted": True
         }
         sessions.append(new_session)
         with open(SESSIONS_FILE, "w", encoding="utf-8") as f:

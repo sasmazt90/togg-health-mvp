@@ -22,7 +22,8 @@ import {
   ChevronRight,
   Maximize2,
   Sparkles,
-  Info
+  Info,
+  Check
 } from 'lucide-react';
 
 export default function VisionPage() {
@@ -35,18 +36,17 @@ export default function VisionPage() {
   >('IDLE');
 
   // Ekran kalibrasyonu: Standart kredi kartı 85.6 mm. Varsayılan 96 DPI = 3.78 px/mm.
-  // Kullanıcı ekranındaki kart genişliğini slider ile ayarlayabilir.
-  const [cardWidthPx, setCardWidthPx] = useState<number>(324); // 324 px / 85.6 mm ~ 3.785 px/mm
+  const [cardWidthPx, setCardWidthPx] = useState<number>(324);
   const pixelsPerMm = Math.max(2.0, cardWidthPx / 85.6);
 
-  // Kamera ve mesafe durumu
+  // Kamera ve Kullanıcı Doğrulamalı Test Mesafesi (Option B)
+  // Sentetik / sahte mesafe hesabı tamamen kaldırılmıştır.
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
-  const [calibratedDistanceCm, setCalibratedDistanceCm] = useState<number>(55);
-  const [distanceConfidence, setDistanceConfidence] = useState<'CALIBRATING' | 'GOOD' | 'TOO_CLOSE' | 'TOO_FAR'>('CALIBRATING');
+  const [verifiedDistanceCm, setVerifiedDistanceCm] = useState<number>(55);
+  const [distanceConfirmed, setDistanceConfirmed] = useState<boolean>(false);
 
   // Staircase kontrolcüsü ve test durumu
   const [staircase, setStaircase] = useState<VisionStaircaseController | null>(null);
@@ -56,7 +56,7 @@ export default function VisionPage() {
   const [trialIndex, setTrialIndex] = useState<number>(1);
   const [contrastLevelPct, setContrastLevelPct] = useState<number>(100);
 
-  // Sonuçlar
+  // Sonuçlar (Kesinlikle hardcoded fallback değer içermez, tamamlanana kadar null kalır)
   const [testResults, setTestResults] = useState<{
     rightEye: EyeTestResult | null;
     leftEye: EyeTestResult | null;
@@ -94,7 +94,7 @@ export default function VisionPage() {
     );
   }
 
-  // Kamera açma işlemi
+  // Kamera açma işlemi - Yalnızca canlı pozisyon kılavuzu sağlar, sentetik mesafe simülasyonu yapmaz
   const startCamera = async () => {
     setCameraError(null);
     try {
@@ -107,36 +107,10 @@ export default function VisionPage() {
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-
-      // Canlı yüz/mesafe yaklaşık ölçümü simülatörü/analiz döngüsü
-      let intervalCount = 0;
-      const interval = setInterval(() => {
-        intervalCount++;
-        // Gerçek video karesi analizi (ortalama parlaklık ve merkezleme)
-        if (videoRef.current && canvasRef.current) {
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
-          if (ctx && video.videoWidth > 0) {
-            canvas.width = 160;
-            canvas.height = 120;
-            ctx.drawImage(video, 0, 0, 160, 120);
-          }
-        }
-
-        // Calibrated face distance approximation (50-60 cm ideal aralığında)
-        const estimated = 52 + (intervalCount % 5);
-        setCalibratedDistanceCm(estimated);
-        setDistanceConfidence('GOOD');
-      }, 500);
-
-      setTimeout(() => clearInterval(interval), 4000);
     } catch (err: any) {
       console.warn('Kamera erişimi sağlanamadı:', err);
-      setCameraError('Kamera izni alınamadı veya cihazda kamera bulunamadı. Varsayılan kalibre mesafe (55 cm) kullanılıyor.');
+      setCameraError('Kamera erişimi sağlanamadı veya izin verilmedi. Pozisyonunuzu alarak doğrulamak istediğiniz test mesafesini aşağıdan seçebilirsiniz.');
       setCameraActive(false);
-      setCalibratedDistanceCm(55);
-      setDistanceConfidence('GOOD');
     }
   };
 
@@ -145,7 +119,7 @@ export default function VisionPage() {
     setTestStep('SCREEN_CALIBRATION');
   };
 
-  // 2. Kamera Mesafe Ölçümüne Geç
+  // 2. Kamera Kadrajı & Doğrulanan Mesafeye Geç
   const handleProceedToCamera = () => {
     setTestStep('CAMERA_DISTANCE');
     startCamera();
@@ -205,12 +179,12 @@ export default function VisionPage() {
 
       const outcome = staircase.registerContrastResponse(isCorrect);
       if (outcome.contrastFinished || trialIndex >= 5) {
-        // Test bitti
+        // Test bitti - yalnızca gerçek sonuçları al
         const results = staircase.getResults();
         setTestResults(results);
         setTestStep('COMPLETED');
 
-        // Sağlık profiline kaydet
+        // Sağlık profiline kaydet (asla hardcoded fallback eklenmez)
         saveResultsToProfile(results);
       } else {
         setContrastLevelPct(outcome.currentContrastPct);
@@ -225,18 +199,24 @@ export default function VisionPage() {
     leftEye: EyeTestResult | null;
     contrast: ContrastResult | null;
   }) => {
+    // Yalnızca test tamamlanmışsa ve gerçek sonuç varsa kaydet
+    if (!results.rightEye || !results.leftEye || !results.contrast) {
+      return;
+    }
+
     try {
       const visionRecord = {
         id: `vis-${Date.now()}`,
         date: new Date().toISOString(),
-        acuityRightLogMAR: results.rightEye?.logMAR || 0.18,
-        acuityLeftLogMAR: results.leftEye?.logMAR || 0.08,
-        acuityRightSnellen: results.rightEye?.snellen || '20/30',
-        acuityLeftSnellen: results.leftEye?.snellen || '20/24',
-        contrastSensitivityLogCS: results.contrast?.logCS || 1.55,
-        calibratedDistanceCm: calibratedDistanceCm,
-        comparisonNote: 'Ölçüm başarıyla tamamlandı. Sonuçlar ön değerlendirme referans bandında kaydedildi.',
-        ophthalmologistReferralRecommended: (results.rightEye?.logMAR || 0) > 0.15 || (results.leftEye?.logMAR || 0) > 0.15
+        testCompleted: true,
+        acuityRightLogMAR: results.rightEye.logMAR,
+        acuityLeftLogMAR: results.leftEye.logMAR,
+        acuityRightSnellen: results.rightEye.snellen,
+        acuityLeftSnellen: results.leftEye.snellen,
+        contrastSensitivityLogCS: results.contrast.logCS,
+        verifiedDistanceCm: verifiedDistanceCm,
+        comparisonNote: 'Ölçüm başarıyla tamamlandı. Değerler kullanıcı doğrulamalı test mesafesi ve adaptif basamak algoritmasıyla kaydedildi.',
+        ophthalmologistReferralRecommended: results.rightEye.logMAR > 0.15 || results.leftEye.logMAR > 0.15
       };
       localStorage.setItem('togg_health_latest_vision', JSON.stringify(visionRecord));
     } catch (e) {
@@ -244,17 +224,26 @@ export default function VisionPage() {
     }
   };
 
-  // Care Agent'a sevk aktarımı
+  // Care Agent'a sevk aktarımı - Sadece gerçek sonuçlar aktarılır
   const handleNavigateToCare = () => {
+    const isCompleted = !!testResults.rightEye && !!testResults.leftEye && !!testResults.contrast;
+    
     const referralContext = {
       sourceModule: 'VISION',
       specialty: 'Göz Hastalıkları',
-      reasonSummary: `Ön değerlendirme sonucu: Sağ Göz ${testResults.rightEye?.snellen || '20/30'} (${testResults.rightEye?.logMAR || 0.18} LogMAR), Sol Göz ${testResults.leftEye?.snellen || '20/24'}. Kontrast: ${testResults.contrast?.logCS || 1.55} LogCS.`,
+      reasonSummary: isCompleted
+        ? `Ön değerlendirme sonucu: Sağ Göz ${testResults.rightEye!.snellen} (${testResults.rightEye!.logMAR.toFixed(2)} LogMAR), Sol Göz ${testResults.leftEye!.snellen} (${testResults.leftEye!.logMAR.toFixed(2)} LogMAR). Kontrast: ${testResults.contrast!.logCS.toFixed(2)} LogCS. Test mesafesi: ${verifiedDistanceCm} cm.`
+        : 'Görme testi tamamlanmadı; genel göz kontrolü ve muayene talebi.',
       timestamp: new Date().toISOString(),
-      metricsSummary: {
-        rightSnellen: testResults.rightEye?.snellen,
-        leftSnellen: testResults.leftEye?.snellen,
-        contrastLogCS: testResults.contrast?.logCS
+      metricsSummary: isCompleted ? {
+        rightSnellen: testResults.rightEye!.snellen,
+        rightLogMAR: testResults.rightEye!.logMAR,
+        leftSnellen: testResults.leftEye!.snellen,
+        leftLogMAR: testResults.leftEye!.logMAR,
+        contrastLogCS: testResults.contrast!.logCS,
+        verifiedDistanceCm
+      } : {
+        status: 'INCOMPLETE'
       }
     };
     try {
@@ -266,7 +255,7 @@ export default function VisionPage() {
   };
 
   // Optotip Boyut Hesaplaması
-  const optotypeSizeMm = VisionStaircaseController.calculateOptotypeSizeMm(calibratedDistanceCm, currentLogMAR);
+  const optotypeSizeMm = VisionStaircaseController.calculateOptotypeSizeMm(verifiedDistanceCm, currentLogMAR);
   const optotypeSizePx = VisionStaircaseController.mmToPixels(optotypeSizeMm, pixelsPerMm);
 
   // Yön rotasyon açısı
@@ -288,7 +277,7 @@ export default function VisionPage() {
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-white">Görme Kontrolü ve Ön Değerlendirme</h1>
             <p className="text-xs text-slate-400">
-              Adaptif Landolt C staircase motoru, ekran/mesafe kalibrasyonu ve kontrast duyarlılığı
+              Adaptif Landolt C staircase motoru, ekran kalibrasyonu ve kullanıcı doğrulamalı test mesafesi
             </p>
           </div>
         </div>
@@ -297,111 +286,114 @@ export default function VisionPage() {
         </div>
       </div>
 
-      {/* GİZLİ ANALİZ KANVASI */}
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* ADIM 1: BAŞLANGIÇ & AÇIKLAMA */}
+      {/* ADIM 1: BAŞLANGIÇ (IDLE) */}
       {testStep === 'IDLE' && (
         <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
           <div className="space-y-2">
-            <h2 className="text-lg font-bold text-white">Test Öncesi Hazırlık ve Gerçek Ölçek Doğrulaması</h2>
+            <h2 className="text-lg font-bold text-white">Ön Kontrol ve Protokol Bilgilendirmesi</h2>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Bu test, sabit piksel boyutları kullanmaz. Ekrana olan mesafeniz, ekranınızın fiziksel piksel yoğunluğu (DPI) ve verdiğiniz yanıtlara göre optotip boyutunu dinamik olarak küçülten adaptif psikometrik merdiven (2-down / 1-up staircase) ile çalışır.
+              Bu test, uluslararası standart Landolt C halkaları ve adaptif basamak (staircase) algoritması kullanarak görme keskinliğinizi ve kontrast algınızı değerlendirir.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-2">
-              <div className="text-xs text-cyan-400 font-semibold flex items-center gap-1.5">
-                <Maximize2 className="w-3.5 h-3.5" /> 1. Ekran Ölçeği Kalibrasyonu
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-1">
+              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                1. Ekran Kalibrasyonu
               </div>
-              <p className="text-xs text-slate-400">
-                Tarayıcı ekranının gerçek mm/piksel ölçeğini standart referans ile doğrular.
+              <p className="text-slate-400">
+                Piksel yoğunluğunu fiziksel milimetreye dönüştürmek için standart bir kart referansı kullanılır.
               </p>
             </div>
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-2">
-              <div className="text-xs text-cyan-400 font-semibold flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5" /> 2. Kamera Mesafe Tespiti
+
+            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-1">
+              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-cyan-400" />
+                2. Doğrulanan Mesafe
               </div>
-              <p className="text-xs text-slate-400">
-                Kabin kamerası ile yüz mesafenizi yaklaşık olarak hesaplar (50-60 cm).
+              <p className="text-slate-400">
+                Kamera kılavuzuyla pozisyon alınır ve test mesafesi kullanıcı tarafından onaylanır (50, 55 veya 60 cm).
               </p>
             </div>
-            <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-2">
-              <div className="text-xs text-cyan-400 font-semibold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" /> 3. Adaptif Yanıt Kontrolü
+
+            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-1">
+              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                3. Gerçek Staircase
               </div>
-              <p className="text-xs text-slate-400">
-                Sağ ve sol göz için yön cevaplarınız doğrulanır ve zorluk basamağı ayarlanır.
+              <p className="text-slate-400">
+                Halkaların boyutu verdiğiniz yanıtlara göre büyür veya küçülür; sağ ve sol göz ayrı test edilir.
               </p>
             </div>
           </div>
 
-          <div className="pt-4 flex justify-end">
+          <div className="bg-cyan-950/30 border border-cyan-800/60 rounded-xl p-4 text-xs text-cyan-300 space-y-1">
+            <div className="font-semibold flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-cyan-400" />
+              <span>Klinik Ön Değerlendirme Bildirimi</span>
+            </div>
+            <p className="leading-relaxed text-cyan-300/80">
+              Bu test tıbbi muayene yerine geçmez. Ekran ölçeği ve kullanıcı doğrulamalı mesafeye dayalı işlevsel bir ön taramadır.
+            </p>
+          </div>
+
+          <div className="flex justify-end pt-2">
             <button
               onClick={handleStartScreenCalibration}
-              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch"
+              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch shadow-lg"
             >
-              <span>1. Adım: Ekran Kalibrasyonunu Başlat</span>
+              <span>Kalibrasyona Başla</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* ADIM 2: EKRAN FİZİKSEL KALİBRASYONU (Piksel Yoğunluğu / DPI) */}
+      {/* ADIM 2: EKRAN KALİBRASYONU (CARD SLIDER) */}
       {testStep === 'SCREEN_CALIBRATION' && (
         <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
           <div className="space-y-1">
-            <h2 className="text-lg font-bold text-white">Ekran Boyutu Kalibrasyonu (Fiziksel Referans)</h2>
+            <h2 className="text-lg font-bold text-white">Ekran Boyutu Kalibrasyonu</h2>
             <p className="text-xs text-slate-300">
-              Uluslararası optometri standartlarında Landolt C halkasının fiziksel milimetre ölçüsü kritiktir. Lütfen aşağıdaki dikdörtgenin genişliğini standart bir kredi kartı / ehliyet (85.6 mm) genişliğine denk gelecek şekilde ayarlayın veya varsayılan ölçeği kullanın.
+              Landolt C halkasının fiziksel milimetre boyutunu ekranınızda tam tutturabilmek için lütfen ekranınıza standart bir kredi kartı / kimlik kartı (85.6 mm) tutun ve mavi kutuyu kartınızın genişliğiyle birebir örtüşene kadar kaydırıcıyla ayarlayın.
             </p>
           </div>
 
-          {/* Kalibrasyon Referans Kartı */}
-          <div className="py-6 flex flex-col items-center justify-center">
+          {/* Kart Referans Kutusu */}
+          <div className="flex flex-col items-center justify-center p-6 bg-slate-950 rounded-xl border border-slate-800 min-h-[160px]">
             <div
-              className="h-28 bg-gradient-to-r from-cyan-950 via-slate-900 to-indigo-950 border-2 border-cyan-400 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.2)] flex flex-col items-center justify-center text-center p-4 transition-all duration-75 relative overflow-hidden"
+              className="h-28 bg-gradient-to-r from-cyan-950 to-blue-900 border-2 border-cyan-400 rounded-lg flex flex-col justify-between p-3 text-cyan-200 transition-all shadow-md"
               style={{ width: `${cardWidthPx}px` }}
             >
-              <div className="text-xs font-bold text-cyan-300">STANDART REFERANS KART</div>
-              <div className="text-[10px] text-slate-400 mt-1">Fiziksel Genişlik: 85.6 mm (ISO/IEC 7810 ID-1)</div>
-              <div className="text-[10px] text-emerald-400 font-mono mt-2">
-                Hesaplanan Ölçek: {pixelsPerMm.toFixed(2)} px/mm ({(pixelsPerMm * 25.4).toFixed(0)} DPI)
+              <div className="flex justify-between items-center text-[11px] font-mono">
+                <span>STANDART KART REFERANSI</span>
+                <span>85.6 mm</span>
+              </div>
+              <div className="text-center font-bold text-xs tracking-wider text-white">
+                FİZİKSEL GENİŞLİK KONTROLÜ
+              </div>
+              <div className="text-[10px] text-cyan-300/70 text-right font-mono">
+                {cardWidthPx} px ({pixelsPerMm.toFixed(2)} px/mm)
               </div>
             </div>
+          </div>
 
-            {/* Slider */}
-            <div className="w-full max-w-md mt-6 space-y-2">
-              <div className="flex justify-between text-xs text-slate-400">
-                <span>Daha Küçük</span>
-                <span className="font-mono text-cyan-400">{cardWidthPx} px</span>
-                <span>Daha Büyük</span>
-              </div>
-              <input
-                type="range"
-                min={220}
-                max={440}
-                value={cardWidthPx}
-                onChange={(e) => setCardWidthPx(Number(e.target.value))}
-                className="w-full accent-cyan-400 cursor-pointer"
-              />
-              <div className="flex justify-center gap-2 pt-2">
-                <button
-                  onClick={() => setCardWidthPx(324)} // 96 DPI
-                  className="text-[11px] px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-800"
-                >
-                  Standart 96 DPI (Dizüstü)
-                </button>
-                <button
-                  onClick={() => setCardWidthPx(370)} // ~110 DPI
-                  className="text-[11px] px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded border border-slate-800"
-                >
-                  Togg Kokpit Ekranı (~110 DPI)
-                </button>
-              </div>
+          {/* Slider Kontrolü */}
+          <div className="space-y-2 max-w-md mx-auto">
+            <div className="flex justify-between text-xs text-slate-400">
+              <span>Daha Dar (Düşük DPI)</span>
+              <span className="font-mono text-cyan-400 font-bold">{cardWidthPx} px</span>
+              <span>Daha Geniş (Yüksek DPI)</span>
             </div>
+            <input
+              type="range"
+              min="220"
+              max="520"
+              value={cardWidthPx}
+              onChange={(e) => setCardWidthPx(Number(e.target.value))}
+              className="w-full accent-cyan-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+            />
           </div>
 
           <div className="flex justify-between items-center pt-4 border-t border-cockpit-border">
@@ -415,20 +407,20 @@ export default function VisionPage() {
               onClick={handleProceedToCamera}
               className="flex items-center gap-2 py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch"
             >
-              <span>Ölçek Doğrulandı, Kameraya Geç</span>
+              <span>Ölçek Doğrulandı, Mesafeye Geç</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* ADIM 3: GERÇEK WEBCAM MESAFE TESPİTİ */}
+      {/* ADIM 3: KAMERA KILAVUZU & DOĞRULANAN TEST MESAFESİ (SEÇENEK B) */}
       {testStep === 'CAMERA_DISTANCE' && (
         <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6 text-center">
           <div className="space-y-1">
-            <h2 className="text-lg font-bold text-white">Kamera Tabanlı Mesafe Tespiti</h2>
+            <h2 className="text-lg font-bold text-white">Kamera Kadrajı ve Kullanıcı Doğrulamalı Test Mesafesi</h2>
             <p className="text-xs text-slate-300">
-              Webcam akışı üzerinden yüz mesafeniz yaklaşık olarak hesaplanır.
+              Kamera aracılığıyla yüzünüzü kadraja hizalayın ve araç ekranıyla aranızdaki fiziksel mesafeyi doğrulayın.
             </p>
           </div>
 
@@ -445,22 +437,22 @@ export default function VisionPage() {
               <div className="p-4 space-y-2">
                 <Camera className="w-12 h-12 text-cyan-400 animate-pulse mx-auto" />
                 <div className="text-sm font-semibold text-slate-200">Kamera Başlatılıyor...</div>
-                <div className="text-xs text-slate-400">Lütfen tarayıcınızdan kamera izni verin.</div>
+                <div className="text-xs text-slate-400">Kamera yoksa veya izin verilmezse mesafe onaylayarak devam edebilirsiniz.</div>
               </div>
             )}
 
-            {/* HUD Overlay */}
+            {/* Kadraj Rehber Çizgisi */}
             {cameraActive && (
               <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 border-2 border-dashed border-cyan-500/40 rounded-xl m-2">
                 <div className="flex justify-between items-center text-[10px] bg-black/60 px-2 py-1 rounded text-cyan-300">
                   <span>CANLI KABİN KAMERASI</span>
                   <span className="flex items-center gap-1 text-emerald-400">
-                    <CheckCircle2 className="w-3 h-3" /> Aktif
+                    <CheckCircle2 className="w-3 h-3" /> Konumlandırma Aktif
                   </span>
                 </div>
-                <div className="w-28 h-36 border border-emerald-400/60 rounded-full mx-auto self-center" />
+                <div className="w-28 h-36 border-2 border-dashed border-emerald-400/70 rounded-full mx-auto self-center" />
                 <div className="bg-black/70 px-3 py-1 rounded text-center text-xs text-slate-200">
-                  Tahmini Mesafe: <strong className="text-cyan-400">{calibratedDistanceCm} cm</strong> (İdeal: 50-60 cm)
+                  Kadraj Rehberi: Yüzünüzü oval alana ortalayın
                 </div>
               </div>
             )}
@@ -472,28 +464,46 @@ export default function VisionPage() {
             </div>
           )}
 
-          <div className="max-w-md mx-auto bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-left text-xs text-slate-400 space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-300 font-semibold">
-              <Info className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Teknik Doğruluk Notu:</span>
+          {/* Kullanıcı Doğrulamalı Mesafe Seçimi */}
+          <div className="max-w-md mx-auto bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-left space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-200">Doğrulanan Test Mesafesi:</span>
+              <span className="text-xs font-mono font-bold text-cyan-400">{verifiedDistanceCm} cm</span>
             </div>
-            <p className="text-[11px] leading-relaxed">
-              Kamera odak uzaklığı ve kullanıcı yüz genişliği geometrisi kullanılarak yaklaşık mesafe hesaplanmıştır. Kesin laboratuvar kalibrasyonu içermez, MVP için tutarlı bir referans sağlar.
+            <div className="grid grid-cols-3 gap-2">
+              {[50, 55, 60].map((dist) => (
+                <button
+                  key={dist}
+                  type="button"
+                  onClick={() => setVerifiedDistanceCm(dist)}
+                  className={`py-2 px-3 rounded-lg text-xs font-medium border transition-all flex items-center justify-center gap-1.5 ${
+                    verifiedDistanceCm === dist
+                      ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow'
+                      : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {verifiedDistanceCm === dist && <Check className="w-3.5 h-3.5" />}
+                  {dist} cm
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Optotip fiziksel boyutu, seçtiğiniz <strong>{verifiedDistanceCm} cm</strong> mesafesine ve kredi kartı kalibrasyonuna göre milimetrik hassasiyetle hesaplanacaktır.
             </p>
           </div>
 
           <div className="flex justify-center gap-4 pt-2">
             <button
-              onClick={() => setCalibratedDistanceCm((prev) => (prev === 55 ? 58 : 55))}
-              className="text-xs text-slate-400 hover:text-white flex items-center gap-1"
+              onClick={() => setTestStep('SCREEN_CALIBRATION')}
+              className="text-xs text-slate-400 hover:text-white"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Yeniden Ölç
+              Geri
             </button>
             <button
               onClick={handleStartTest}
               className="py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch shadow-lg"
             >
-              Mesafe Doğrulandı, Teste Başla
+              Doğrulandı, Testi Başlat
             </button>
           </div>
         </div>
@@ -547,14 +557,6 @@ export default function VisionPage() {
                   transition: 'transform 0.15s ease-out'
                 }}
               >
-                {/* 
-                  Landolt C Matematiksel Halka:
-                  Dış çap = 100, Et kalınlığı = 20 (D/5), Merkez yarıçapı = 40.
-                  Çevre = 2 * PI * 40 = 251.32
-                  Açıklık yarığı genişliği = 20.
-                  Çevre üzerindeki yay uzunluğu = 20.
-                  Dolu kısım = 251.32 - 20 = 231.32
-                */}
                 <circle
                   cx="50"
                   cy="50"
@@ -569,7 +571,7 @@ export default function VisionPage() {
             </div>
 
             <div className="text-[11px] text-slate-500 font-mono mt-4">
-              Hesaplanan Fiziksel Çap: {optotypeSizeMm.toFixed(1)} mm ({optotypeSizePx} px) • LogMAR: {currentLogMAR.toFixed(2)}
+              Hesaplanan Fiziksel Çap: {optotypeSizeMm.toFixed(1)} mm ({optotypeSizePx} px) • LogMAR: {currentLogMAR.toFixed(2)} • Mesafe: {verifiedDistanceCm} cm
             </div>
           </div>
 
@@ -616,40 +618,46 @@ export default function VisionPage() {
             <div>
               <h2 className="text-xl font-bold text-white">Görme Ön Değerlendirmesi Tamamlandı</h2>
               <p className="text-xs text-slate-400">
-                Sonuçlar kullanıcı cevaplarınızdan ve adaptif basamak motorundan gerçek zamanlı hesaplandı.
+                Sonuçlar verdiğiniz yanıtlardan ve adaptif basamak motorundan gerçek zamanlı hesaplandı.
               </p>
             </div>
           </div>
 
-          {/* Sonuç Kartları */}
+          {/* Sonuç Kartları (Asla sahte fallback göstermez) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
               <div className="text-xs text-slate-400">Sağ Göz Keskinliği</div>
               <div className="text-2xl font-bold text-cyan-400 pt-1">
-                {testResults.rightEye?.snellen || '20/30'}
+                {testResults.rightEye ? testResults.rightEye.snellen : 'Değerlendirilemedi'}
               </div>
               <div className="text-[11px] text-slate-500">
-                LogMAR: {testResults.rightEye?.logMAR.toFixed(2)} ({testResults.rightEye?.correctTrials}/{testResults.rightEye?.totalTrials} Doğru)
+                {testResults.rightEye
+                  ? `LogMAR: ${testResults.rightEye.logMAR.toFixed(2)} (${testResults.rightEye.correctTrials}/${testResults.rightEye.totalTrials} Doğru)`
+                  : 'Sonuç mevcut değil'}
               </div>
             </div>
 
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
               <div className="text-xs text-slate-400">Sol Göz Keskinliği</div>
               <div className="text-2xl font-bold text-cyan-400 pt-1">
-                {testResults.leftEye?.snellen || '20/24'}
+                {testResults.leftEye ? testResults.leftEye.snellen : 'Değerlendirilemedi'}
               </div>
               <div className="text-[11px] text-slate-500">
-                LogMAR: {testResults.leftEye?.logMAR.toFixed(2)} ({testResults.leftEye?.correctTrials}/{testResults.leftEye?.totalTrials} Doğru)
+                {testResults.leftEye
+                  ? `LogMAR: ${testResults.leftEye.logMAR.toFixed(2)} (${testResults.leftEye.correctTrials}/${testResults.leftEye.totalTrials} Doğru)`
+                  : 'Sonuç mevcut değil'}
               </div>
             </div>
 
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
               <div className="text-xs text-slate-400">Kontrast Hassasiyeti</div>
               <div className="text-2xl font-bold text-amber-400 pt-1">
-                {testResults.contrast?.logCS.toFixed(2)} LogCS
+                {testResults.contrast ? `${testResults.contrast.logCS.toFixed(2)} LogCS` : 'Değerlendirilemedi'}
               </div>
               <div className="text-[11px] text-slate-500">
-                En Düşük Algılanan Kontrast: %{testResults.contrast?.contrastPct} (Ref: 1.65 - 1.95)
+                {testResults.contrast
+                  ? `En Düşük Algılanan Kontrast: %${testResults.contrast.contrastPct}`
+                  : 'Sonuç mevcut değil'}
               </div>
             </div>
           </div>
@@ -658,10 +666,10 @@ export default function VisionPage() {
           <div className="bg-cyan-950/30 border border-cyan-800/60 rounded-xl p-4 text-xs text-cyan-200 space-y-2">
             <div className="font-bold flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span>Ön Değerlendirme ve Değişim Bildirimi:</span>
+              <span>Ön Değerlendirme ve Bilgilendirme:</span>
             </div>
             <p className="leading-relaxed text-cyan-300/90">
-              Bu test sonuçları klinik bir göz muayenesi veya kesin tıbbi tanı değildir. Ölçülen değerler ekran mesafesi ({calibratedDistanceCm} cm) ve kalibre ekran ölçeğine dayalı işlevsel bir ön değerlendirmedir. Görme keskinliğinizde veya kontrast algınızda değişim hissediyorsanız bir göz doktoruna danışmanız önerilir.
+              Bu test sonuçları klinik bir göz muayenesi veya kesin tıbbi tanı değildir. Ölçülen değerler kullanıcı doğrulamalı test mesafesi ({verifiedDistanceCm} cm) ve kalibre ekran ölçeğine dayalı işlevsel bir ön değerlendirmedir. Görme keskinliğinizde veya kontrast algınızda değişim hissediyorsanız bir göz doktoruna danışmanız önerilir.
             </p>
           </div>
 
@@ -670,6 +678,7 @@ export default function VisionPage() {
               onClick={() => {
                 setTestStep('IDLE');
                 setStaircase(null);
+                setTestResults({ rightEye: null, leftEye: null, contrast: null });
               }}
               className="w-full sm:w-auto text-xs text-slate-400 hover:text-white px-4 py-2"
             >

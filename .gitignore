@@ -74,6 +74,8 @@ local_storage/
 data/sessions/
 data/cache/
 services/core-api/data/
+togg_session_memory.json
+*session_memory*.json
 
 # Temporary Media & Sensor Data (Camera frames, audio recordings)
 captures/

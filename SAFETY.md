@@ -72,8 +72,8 @@ Asistan; kendine zarar verme, intihar düşüncesi veya akut şiddet belirten an
 > - *Acil Çağrı Merkezi: **112***
 
 > [!IMPORTANT]
-> **Kriz Hattı ve 182 Ayrımı:**
-> - ALO 182 bir kriz danışma hattı **değildir**; Sağlık Bakanlığı MHRS randevu sistemidir. Bu nedenle kriz mesajlarında asla 182 veya doğrulanmamış hayali hat isimleri kullanılmaz. 182 yalnızca kriz dışı, rutin hekim randevusu planlama aşamasında listelenebilir.
+> **Kriz Desteği ve Poliklinik Randevu Ayrımı:**
+> - Sağlık Bakanlığı MHRS randevu hattı bir kriz danışma servisi **değildir**; poliklinik randevu sistemidir. Bu nedenle kriz mesajlarında asla randevu hatları veya doğrulanmamış hayali kriz numaraları kullanılmaz. Acil kriz hallerinde yegane resmi acil destek kanalı **112 Acil Çağrı Merkezi**'dir. Rutin randevu kanalları yalnızca kriz dışı, rutin hekim randevusu planlama adımlarında listelenebilir.
 > - **Araç Hareket Halindeyken Kriz:** Sürücüden ekrana bakması kesinlikle istenmez. Asistan sesli olarak sürücüye aracını güvenli bir yerde durdurmasını ve derhal 112'yi aramasını tavsiye eder.
 
 ## 4. Otonom Randevu Asistanı Sınırları & Açık Onay Kapısı

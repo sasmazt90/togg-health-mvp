@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 
-from mental_provider import get_active_mental_provider, check_mental_crisis
+from mental_provider import get_active_mental_provider, check_mental_crisis, get_active_session_analyzer
 from session_memory import SessionMemoryManager
 from care_provider import BrowserCareSearchProvider, DemoCareSearchProvider, CalendarProvider, TravelTimeProvider
 
@@ -43,7 +43,7 @@ vehicle_state = {
     "destination": {"latitude": 41.0082, "longitude": 28.9784, "label": "Levent, İstanbul"},
     "estimatedTravelTimeToDestMin": 22,
     "driverAuthenticated": True,
-    "driverId": "tru-user-001",
+    "driverId": "demo-driver-001",
     "driverName": "Ahmet Yılmaz",
     "driverFatigueSignal": "LOW",
     "cabinCameraAvailable": True,
@@ -73,13 +73,13 @@ profile_state = {
         "lastScanDate": "2026-09-17T18:40:00Z",
         "highestChangeRegion": "Sağ Yanak",
         "changePct": 24,
-        "baselineDiffNote": "Önceki ölçümünüze göre sağ yanak bölgesinde belirgin bir görsel değişim gözlendi. İsterseniz bir dermatologla görüşmek için uygun seçenekleri bulabilirim.",
+        "baselineDiffNote": "Önceki ölçümünüze göre sağ yanak bölgesinde belirgin bir görsel değişim gözlendi. Bir dermatologla görüşmek faydalı olabilir.",
         "referralSuggested": True
     },
     "mentalSummary": {
         "lastSessionDate": "2026-09-19T19:10:00Z",
-        "recurringThemes": ["uyku düzensizliği", "süregelen yorgunluk", "stres"],
-        "summaryText": "Son görüşmelerinizde uyku ve stres temalarının tekrar ettiği gözlemlendi.",
+        "recurringThemes": ["uyku düzensizliği", "fiziksel yorgunluk"],
+        "summaryText": "Son görüşmelerinizde uyku ve yorgunluk temalarının tekrar ettiği gözlemlendi.",
         "referralSuggested": True
     }
 }
@@ -96,6 +96,9 @@ class ConversePayload(BaseModel):
     sessionId: Optional[str] = None
     history: Optional[List[Dict[str, str]]] = None
 
+class AnalyzeSessionPayload(BaseModel):
+    messages: List[Dict[str, str]]
+
 class CreateSessionPayload(BaseModel):
     summaryText: str
     recurringThemes: List[str]
@@ -104,6 +107,7 @@ class CreateSessionPayload(BaseModel):
     moodAfter: Optional[str] = "RELAXED"
     escalationSuggested: Optional[bool] = False
     suggestedAction: Optional[str] = None
+    saveMentalSummaries: Optional[bool] = True
 
 class AppointmentMatchPayload(BaseModel):
     specialty: str
@@ -122,7 +126,7 @@ def read_root():
         "status": "OPERATIONAL",
         "language": "tr-TR",
         "clinicalSafety": "Non-diagnostic trend monitoring",
-        "version": "0.2.0-faz2"
+        "version": "0.3.0-faz3"
     }
 
 @app.get("/api/health")
@@ -138,15 +142,32 @@ def get_vehicle_state():
     return vehicle_state
 
 @app.post("/api/vehicle/toggle")
-def toggle_vehicle_mode():
-    if vehicle_state["vehicleParked"]:
-        vehicle_state["currentSpeed"] = 75
+def toggle_driving_mode():
+    if vehicle_state["vehicleMoving"]:
+        vehicle_state["vehicleMoving"] = False
+        vehicle_state["vehicleParked"] = True
+        vehicle_state["currentSpeed"] = 0
+        vehicle_state["gear"] = "P"
+        vehicle_state["state"] = "PARKED"
+    else:
+        vehicle_state["vehicleMoving"] = True
+        vehicle_state["vehicleParked"] = False
+        vehicle_state["currentSpeed"] = 50
+        vehicle_state["gear"] = "D"
+        vehicle_state["state"] = "DRIVING"
+    vehicle_state["lastUpdated"] = datetime.utcnow().isoformat()
+    return vehicle_state
+
+@app.post("/api/vehicle/speed")
+def update_vehicle_speed(payload: SpeedUpdatePayload):
+    speed = payload.speedKmH
+    vehicle_state["currentSpeed"] = speed
+    if speed > 0:
         vehicle_state["vehicleMoving"] = True
         vehicle_state["vehicleParked"] = False
         vehicle_state["gear"] = "D"
         vehicle_state["state"] = "DRIVING"
     else:
-        vehicle_state["currentSpeed"] = 0
         vehicle_state["vehicleMoving"] = False
         vehicle_state["vehicleParked"] = True
         vehicle_state["gear"] = "P"
@@ -154,19 +175,12 @@ def toggle_vehicle_mode():
     vehicle_state["lastUpdated"] = datetime.utcnow().isoformat()
     return vehicle_state
 
-@app.post("/api/vehicle/set-speed")
-def set_vehicle_speed(payload: SpeedUpdatePayload):
-    is_moving = payload.speedKmH > 0
-    vehicle_state["currentSpeed"] = payload.speedKmH
-    vehicle_state["vehicleMoving"] = is_moving
-    vehicle_state["vehicleParked"] = not is_moving
-    vehicle_state["gear"] = "D" if is_moving else "P"
-    vehicle_state["state"] = "DRIVING" if is_moving else "PARKED"
-    vehicle_state["lastUpdated"] = datetime.utcnow().isoformat()
-    return vehicle_state
+# ---------------------------------------------------------------------------
+# Health Profile Endpoints
+# ---------------------------------------------------------------------------
 
 @app.get("/api/profile")
-def get_profile():
+def get_user_profile():
     return profile_state
 
 # ---------------------------------------------------------------------------
@@ -187,14 +201,17 @@ def converse_mental_assistant(payload: ConversePayload):
     is_driving = vehicle_state["vehicleMoving"]
     user_msg = payload.userMessage.strip()
 
-    # 1. Kriz Güvenlik Filtresi (Deterministik + Sürüş duyarlı)
+    # 1. Kriz Güvenlik Filtresi (İki katmanlı: Deterministik + Sürüş duyarlı)
     crisis_check = check_mental_crisis(user_msg, is_driving)
     if crisis_check.get("isCrisis"):
         return {
             "reply": crisis_check["reply"],
             "isCrisis": True,
+            "riskLevel": crisis_check.get("riskLevel", "IMMINENT"),
+            "emergencyContact": crisis_check.get("emergencyContact", "112 Acil Çağrı Merkezi"),
             "drivingModeResponse": is_driving,
-            "providerType": "CRISIS_SAFETY_GUARD"
+            "providerType": "CRISIS_SAFETY_GUARD",
+            "clinicalDisclaimer": crisis_check.get("clinicalDisclaimer")
         }
 
     # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
@@ -211,6 +228,11 @@ def converse_mental_assistant(payload: ConversePayload):
 
     return result
 
+@app.post("/api/mental/analyze-session")
+def analyze_mental_session(payload: AnalyzeSessionPayload):
+    analyzer = get_active_session_analyzer()
+    return analyzer.analyze_session(payload.messages)
+
 @app.get("/api/mental/sessions")
 def get_mental_sessions():
     return SessionMemoryManager.get_all_sessions()
@@ -224,7 +246,8 @@ def record_mental_session(payload: CreateSessionPayload):
         mood_before=payload.moodBefore or "TIRED",
         mood_after=payload.moodAfter or "RELAXED",
         escalation_suggested=payload.escalationSuggested or False,
-        suggested_action=payload.suggestedAction
+        suggested_action=payload.suggestedAction,
+        save_mental_summaries=payload.saveMentalSummaries if payload.saveMentalSummaries is not None else True
     )
 
 # ---------------------------------------------------------------------------
@@ -238,7 +261,6 @@ def match_appointments(payload: AppointmentMatchPayload):
     specialty = payload.specialty
     city = payload.preferredCity or "İstanbul"
 
-    # Browser Agent veya Demo Arama
     if payload.useBrowserAgent:
         provider = BrowserCareSearchProvider()
     else:
@@ -247,18 +269,20 @@ def match_appointments(payload: AppointmentMatchPayload):
     search_result = provider.search_slots(specialty=specialty, city=city)
     slots = search_result.get("slots", [])
 
-    # Her slot için gerçek takvim çakışması ve ulaşım süresi hesabı
     processed_slots = []
     for slot in slots:
         date_time_str = slot.get("dateTime", "")
-        has_conflict = calendar_provider.has_conflict(date_time_str)
+        has_conflict = False
+        if date_time_str:
+            has_conflict = calendar_provider.has_conflict(date_time_str)
 
         travel_info = TravelTimeProvider.calculate_travel_time_min(slot.get("locationLabel", ""))
 
         processed_slots.append({
             **slot,
             "calendarConflict": has_conflict,
-            "calendarFits": not has_conflict,
+            "calendarFits": not has_conflict if date_time_str else True,
+            "calendarBadge": "Demo Takvim (Yerel Simülasyon)",
             "travelTimeMin": travel_info["estimatedMinutes"],
             "trafficBadge": travel_info["trafficBadge"],
             "matchScore": 95 if not has_conflict else 70

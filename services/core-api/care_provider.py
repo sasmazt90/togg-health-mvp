@@ -2,13 +2,17 @@
 Care Search & Browser Automation Provider
 Lisans: UNLICENSED
 
-Microsoft Playwright tabanlı salt-okunur (read-only) arama motoru,
-takvim çakışma kontrolü ve ulaşım süresi hesaplaması.
-
-İlkeler:
-- CAPTCHA veya bot engellerini asla aşmaya çalışma.
-- Eğer sayfa engellenirse açıkça hata/fallback ve güvenli el sıkışma (handoff) linki raporla.
-- Canlı sonuçları (LIVE) ve Demo sonuçları (DEMO) açıkça işaretle.
+İLKELER & GERÇEKLİK KURALI:
+1. Anti-bot, CAPTCHA veya Cloudflare engellerini asla aşmaya çalışma (BYPASS YAPMA).
+2. Gerçek DOM'dan zamanı okunmamış hiçbir veriyi 'Canlı Kaynak' veya 'LIVE_AVAILABILITY' olarak işaretleme.
+3. Doktor profili canlı kaynaktan bulunup müsaitlik saatleri DOM'dan okunamıyorsa:
+   sourceType = 'LIVE_PROVIDER_ONLY'
+   ve kullanıcıya 'Doktor profili canlı kaynaktan bulundu — müsaitlik için siteyi aç' güvenli el sıkışma (safe handoff) bağlantısı ver.
+4. Yalnızca DOM'dan gerçek zaman okunabilirse: sourceType = 'LIVE_AVAILABILITY'.
+5. Demo randevu slotları açıkça:
+   sourceType = 'DEMO', sourceBadge = 'Demo Randevu Verisi'.
+6. Demo verilerde gerçek kurum (Acıbadem, Dünyagöz vb.) veya gerçek hekim isimleri kullanılmaz;
+   tamamen jenerik sentetik isimler kullanılır ('Demo Göz Merkezi', 'Demo Dermatoloji Kliniği').
 """
 
 from abc import ABC, abstractmethod
@@ -25,56 +29,70 @@ class CareSearchProvider(ABC):
 
 class DemoCareSearchProvider(CareSearchProvider):
     """
-    Çevrimdışı ve test ortamları için gerçekçi demo randevu sağlayıcısı.
+    Çevrimdışı ve test ortamları için jenerik sentetik demo randevu sağlayıcısı.
+    Asla gerçek hekim veya hastane adı kullanmaz.
     Açıkça 'DEMO' veri rozeti taşır.
     """
     def search_slots(self, specialty: str, city: str = "İstanbul") -> Dict[str, Any]:
+        spec_slug = specialty.lower().replace(" ", "-")
+        now = datetime.now()
+
+        if "göz" in spec_slug:
+            center_name = "Demo Göz Sağlığı Merkezi"
+            doctor_name = "Uzm. Dr. A. Yılmaz (Demo Hekim)"
+        elif "derm" in spec_slug or "cilt" in spec_slug:
+            center_name = "Demo Dermatoloji Kliniği"
+            doctor_name = "Uzm. Dr. B. Kaya (Demo Hekim)"
+        else:
+            center_name = "Demo Danışmanlık ve Terapi Merkezi"
+            doctor_name = "Uzm. Psk. C. Demir (Demo Danışman)"
+
         slots = [
             {
                 "id": f"demo-slot-{specialty[:3].lower()}-01",
                 "specialty": specialty,
-                "providerName": "Doç. Dr. Selin Kaya",
+                "providerName": doctor_name,
                 "title": f"{specialty} Uzmanı",
-                "clinicName": "Acıbadem Altunizade Hastanesi",
-                "locationLabel": f"Altunizade, {city}",
+                "clinicName": center_name,
+                "locationLabel": f"Merkez Şube, {city}",
                 "isOnline": False,
-                "dateTime": (datetime.now() + timedelta(days=1, hours=4)).replace(minute=20).strftime("%Y-%m-%dT%H:%M:00"),
+                "dateTime": (now + timedelta(days=1, hours=4)).replace(minute=20).strftime("%Y-%m-%dT%H:%M:00"),
                 "displayTime": "Yarın 18:20",
                 "travelTimeMin": 14,
                 "sourceType": "DEMO",
-                "sourceBadge": "Demo Veri",
+                "sourceBadge": "Demo Randevu Verisi",
                 "bookingUrl": "https://www.doktortakvimi.com",
                 "bookingStatus": "AVAILABLE"
             },
             {
                 "id": f"demo-slot-{specialty[:3].lower()}-02",
                 "specialty": specialty,
-                "providerName": "Prof. Dr. Emre Demir",
-                "title": f"{specialty} ve Danışman Hekim",
-                "clinicName": "Dünyagöz Etiler",
-                "locationLabel": f"Etiler, {city}",
+                "providerName": f"Doç. Dr. D. Öztürk (Demo Hekim)",
+                "title": f"{specialty} ve Danışman",
+                "clinicName": f"{center_name} - Şube 2",
+                "locationLabel": f"Batı Yakası, {city}",
                 "isOnline": False,
-                "dateTime": (datetime.now() + timedelta(days=2, hours=3)).replace(minute=45).strftime("%Y-%m-%dT%H:%M:00"),
+                "dateTime": (now + timedelta(days=2, hours=3)).replace(minute=45).strftime("%Y-%m-%dT%H:%M:00"),
                 "displayTime": "Çarşamba 17:45",
                 "travelTimeMin": 22,
                 "sourceType": "DEMO",
-                "sourceBadge": "Demo Veri",
+                "sourceBadge": "Demo Randevu Verisi",
                 "bookingUrl": "https://www.doktortakvimi.com",
                 "bookingStatus": "AVAILABLE"
             },
             {
                 "id": f"demo-slot-{specialty[:3].lower()}-03",
                 "specialty": specialty,
-                "providerName": "Uzm. Psk. Zeynep Arslan" if specialty == "Klinik Psikoloji" else f"Uzm. Dr. Burak Çetin",
-                "title": f"{specialty} Danışmanı",
-                "clinicName": "Online Görüşme Odası",
-                "locationLabel": "Online / Araç İçi Ekran",
+                "providerName": f"Uzm. E. Şahin (Demo Çevrimiçi)",
+                "title": f"Çevrimiçi {specialty} Danışmanı",
+                "clinicName": "Togg Araç İçi Tele-Sağlık Odası",
+                "locationLabel": "Online / Araç Ekranı",
                 "isOnline": True,
-                "dateTime": (datetime.now() + timedelta(days=2, hours=5)).replace(minute=0).strftime("%Y-%m-%dT%H:%M:00"),
+                "dateTime": (now + timedelta(days=2, hours=5)).replace(minute=0).strftime("%Y-%m-%dT%H:%M:00"),
                 "displayTime": "Çarşamba 20:00",
                 "travelTimeMin": 0,
                 "sourceType": "DEMO",
-                "sourceBadge": "Demo Veri",
+                "sourceBadge": "Demo Randevu Verisi",
                 "bookingUrl": "https://www.doktortakvimi.com",
                 "bookingStatus": "AVAILABLE"
             }
@@ -82,7 +100,7 @@ class DemoCareSearchProvider(CareSearchProvider):
         return {
             "status": "SUCCESS",
             "providerType": "DEMO",
-            "sourceBadge": "Demo Veri",
+            "sourceBadge": "Demo Randevu Verisi",
             "specialty": specialty,
             "city": city,
             "slots": slots
@@ -91,16 +109,22 @@ class DemoCareSearchProvider(CareSearchProvider):
 
 class BrowserCareSearchProvider(CareSearchProvider):
     """
-    Playwright tabanlı otonom web tarayıcısı.
-    Türkiye'deki kamuya açık hekim sayfalarında salt-okunur arama yapar.
-    Bot engeli durumunda bunu sahte veriyle gizlemez; güvenli handoff olarak raporlar.
+    Playwright tabanlı otonom hekim bulma motoru.
+    Salt-okunur (read-only) arama yapar.
+    
+    GERÇEKLİK KURALI:
+    - Sayfa Cloudflare/CAPTCHA veya bot koruması altındaysa bypass YAPILMAZ.
+      Şeffaf biçimde 'FALLBACK_BLOCKED' ve güvenli handoff linki sunulur.
+    - Gerçek DOM'dan hekim kartı bulunsa bile, slot tarihi DOM'dan açıkça okunmadıkça
+      ASLA uydurma datetime üretilmez; 'LIVE_PROVIDER_ONLY' statüsü verilir.
+    - Sadece DOM'dan gerçek müsaitlik zamanı okunabildiğinde 'LIVE_AVAILABILITY' verilir.
     """
     def search_slots(self, specialty: str, city: str = "İstanbul") -> Dict[str, Any]:
         query_encoded = urllib.parse.quote(specialty)
         city_encoded = urllib.parse.quote(city)
         target_url = f"https://www.doktortakvimi.com/arama?q={query_encoded}&loc={city_encoded}"
 
-        extracted_slots: List[Dict[str, Any]] = []
+        extracted_providers: List[Dict[str, Any]] = []
         is_blocked = False
         error_message = None
 
@@ -114,57 +138,88 @@ class BrowserCareSearchProvider(CareSearchProvider):
                 page = context.new_page()
                 page.set_default_timeout(7000)
 
-                # Kamusal arama sayfasını ziyaret et
                 response = page.goto(target_url, wait_until="domcontentloaded")
-                
-                # Bot engeli veya Cloudflare tespiti
-                title = page.title().lower()
                 content = page.content().lower()
+                title = page.title().lower()
 
-                if "captcha" in content or "access denied" in content or "just a moment" in title or (response and response.status in [403, 429, 503]):
+                # Bot koruması veya doğrulama denetimi
+                if (
+                    "captcha" in content
+                    or "access denied" in content
+                    or "just a moment" in title
+                    or "cloudflare" in content
+                    or (response and response.status in [403, 404, 429, 503])
+                ):
                     is_blocked = True
-                    error_message = "Web sitesi bot koruması (Cloudflare/CAPTCHA) tespit edildi. Otomasyon kuralları gereği bypass yapılmadı; güvenli web yönlendirmesi sağlandı."
+                    error_message = (
+                        "Web sitesi bot/erişim koruması (Cloudflare/CAPTCHA) tespit edildi. "
+                        "Etik otomasyon gereği bypass yapılmadı; güvenli web yönlendirmesi hazırlandı."
+                    )
                 else:
-                    # Kamuya açık doktor kartlarını seçmeye çalış
-                    cards = page.query_selector_all(".search-item, [data-doctor-id], .card")
+                    # DOM üzerinden doktor kartlarını ara
+                    cards = page.query_selector_all(".search-item, [data-doctor-id], .card, [data-qa-id='doctor-card']")
                     for idx, card in enumerate(cards[:3]):
-                        name_elem = card.query_selector("h3, .doctor-name, a.text-body")
+                        name_elem = card.query_selector("h3, .doctor-name, a.text-body, [data-qa-id='doctor-name']")
                         name = name_elem.inner_text().strip() if name_elem else f"Hekim #{idx+1}"
-                        
-                        clinic_elem = card.query_selector(".address, .clinic-name, .text-muted")
-                        clinic = clinic_elem.inner_text().strip() if clinic_elem else f"{city} Sağlık Merkezi"
 
-                        slot_id = f"live-slot-{idx+1}"
-                        extracted_slots.append({
-                            "id": slot_id,
-                            "specialty": specialty,
-                            "providerName": name,
-                            "title": f"{specialty} Uzmanı",
-                            "clinicName": clinic,
-                            "locationLabel": f"{city} (Web Arama)",
-                            "isOnline": False,
-                            "dateTime": (datetime.now() + timedelta(days=1, hours=3+idx)).strftime("%Y-%m-%dT%H:00:00"),
-                            "displayTime": f"Görünen Slot #{idx+1}",
-                            "travelTimeMin": 18,
-                            "sourceType": "LIVE",
-                            "sourceBadge": "Canlı Kaynak (Browser Agent)",
-                            "bookingUrl": target_url,
-                            "bookingStatus": "AVAILABLE"
-                        })
+                        clinic_elem = card.query_selector(".address, .clinic-name, .text-muted, [data-qa-id='doctor-address']")
+                        clinic = clinic_elem.inner_text().strip() if clinic_elem else f"{city} Kliniği"
+
+                        profile_elem = card.query_selector("a[href*='/doktor/'], a.doctor-link, a")
+                        profile_href = profile_elem.get_attribute("href") if profile_elem else ""
+                        profile_url = urllib.parse.urljoin("https://www.doktortakvimi.com", profile_href) if profile_href else target_url
+
+                        # DOM'da açıkça okunabilen takvim slotu var mı denetle
+                        slot_btn = card.query_selector(".calendar-slot, [data-qa-id='slot-button'], .btn-time")
+                        if slot_btn and slot_btn.inner_text().strip():
+                            # Gerçek DOM slot zamanı bulundu
+                            raw_slot_text = slot_btn.inner_text().strip()
+                            extracted_providers.append({
+                                "id": f"live-slot-{idx+1}",
+                                "specialty": specialty,
+                                "providerName": name,
+                                "title": f"{specialty} Uzmanı",
+                                "clinicName": clinic,
+                                "locationLabel": f"{city} (Doğrulanan Web Kaynağı)",
+                                "isOnline": False,
+                                "rawExtractedTime": raw_slot_text,
+                                "sourceType": "LIVE_AVAILABILITY",
+                                "sourceBadge": "Canlı Müsaitlik (Web Kaynağı)",
+                                "bookingUrl": profile_url,
+                                "bookingStatus": "AVAILABLE"
+                            })
+                        else:
+                            # Hekim profili bulundu ama müsaitlik saatleri DOM'da açık değil
+                            # KESİNLİKLE SAHTE DATETIME ÜRETİLMEZ!
+                            extracted_providers.append({
+                                "id": f"live-provider-{idx+1}",
+                                "specialty": specialty,
+                                "providerName": name,
+                                "title": f"{specialty} Uzmanı",
+                                "clinicName": clinic,
+                                "locationLabel": f"{city} (Canlı Keşif)",
+                                "isOnline": False,
+                                "sourceType": "LIVE_PROVIDER_ONLY",
+                                "sourceBadge": "Canlı Hekim Profili (Müsaitlik İçin Siteyi Aç)",
+                                "bookingUrl": profile_url,
+                                "bookingStatus": "DISCOVERED_ONLY",
+                                "instructions": "Doktor profili canlı kaynaktan bulundu — müsaitlik için siteyi aç"
+                            })
+
                 browser.close()
 
         except Exception as e:
             is_blocked = True
-            error_message = f"Web otomasyonu bağlantı engeli: {str(e)[:120]}"
+            error_message = f"Web otomasyon bağlantı durumu: {str(e)[:120]}"
 
-        if is_blocked or not extracted_slots:
-            # Şeffaf Fallback: Kullanıcıya engeli bildir ve demo veriyi açık DEMO rozetiyle sun
+        if is_blocked or not extracted_providers:
+            # Şeffaf Fallback
             demo_prov = DemoCareSearchProvider()
             demo_data = demo_prov.search_slots(specialty, city)
             return {
                 "status": "FALLBACK_BLOCKED",
                 "providerType": "BROWSER_WITH_DEMO_FALLBACK",
-                "sourceBadge": "Demo Veri (Canlı Site Korumalı)",
+                "sourceBadge": "Demo Randevu Verisi (Canlı Site Korumalı)",
                 "liveSearchUrl": target_url,
                 "handoffNote": error_message or "Canlı web araması kısıtlandı; güvenli handoff linki hazırlandı.",
                 "specialty": specialty,
@@ -179,25 +234,27 @@ class BrowserCareSearchProvider(CareSearchProvider):
             "liveSearchUrl": target_url,
             "specialty": specialty,
             "city": city,
-            "slots": extracted_slots
+            "slots": extracted_providers
         }
 
 
 class CalendarProvider:
     """
-    Kullanıcının mevcut takvimini tutar ve randevu saatleri için gerçek aralık çakışması (interval collision) hesaplar.
+    Kullanıcının yerel simüle takvimini tutar ve randevu saatleri için
+    gerçek zaman aralığı kesişim matematiği (interval collision) uygular:
+    max(start1, start2) < min(end1, end2)
+    
+    NOT: Bu bir 'Demo Takvim / Yerel Takvim Simülasyonu'dur.
+    Google/Apple Calendar için sağlayıcı arayüzü hazırdır; OAuth2 canlı entegrasyonu planlanmıştır.
     """
     def __init__(self):
         now = datetime.now()
-        # Kullanıcının mevcut meşgul zaman aralıkları
         self.busy_intervals = [
-            # Yarın 18:00 - 19:00 arası toplantı
             {
                 "title": "Şirket Değerlendirme Toplantısı",
                 "start": (now + timedelta(days=1)).replace(hour=18, minute=0, second=0, microsecond=0),
                 "end": (now + timedelta(days=1)).replace(hour=19, minute=0, second=0, microsecond=0)
             },
-            # Çarşamba 17:00 - 18:00 arası sürüş/seyahat
             {
                 "title": "Araç Servis Randevusu",
                 "start": (now + timedelta(days=2)).replace(hour=17, minute=0, second=0, microsecond=0),
@@ -206,9 +263,6 @@ class CalendarProvider:
         ]
 
     def has_conflict(self, slot_iso_time: str, duration_min: int = 45) -> bool:
-        """
-        slotStart < eventEnd ve slotEnd > eventStart ise çakışma vardır.
-        """
         try:
             slot_start = datetime.fromisoformat(slot_iso_time)
             slot_end = slot_start + timedelta(minutes=duration_min)
@@ -223,22 +277,22 @@ class CalendarProvider:
 
 class TravelTimeProvider:
     """
-    Araç konumu ile klinik konumu arasındaki sürüş süresi tahmini.
-    Gerçek harita anahtarı yoksa açıkça 'MockTravelTimeProvider' olduğunu ve
-    sonucun 'Demo Veri' olduğunu bildirir.
+    Araç konumu ile randevu konumu arasındaki tahmini sürüş süresi.
+    Canlı trafik harita API anahtarı olmadığında açıkça 'MockTravelTimeProvider'
+    ve 'Tahmini Süre — Demo Model' etiketiyle çalışır.
     """
     @staticmethod
     def calculate_travel_time_min(dest_location_label: str) -> Dict[str, Any]:
-        # Harita API key yok -> Deterministik simüle süre
         minutes = 14
-        if "etiler" in dest_location_label.lower():
+        dest_lower = dest_location_label.lower()
+        if "batı" in dest_lower or "etiler" in dest_lower:
             minutes = 22
-        elif "online" in dest_location_label.lower():
+        elif "online" in dest_lower:
             minutes = 0
 
         return {
             "estimatedMinutes": minutes,
             "isLiveTraffic": False,
             "provider": "MockTravelTimeProvider",
-            "trafficBadge": "Tahmini Sürüş (Demo Veri)"
+            "trafficBadge": "Tahmini Süre — Demo Model"
         }

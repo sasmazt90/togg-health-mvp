@@ -12,17 +12,17 @@ Bu yol haritası, **Togg Health MVP**'nin çalışan bir yerel prototipten Togg 
   - Sürüş vs. Park duyarlı, kriz protokolü entegre sesli mental asistan.
   - Playwright browser agent ile takvim ve sürüş süresi uyumlu randevu eşleştirme.
   - `MockVehicleProvider` ile sürüş/park modu simülasyonu (`VehicleDataProvider` / `ToggVehicleProvider` soyutlaması).
-  - Yerel SQLite veri depolama ve gizlilik mimarisi.
+  - Yerel localStorage ve JSON oturum belleği ile gizlilik mimarisi.
 
 ---
 
 ## Aşama 2: Togg PoC ve Araç İçi Test Tezgahı (Sonraki Adım)
 * **Hedef:** Togg test araçlarında veya kabin simülatöründe donanım entegrasyon PoC'si.
 * **Kapsam:**
-  - Togg araç içi dikiz aynası/kabin tavan kamerasından RTSP/gstreamer video akışı alımı (*Togg kabin API erişimine tabidir*).
+  - Togg araç içi dikiz aynası/kabin tavan kamerasından video akışı alımı (*Togg kabin kamera API erişimine tabidir*).
   - Direksiyon simidi tuşları (ok düğmeleri) ile Landolt C yönlerinin seçilmesi.
   - Araç içi stereo mikrofon dizilimi ve hoparlörler ile gürültü filtrelemeli sesli diyalog.
-  - Togg Tru.ID kullanıcı profili ile oturum açma soyutlaması.
+  - Togg kullanıcı profili ile oturum açma soyutlaması.
 
 ---
 
@@ -30,7 +30,7 @@ Bu yol haritası, **Togg Health MVP**'nin çalışan bir yerel prototipten Togg 
 * **Hedef:** `MockVehicleProvider` yerine `ToggVehicleProvider` geçişi.
 * **Kapsam:**
   - Togg Araç İçi Bilgi-Eğlence İşletim Sistemi üzerinde yerel uygulama veya optimize Web App olarak çalışma.
-  - Araç Telemetrisi (*Gelecek plan / Togg tarafından sağlanacak resmi API veya köprülere tabidir; doğrudan CAN-bus erişimi varsayılmaz*): Araç hızı ($v > 0$), vites konumu (P/D), Trugo şarj durumu ($SOC$).
+  - Araç Telemetrisi (Togg tarafından sağlanacak resmi araç API'leri / SDK'ları ile entegre edilir; teknik abstraction: `VehicleDataProvider` / `ToggVehicleProvider`): Araç hızı ($v > 0$), vites konumu (P/D), şarj durumu ($SOC$).
   - Dahili Togg Navigasyonu ile randevu hekiminin kliniğine tek tıkla rota oluşturma (*Togg Navigasyon SDK desteği durumunda*).
   - Trugo şarj molalarında 5 dakikalık "Mola Sağlık Kontrolü" akıllı bildirimleri.
 

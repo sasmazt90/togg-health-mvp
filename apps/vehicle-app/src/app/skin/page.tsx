@@ -23,7 +23,8 @@ import {
   Info,
   Sliders,
   AlertCircle,
-  VideoOff
+  VideoOff,
+  Cpu
 } from 'lucide-react';
 
 export default function SkinPage() {
@@ -38,10 +39,12 @@ export default function SkinPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState<boolean>(false);
 
   // Canlı hizalama ve kalite durumu
   const [alignment, setAlignment] = useState<FaceAlignment>({
     faceDetected: false,
+    isMediaPipeActive: false,
     yaw: 0,
     pitch: 0,
     roll: 0,
@@ -56,8 +59,21 @@ export default function SkinPage() {
     status: 'OPTIMAL'
   });
 
-  // Analiz sonuçları
+  // Analiz sonuçları (Asla sentetik fallback içermez)
   const [analysisResult, setAnalysisResult] = useState<SkinAnalysisResult | null>(null);
+
+  // MediaPipe FaceLandmarker'ı başlat
+  useEffect(() => {
+    let isMounted = true;
+    SkinAnalyzer.getFaceLandmarker().then((landmarker) => {
+      if (isMounted && landmarker) {
+        setIsMediaPipeLoaded(true);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Temizlik
   useEffect(() => {
@@ -128,7 +144,7 @@ export default function SkinPage() {
       setAlignment(align);
 
       // Kalite kontrolü
-      const q = SkinAnalyzer.checkQuality(ctx, w, h);
+      const q = SkinAnalyzer.checkQuality(ctx, w, h, align.faceDetected);
       setQuality(q);
     }, 250);
 
@@ -148,8 +164,8 @@ export default function SkinPage() {
       const w = canvas.width;
       const h = canvas.height;
 
-      // 6 ROI bölgesini hesapla
-      const regionMetrics = SkinAnalyzer.analyzeRegions(ctx, w, h, alignment.box);
+      // 6 ROI bölgesini gerçek landmarklar üzerinden hesapla
+      const regionMetrics = SkinAnalyzer.analyzeRegions(ctx, w, h, alignment);
 
       // Baz çizgi (Baseline) okuma ve karşılaştırma
       let storedBaseline: Record<string, RegionMetrics> | null = null;
@@ -180,7 +196,8 @@ export default function SkinPage() {
         highestChangePct: comparison.highestChangePct,
         referralSuggested: comparison.referralSuggested,
         isBaseline: comparison.isBaseline,
-        clinicalNoteTr: comparison.clinicalNoteTr
+        clinicalNoteTr: comparison.clinicalNoteTr,
+        usedMediaPipe: alignment.isMediaPipeActive
       };
 
       setAnalysisResult(finalResult);
@@ -222,16 +239,7 @@ export default function SkinPage() {
     router.push('/care?specialty=Dermatoloji&from=skin');
   };
 
-  const regionList = analysisResult
-    ? Object.values(analysisResult.regions)
-    : [
-        { id: 'forehead', nameTr: 'Alın', rednessScore: 22, luminanceScore: 68, textureVariance: 16, changeFromBaselinePct: 3 },
-        { id: 'rightCheek', nameTr: 'Sağ Yanak', rednessScore: 38, luminanceScore: 54, textureVariance: 32, changeFromBaselinePct: 24 },
-        { id: 'leftCheek', nameTr: 'Sol Yanak', rednessScore: 24, luminanceScore: 66, textureVariance: 19, changeFromBaselinePct: 5 },
-        { id: 'nose', nameTr: 'Burun', rednessScore: 26, luminanceScore: 62, textureVariance: 21, changeFromBaselinePct: 2 },
-        { id: 'chin', nameTr: 'Çene', rednessScore: 21, luminanceScore: 65, textureVariance: 17, changeFromBaselinePct: 3 },
-        { id: 'periorbital', nameTr: 'Göz Çevresi', rednessScore: 19, luminanceScore: 48, textureVariance: 24, changeFromBaselinePct: 8 }
-      ];
+  const regionList = analysisResult ? Object.values(analysisResult.regions) : [];
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -244,7 +252,7 @@ export default function SkinPage() {
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-white">Cilt Kontrolü ve Değişim Takibi</h1>
             <p className="text-xs text-slate-400">
-              Canlı kamera akışı, 6 yüz ROI analizi, ışık/bulanıklık filtreleri ve zamana yayılan baz çizgi takibi
+              Canlı kamera akışı, 6 yüz ROI analizi, ışık/bulanıklık filtreleri ve zamana yayılan referans takibi
             </p>
           </div>
         </div>
@@ -262,7 +270,7 @@ export default function SkinPage() {
           <div className="space-y-2">
             <h2 className="text-lg font-bold text-white">Zaman İçindeki Cilt Değişim Analizi</h2>
             <p className="text-sm text-slate-300 leading-relaxed">
-              Sistemimiz tek seferlik yanıltıcı bir "cilt puanı" veya tıbbi tanı vermek yerine; aynı ışık ve açıda alınan önceki referans taramanızla (baz çizgi) yeni taramanızı 6 farklı bölgede (alın, yanaklar, burun, çene, göz çevresi) karşılaştırır.
+              Sistemimiz tek seferlik yanıltıcı bir "cilt puanı" veya tıbbi tanı vermek yerine; aynı ışık ve açıda alınan önceki referans taramanızla yeni taramanızı 6 farklı bölgede (alın, yanaklar, burun, çene, göz çevresi) piksel seviyesinde karşılaştırır.
             </p>
           </div>
 
@@ -408,7 +416,7 @@ export default function SkinPage() {
           <div className="w-16 h-16 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
           <h2 className="text-lg font-bold text-white">6 Bölge Piksel Analizi Yapılıyor...</h2>
           <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Alın, yanaklar, burun, çene ve göz çevresi pikselleri okunuyor; kızarıklık, lüminans ve doku varyansı hesaplanıyor.
+            Alın, yanaklar, burun, çene ve göz çevresi pikselleri okunuyor; kızarıklık eğilimi, ton ve doku değişim göstergeleri hesaplanıyor.
           </p>
         </div>
       )}
@@ -461,15 +469,15 @@ export default function SkinPage() {
 
                   <div className="mt-3 space-y-1 text-[11px] text-slate-400">
                     <div className="flex justify-between">
-                      <span>Kızarıklık İndeksi:</span>
+                      <span>Kızarıklık Eğilimi:</span>
                       <strong className="text-slate-200">{reg.rednessScore} / 100</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span>Lüminans:</span>
+                      <span>Cilt Tonu/Parlaklık:</span>
                       <strong className="text-slate-200">%{reg.luminanceScore}</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span>Doku Varyansı:</span>
+                      <span>Doku Göstergesi:</span>
                       <strong className="text-slate-200">{reg.textureVariance}</strong>
                     </div>
                   </div>
@@ -478,7 +486,7 @@ export default function SkinPage() {
             })}
           </div>
 
-          {/* Klinik Olmayan Değişim Notu */}
+          {/* Non-klinik Değişim Notu */}
           <div className="bg-amber-950/30 border border-amber-800/60 rounded-xl p-5 text-sm text-amber-200 space-y-2">
             <div className="font-bold flex items-center gap-2">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
@@ -486,7 +494,7 @@ export default function SkinPage() {
             </div>
             <p className="text-xs text-amber-300/90 leading-relaxed">
               {analysisResult?.clinicalNoteTr ||
-                'Önceki ölçümünüze göre belirgin bir görsel değişim gözlendi. İsterseniz bir dermatologla görüşmek için uygun seçenekleri bulabilirim.'}
+                'Bölgesel görsel ölçümler baz çizgi referans bandında seyretmektedir.'}
             </p>
           </div>
 
@@ -494,7 +502,7 @@ export default function SkinPage() {
           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-slate-500 shrink-0" />
             <span>
-              Bu analiz bir tıbbi tanı veya klinik cilt muayenesi değildir; görsel renk kanalları ve doku gradyanı trend takibidir. Ham yüz görüntüleri hiçbir zaman kalıcı olarak diske kaydedilmez.
+              Bu analiz tıbbi bir tanı veya klinik muayene değildir; piksel renk kanalları ve doku gradyanı trend takibidir. Ham yüz görüntüleri hiçbir zaman kalıcı olarak diske veya sunucuya kaydedilmez.
             </span>
           </div>
 

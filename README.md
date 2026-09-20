@@ -15,61 +15,80 @@ Modern araçlar artık yalnızca bir ulaşım aracı değil, kullanıcıların h
 
 **Togg Health MVP**, araç içi donanımları (geniş kokpit ekranı, kabin kamerası, mikrofon sistemi, araç konumu ve sürüş telemetrisi) aktif ve önleyici bir sağlık takip merkezine dönüştürür.
 
-Bu proje bağımsız 4 ayrı demo değildir. **Ortak bir kullanıcı profili, ortak sağlık geçmişi, ortak güvenlik katmanı ve ortak randevu altyapısı** ile birbirine bağlı çalışan tek bir bütünleşik üründür.
+Bu proje bağımsız 4 ayrı demo değildir. **Ortak bir kullanıcı profili, ortak sağlık geçmişi, ortak güvenlik katmanı ve ortak randevu sevk altyapısı (`ReferralContext`)** ile birbirine bağlı çalışan tek bir bütünleşik üründür.
 
 ---
 
-## 2. Dört Temel Modül
+## 2. Özellik ve Entegrasyon Durumu Matrisi
 
-1. **Görme Kontrolü:** Araç ekranını aktif bir optometri değerlendirme aracına dönüştürür. Kamera ile mesafe kalibrasyonu yapar; sağ/sol göz keskinliğini ve kontrast hassasiyetini ölçer, geçmiş sonuçlarla karşılaştırır.
-2. **Cilt Kontrolü:** Araç içi kamera ile yüzü 6 bölgeye (alın, yanaklar, burun, çene, göz çevresi) ayırır; kızarıklık, pigmentasyon ve doku değişimlerini zamana yayılan baz çizgi ile karşılaştırır.
-3. **Yapay Zekâ Destekli Ruhsal İyi Oluş Asistanı:** Yalnızca ruh hali tespiti yapmakla kalmaz; uzun süreli sesli diyalog kurar, seans hafızası tutar, eğilimleri analiz eder. Sürüş sırasında dikkat dağıtmayacak kısa sesli yanıtlara geçer, park halinde detaylı özetler sunar.
-4. **Sağlık Profesyoneli ve Randevu Asistanı:** Kullanıcıya yalnızca "doktora git" demez; uygun branştaki hekimleri (DoktorTakvimi, Doktorsitesi vb.) browser agent ile tarar, kullanıcının takvimi ve araç sürüş süresiyle eşleştirir, kullanıcının açık onayıyla randevu planlar.
+### Çalışan MVP Özellikleri (Gerçekte Çalışanlar)
+* **Görme (Vision):**
+  * Gerçek webcam video akışı (`getUserMedia`).
+  * Standart kart (85.6 mm) ile ekran DPI kalibrasyonu.
+  * Kullanıcı doğrulamalı test mesafesi (50 / 55 / 60 cm).
+  * 4 yönlü Landolt C optotipi ve 2-down / 1-up psikometrik basamak algoritması.
+  * Gerçek Weber kontrast hassasiyeti testi.
+  * Araç hareket halindeyken otomatik park kilidi.
+* **Cilt (Skin):**
+  * `@mediapipe/tasks-vision` (FaceLandmarker) ile gerçek 468 nokta yüz geometrisi.
+  * Yüz açısı (yaw, pitch, roll) ve ışık/bulanıklık kalite filtreleri.
+  * 6 anatomik ROI (alın, yanaklar, burun, çene, göz çevresi) piksel ekstraksiyonu.
+  * Göz ve dudak bölgelerini hariç tutan koruyucu maskeleme.
+  * $2R - G - B$ kırmızılık eğilimi, CIE parlaklık ve doku varyansı hesabı.
+  * İlk ölçümü referans alarak zaman içindeki gerçek yüzdelik değişim ($\Delta$) takibi.
+  * Sıfır ham görüntü kaydı (analiz sonrası RAM'den temizlenir).
+* **Ruhsal Asistan (Mental):**
+  * W3C Web Speech API ile tarayıcı içi gerçek zamanlı Türkçe ses tanıma (STT) ve seslendirme (TTS).
+  * `MentalConversationProvider` soyutlaması (OpenAI uyumlu canlı LLM veya açıkça etiketli yerel motor).
+  * `MentalSessionAnalyzer` ile konuşmanın gerçek içeriğinden yapılandırılmış özet ve tema çıkarımı.
+  * Sürüş modunda 25 kelime altı kısa, dikkat dağıtmayan sesli yanıt kısıtları.
+  * İki katmanlı kriz güvenliği: Öncelikli anahtar kelime filtresi, yalnızca 112 Acil Çağrı Merkezi yönlendirmesi (182 kriz mesajlarında ASLA yer almaz).
+* **Sağlık Asistanı (Care Agent):**
+  * Microsoft Playwright ile kamuya açık hekim dizinlerinde salt-okunur arama ve hekim keşfi.
+  * Bot koruması veya CAPTCHA durumunda şeffaf safe-handoff devri.
+  * `CalendarProvider` gerçek zaman aralığı çarpışma matematiği.
+  * Sevk bağlamı (`ReferralContext`) ile Görme, Cilt ve Mental modüllerinden branş ve gerekçe devralma.
+  * Randevu devri öncesi zorunlu açık kullanıcı onayı kapısı (Consent Gate).
+* **Gizlilik ve Veri Denetimi (`/privacy`):**
+  * Donanım izinleri (kamera/mikrofon) durumu ve canlı test.
+  * Mental seans özetlerini saklama izni toggle'ı.
+  * Tek tıkla yerel sağlık geçmişini ve telemetriyi kalıcı olarak silme.
+
+### Demo / Simüle Entegrasyonlar
+* **Araç Hız ve Sürüş Simülasyonu:** Üst barda yer alan 0 km/s (Park) ve 50 km/s (Sürüş) butonları ile araç telematik durumu simüle edilir.
+* **Demo Randevu Slotları:** Canlı web sitelerinde bot koruması nedeniyle slot saatleri okunamadığında devreye giren jenerik sentetik hekim/klinik profilleri (`[Demo Randevu Verisi]`).
+* **Demo Takvim:** Kullanıcının mevcut programı yerel bir takvim simülasyonu üzerinde test edilir (`[Demo Takvim]`).
+* **Travel Time:** Sürüş süreleri deterministik bir model üzerinden hesaplanır (`[Tahmini Süre — Demo Model]`).
+
+### Togg ile PoC Sonrası Entegrasyonlar (Gelecek Yol Haritası)
+* Togg tarafından sağlanacak resmi araç API'leri / SDK'ları (`VehicleDataProvider` / `ToggVehicleProvider` köprüsü).
+* Kabin içi yakın kızılötesi (NIR) sürücü izleme kamerası doğrudan entegrasyonu.
+* Gerçek navigasyon ve canlı trafik API'si bağlantısı.
+* Resmi Togg kullanıcı profili ve kimlik doğrulama entegrasyonu.
+* Sağlık Bakanlığı resmi MHRS hekim randevu API entegrasyonu.
 
 ---
 
-## 3. Mevcut Togg Dijital Sağlık Deneyiminden Farkımız
+## 3. Klinik Güvenlik ve İletişim Dili
 
-Togg'un halihazırda dijital sağlık alanında ruh hali analizi, ses analizi, nefes egzersizleri ve rahatlatıcı müzik gibi kıymetli çalışmaları bulunmaktadır. Bu ürün bunların bir kopyası değildir:
+Ürün **KESİNLİKLE TANI KOYMAZ**.
 
-| Özellik | Standart Araç İçi Çözümler | Togg Health MVP |
-| :--- | :--- | :--- |
-| **Görme** | Yok / Yalnızca yorgunluk ikazı | Araç ekranında aktif Landolt C & kontrast hassasiyeti ön değerlendirmesi |
-| **Cilt** | Yok | MediaPipe ile 6 bölgeli zaman içindeki cilt değişimi takibi |
-| **Ruhsal Destek**| Kısa ruh hali etiketi, nefes egzersizi | Sürekli sesli diyalog, seans hafızası, kronik stres eğilim tespiti |
-| **Aksiyon** | Pasif tavsiye ("dinlenin") | Otonom browser agent ile takvim ve araç sürüş süresi uyumlu randevu bulma |
-| **Tıbbi Güvenlik**| - | Kesinlikle tanı koymaz; açık, yargılamayan değişim dili ve kriz protokolü |
-
----
-
-## 4. Temel Ürün Yaklaşımı ve Klinik Dil
-
-Ürün **TANI KOYMAMALIDIR**.
-
-* ❌ **YANLIŞ:** *"Akneniz var."*, *"Depresyondasınız."*, *"Gözünüzde katarakt var."*
+* ❌ **YANLIŞ:** *"Eritem tespit edildi."*, *"Gözünüz bozulmuş."*, *"Ağır depresyondasınız."*, *"Derhal doktora başvurun."*
 * ✅ **DOĞRU:**
-  - *"Önceki ölçümünüze göre sağ yanak bölgesinde görsel bir değişim gözlendi."*
-  - *"Son görüşmelerinizde stres ve uyku tekrar eden temalar olarak öne çıktı."*
-  - *"Önceki değerlendirmeye göre kontrast hassasiyetinizde değişim gözlendi."*
-  - *"Bir sağlık profesyoneliyle görüşmeniz faydalı olabilir."*
+  - *"Önceki ölçümünüze göre sağ yanak bölgesinde belirgin bir görsel değişim gözlendi. Bir dermatologla görüşmek faydalı olabilir."*
+  - *"Son görüşmelerinizde uyku ve yoğun tempo temalarının tekrar ettiği gözlemlendi."*
+  - *"Ölçülen değerler kullanıcı doğrulamalı mesafeye dayalı işlevsel bir ön değerlendirmedir; kesin muayene niteliği taşımaz."*
+
+Detaylı klinik protokol ve kriz kuralları için [SAFETY.md](SAFETY.md) belgesini inceleyin.
 
 ---
 
-## 5. Teknik Mimari
-
-* **Frontend:** Next.js 14+ (App Router), React, TypeScript, Tailwind CSS. Otomotiv standartlarına uygun geniş yatay ekran tasarımı, koyu tema, yüksek kontrast, büyük dokunma alanları.
-* **Backend:** Python 3.11, FastAPI, Pydantic, SQLite (local-first, sıfır harici bulut bağımlılığı).
-* **Araç Bağlamı (Vehicle Context):** `VehicleContextProvider` ve `MockVehicleProvider` arayüzü sayesinde gerçek Togg API'leri gelmeden sürüş/park modu eksiksiz simüle edilir.
-* **Açık Kaynak Lisans İzolasyonu:** FrACT GPL olduğu için kod kopyalanmamış; uluslararası kamu malı optometri formülleri temel alınarak motor sıfırdan özgün olarak yazılmıştır. MediaPipe ve Playwright ise ticari kullanıma uygun Apache-2.0 lisanslıdır. Proje kodlarımız UNLICENSED (özel mülkiyet) olarak korunmaktadır.
-
----
-
-## 6. Kurulum ve Çalıştırma
+## 4. Kurulum ve Çalıştırma
 
 ### Gereksinimler
-- Node.js 18+ (Node 22 önerilir)
+- Node.js 18+ (Node 20 veya 22 önerilir)
 - Python 3.11+
-- Git
+- Google Chrome veya Chromium
 
 ### Adım Adım Kurulum
 
@@ -85,9 +104,9 @@ Togg'un halihazırda dijital sağlık alanında ruh hali analizi, ses analizi, n
    npm install
    npm run dev
    ```
-   Arayüz `http://localhost:3000` adresinde çalışacaktır.
+   Arayüz `http://localhost:3000` adresinde açılacaktır.
 
-3. **Backend Kurulumu (Yeni Terminalde):**
+3. **Backend Kurulumu (Ayrı Bir Terminalde):**
    ```bash
    cd services/core-api
    python -m venv .venv
@@ -95,39 +114,32 @@ Togg'un halihazırda dijital sağlık alanında ruh hali analizi, ses analizi, n
    .venv\Scripts\activate
    # Linux/macOS:
    source .venv/bin/activate
+   
    pip install -r requirements.txt
-   uvicorn main:app --reload --port 8000
+   python -m playwright install chromium
+   
+   python -m uvicorn main:app --reload --port 8000
    ```
 
 ---
 
-## 7. Ana Demo Yolculukları
+## 5. Testlerin Çalıştırılması
 
-### Demo 1 — Görme Ön Değerlendirmesi
-Ana Ekran → Görme Kontrolü → Kamera mesafe kalibrasyonu (50-60 cm) → Sağ göz testi → Sol göz testi → Kontrast hassasiyeti → Değişim analizi → Göz doktoru önerisi → Care Agent'a aktarım → Takvim ve ulaşım uyumlu slot seçimi → Kullanıcı onayı. *(Araç sürüş moduna alındığında test kilitlenir).*
+Birim ve entegrasyon testlerini çalıştırmak için kök dizinde:
+```bash
+pytest tests/unit -v
+```
 
-### Demo 2 — Cilt Değişimi Takibi
-Ana Ekran → Cilt Kontrolü → Kamera açısı ve ışık hizalaması → 6 bölgeli tarama (alın, yanaklar, burun, çene, göz çevresi) → Önceki tarama ile karşılaştırma → Bölgesel kızarıklık/doku değişimi bildirimi → Dermatolog önerisi → Randevu asistanı.
-
-### Demo 3 — Sesli Ruhsal İyi Oluş Asistanı
-Sesli başlatma ("Togg, nasılsın?") → Kullanıcı konuşur → Asistan dinler ve yanıtlar → Seans hafızası ve eğilim güncellemesi → Sürüşte kısa yanıtlar, parkta derinleşme → Tekrarlayan stres/uyku durumunda uzman psikolog önerisi → Randevu planlama.
-
----
-
-## 8. Gizlilik ve Güvenlik (Privacy-by-Design)
-
-- **Kamera ve Mikrofon:** Ham görüntüler veya sesler sunucuda saklanmaz; analiz sonrası derhal bellekten atılır.
-- **Kişisel Sağlık Verisi:** Yalnızca kullanıcının yerel cihazında (local SQLite) şifrelenebilir yapıda tutulur.
-- **Public Repo İzolasyonu:** `.gitignore` kuralları ile hiçbir API anahtarı, `.env` dosyası veya kişisel veri GitHub'a gönderilmez.
-- Detaylar için [SAFETY.md](SAFETY.md) ve [LICENSES.md](LICENSES.md) dosyalarını inceleyin.
+Frontend production derlemesini doğrulamak için:
+```bash
+cd apps/vehicle-app
+npm run build
+```
 
 ---
 
-## 9. Togg Entegrasyon Stratejisi
+## 6. Lisans ve Telif Durumu
 
-Bu MVP, Togg'a bir fikir değil, çalışan bir ürün olarak sunulmak üzere geliştirilmiştir:
-- `MockVehicleProvider` $\rightarrow$ `ToggVehicleProvider`
-- `DemoIdentityProvider` $\rightarrow$ `ToggTruIDProvider`
-- `MockTravelTimeProvider` $\rightarrow$ `ToggNavigationProvider`
-
-Detaylı gelişim aşamaları için [ROADMAP.md](ROADMAP.md) belgesine bakınız.
+* Bu projenin kendi özgün kaynak kodları tescilli olup `"UNLICENSED"` olarak belirlenmiştir; izinsiz ticari kullanımı yasaktır.
+* Kullanılan harici kütüphaneler (`@mediapipe/tasks-vision`, `playwright`, `fastapi`, `next`, `react`, `lucide-react`) izin verici (permissive) açık kaynak lisanslara (Apache-2.0, MIT, BSD, ISC) sahiptir.
+* Lisans dökümü için [LICENSES.md](LICENSES.md) dosyasına bakınız.

@@ -62,13 +62,31 @@ def test_vision_distance_optotype_mm_scaling():
 def test_vision_park_lock_enforcement():
     """Araç hareket halindeyken görme testi kilitli olmalı, park halinde izin verilmelidir."""
     # Sürüş moduna al
-    client.post("/api/vehicle/set-speed", json={"speedKmH": 65.0})
+    client.post("/api/vehicle/speed", json={"speedKmH": 65.0})
     state_resp = client.get("/api/vehicle/state").json()
     assert state_resp["vehicleMoving"] is True
     assert state_resp["vehicleParked"] is False
     
     # Park moduna geri al
-    client.post("/api/vehicle/set-speed", json={"speedKmH": 0.0})
+    client.post("/api/vehicle/speed", json={"speedKmH": 0.0})
     parked_resp = client.get("/api/vehicle/state").json()
     assert parked_resp["vehicleMoving"] is False
     assert parked_resp["vehicleParked"] is True
+
+def test_vision_no_synthetic_distance_generator():
+    """Vision sayfasında intervalCount veya 52+ simülasyon döngüsü kesinlikle yer alamaz."""
+    vision_file = root_dir / "apps" / "vehicle-app" / "src" / "app" / "vision" / "page.tsx"
+    assert vision_file.exists()
+    content = vision_file.read_text(encoding="utf-8")
+    assert "52 + (intervalCount % 5)" not in content
+    assert "intervalCount % 5" not in content
+    assert "verifiedDistanceCm" in content
+
+def test_vision_incomplete_result_has_no_fake_snellen_fallback():
+    """Tamamlanmamış test durumunda sahte 20/30 veya 20/24 Snellen fallback'i gösterilmemelidir."""
+    vision_file = root_dir / "apps" / "vehicle-app" / "src" / "app" / "vision" / "page.tsx"
+    content = vision_file.read_text(encoding="utf-8")
+    # testResults.rightEye null olduğunda '20/30' basılmamalı
+    assert "testResults.rightEye?.snellen || '20/30'" not in content
+    assert "testResults.leftEye?.snellen || '20/24'" not in content
+    assert "Değerlendirilemedi" in content

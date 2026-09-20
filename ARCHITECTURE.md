@@ -1,6 +1,6 @@
 # Sistem Mimarisi (ARCHITECTURE.md)
 
-Bu belge, **Togg Health MVP**'nin modüler monorepo yapısını, veri akışını, otomotiv soyutlama katmanlarını ve dört temel sağlık modülünün teknik mimarisini açıklar.
+Bu belge, **Togg Health MVP**'nin modüler yapısını, veri akışını, otomotiv soyutlama katmanlarını ve dört temel sağlık modülünün teknik mimarisini açıklar.
 
 ---
 
@@ -13,8 +13,8 @@ Bu belge, **Togg Health MVP**'nin modüler monorepo yapısını, veri akışın�
 +--------------------+-------------------------------+--------------------+
                      |                               |
         [VehicleContextProvider]            [Unified Health Profile]
-        - Sürüş / Park Durumu                - Görme Geçmişi
-        - Hız & Konum                        - Cilt Değişim Geçmişi
+        - Sürüş / Park Durumu                - Görme Geçmişi (Gerçek Staircase)
+        - Hız & Konum (Simüle Kontrol)       - Cilt Değişim Geçmişi (MediaPipe)
         - Kamera / Mikrofon İzinleri         - Seans Özetleri & Eğilimler
                      |                               |
 +--------------------+-------------------------------+--------------------+
@@ -24,14 +24,14 @@ Bu belge, **Togg Health MVP**'nin modüler monorepo yapısını, veri akışın�
              |               |                   |                        |
              v               v                   v                        v
       [1. GÖRME]        [2. CİLT]          [3. MENTAL]              [4. CARE AGENT]
-      - Landolt C       - MediaPipe Mesh   - Web Speech API         - Playwright Agent
-      - Adaptive PEST   - CIELAB Değişim   - Driving State Machine  - Calendar Matcher
-      - Kontrast        - Doku & Gözenek   - Seans Hafızası         - TravelTime Mock
-      - Mesafe Ölçüm    - Bölgesel Delta   - Kriz Filtresi          - Onay Kapısı
+      - Landolt C       - MediaPipe Mesh   - Web Speech API (TR)    - Playwright Keşif
+      - 2-Down/1-Up     - 6 Anatomik ROI   - Sürüş Modu Kısıtları   - Safe Handoff
+      - Weber Kontrast  - 2R - G - B       - SessionAnalyzer        - Demo Takvim Çakışma
+      - Doğrulanan Mesafe- Parlaklık/Doku  - İki Katmanlı Kriz      - Demo TravelTime
              |               |                   |                        |
              +---------------+-------------------+------------------------+
                                          |
-                       [Local-First SQLite Veritabanı]
+                       [Yerel localStorage & JSON Oturum Belleği]
 ```
 
 ---
@@ -44,60 +44,66 @@ togg-health-mvp/
     vehicle-app/                  # Next.js 14 kokpit web uygulaması
   services/
     core-api/                     # FastAPI ana API servisi
-    vision/                       # Görme testi hesaplama & optometri servisleri
-    skin/                         # Cilt bölütleme & görüntü işleme pipeline'ı
-    mental/                       # Ruhsal iyi oluş ve diyalog motoru
-    care-agent/                   # Otonom randevu arama ve takvim eşleme servisi
   packages/
     vehicle-context/              # IVehicleProvider & MockVehicleProvider
     health-profile/               # Ortak Pydantic ve TypeScript veri tipleri
     session-memory/               # Seans kayıt ve eğilim analiz motoru
     safety/                       # Klinik ve sürüş güvenlik katmanları
     shared/                       # Ortak konfigürasyon ve yardımcılar
-  docs/                           # Ürün, mimari ve yasal dokümantasyon
-  tests/                          # Birim ve uçtan uca testler
+  docs/                           # Ürün, mimari ve klinik güvenlik dokümantasyonu
+  tests/                          # Birim ve entegrasyon testleri
 ```
 
 ---
 
-## 3. Dört Modülün Teknik Mimarisi
+## 3. Dört Modülün Gerçek Teknik Mimarisi
 
-### 3.1. Modül 1 — Görme Kontrolü (`services/vision`)
-* **Lisans Güvenliği:** GPL lisanslı FrACT kodundan bağımsız; kamu malı formüllerle ($MAR = \frac{d}{D}$) sıfırdan geliştirilmiş psikofiziksel test motoru.
-* **Mesafe Kalibrasyonu:** Kameradaki iki göz bebeği arası piksel mesafesi (interpupillary distance - IPD) referans alınarak kullanıcı-ekran mesafesi ($cm$) hesaplanır.
-* **Optotip ve Test Akışı:** Ekran üzerinde 8 farklı yöne açılan Landolt C halkaları oluşturulur. Adaptive staircase (2-down / 1-up) algoritması ile kullanıcının yanıtlarına göre optotip küçülür/büyür ve görme keskinliği LogMAR / Snellen eşdeğeri olarak kaydedilir.
-* **Kontrast Hassasiyeti:** Arka plan ile harf arasındaki kontrast Michelson ve Weber standartlarına göre kademeli düşürülerek kontrast eşiği belirlenir.
-* **Sürüş Kısıtı:** `VehicleContext.vehicleMoving == true` ise test başlatılamaz.
+### 3.1. Modül 1 — Görme Ön Değerlendirmesi (`services/vision` & `apps/vehicle-app`)
+* **Lisans Güvenliği:** GPL lisanslı FrACT kodundan tamamen bağımsız; kamu malı standart formüllerle sıfırdan geliştirilmiş psikofiziksel test motoru.
+* **Ekran Kalibrasyonu:** Standart kimlik / kredi kartı referans genişliği (85.6 mm) kullanılarak kullanıcının ekran DPI ve milimetre/piksel oranı kalibre edilir.
+* **Test Mesafesi (Kullanıcı Doğrulamalı):** Kamera kadraj kılavuzu ile yüz hizalaması yapılır; test mesafesi kullanıcı tarafından onaylanır (50, 55 veya 60 cm). Sentetik veya simüle mesafe döngüsü kesinlikle kullanılmaz.
+* **Optotip ve Test Akışı:** Landolt C halkaları 4 temel yönde (Yukarı, Aşağı, Sol, Sağ) çizilir. 2-down / 1-up adaptif basamak (staircase) algoritması ile kullanıcının gerçek yanıtlarına göre LogMAR ve Snellen eşdeğerleri hesaplanır.
+* **Kontrast Hassasiyeti:** Weber kontrast formülü ($C = \frac{L_{\text{target}} - L_{\text{background}}}{L_{\text{background}}}$) temelinde 5 kalibre basamakta kontrast eşiği ölçülür.
+* **Sürüş Kısıtı:** Araç hareket halindeyken ($v > 0$) test başlatılamaz; sadece park halinde çalışır.
+* **Sonuç Dürüstlüğü:** Test tamamlanmadığında hiçbir sahte klinik sonuç (20/30 vb.) üretilmez.
 
-### 3.2. Modül 2 — Cilt Kontrolü (`services/skin`)
-* **Yüz Tespiti ve Bölütleme:** Apache-2.0 lisanslı MediaPipe Face Landmarker kullanılır. 468 yüz noktasından 6 ana bölge (Alın, Sağ Yanak, Sol Yanak, Burun, Çene, Göz Çevresi) konveks poligonlar halinde dilimlenir.
-* **Yönlendirme & Kalibrasyon:** Kullanıcının yüz açısı (yaw, pitch, roll) ve mesafesi hesaplanır; "Biraz sola dönün", "Lütfen yaklaşın" rehberliği sağlanır.
-* **Görsel Göstergeler:**
-  - *Kızarıklık İndeksi:* CIELAB $a^*$ kanalı veya $2R - G - B$ renk farkı.
-  - *Pigmentasyon:* $L^*$ parlaklık ve melanin eşdeğer kontrastı.
-  - *Doku & Gözenekler:* Yüksek frekanslı Laplacian filtresi varyansı.
-* **Zaman İçindeki Karşılaştırma:** Kullanıcının önceki baz çizgi (baseline) taraması ile yeni tarama hizalanarak bölge bazında değişim yüzdeleri raporlanır.
+### 3.2. Modül 2 — Cilt Kontrolü ve Referans Takibi (`apps/vehicle-app` & `services/core-api`)
+* **MediaPipe Face Landmarker Entegrasyonu:** Apache-2.0 lisanslı `@mediapipe/tasks-vision` paketi ile canlı video karesinden 468 yüz noktası çıkarılır. Yüz algılanamazsa anında `NO_FACE` uyarısı verilir.
+* **6 Anatomik ROI Ekstraksiyonu:** Alın, Sağ Yanak, Sol Yanak, Burun, Çene ve Göz Çevresi pikselleri gerçek landmark koordinatlarına göre kırpılır. Göz ve dudak bölgeleri maskelenerek piksel kalitesinin bozulması engellenir.
+* **Dürüst Non-Klinik Metrikler:**
+  - *Kızarıklık Eğilimi:* $2R - G - B$ piksel renk farkı formülü (0-100 normalize).
+  - *Cilt Tonu/Parlaklık Eğilimi:* $0.299R + 0.587G + 0.114B$ CIE parlaklık hesabı.
+  - *Doku Değişim Göstergesi:* Bölgesel parlaklık standart sapması.
+  - "Melanin", "gözenek" veya "kırışıklık analizi" gibi doğrudan ölçülmeyen klinik iddialar yer almaz.
+* **Referans (Baz Çizgi) Karşılaştırması:** İlk tarama referans olarak saklanır. Sonraki taramalarda bölgesel değişim ($\Delta$) hesaplanır. Değişim %20 üzerinde olduğunda kullanıcıya *"Bir dermatologla görüşmek faydalı olabilir"* tavsiye dili kullanılır.
+* **Sıfır Ham Görüntü Depolama:** Ham fotoğraf veya video asla kaydedilmez; analiz tarayıcı belleğinde bittiği anda kare temizlenir, yalnızca sayısal telemetri saklanır.
 
-### 3.3. Modül 3 — Ruhsal İyi Oluş Asistanı (`services/mental`)
-* **Ses Altyapısı:** Sıfır gecikmeli tarayıcı içi Web Speech API (SpeechRecognition + SpeechSynthesis) ile çift yönlü doğal sesli diyalog. Sunucu tarafında FastAPI yedek metin motoru.
-* **Çift Modlu Çalışma Mantığı:**
-  - *Sürüş Modu:* Soru listeleri veya ekrana bakmayı gerektiren öğeler devre dışıdır. Asistan kısa, sakin ve dikkati dağıtmayacak konuşmalar yapar. Gerekirse seansı park anına erteler.
-  - *Park Modu:* Önceki görüşmelerin duygu eğilimleri, stres grafikleri ve seans özetleri incelenebilir.
-* **Görüşme Hafızası ve Eskalasyon:** Tekrarlayan seanslarda stres, tükenmişlik ve uyku problemleri birikiyorsa sistem bunu tespit eder ve Care Agent üzerinden bir klinik psikolog önerisi sunar.
+### 3.3. Modül 3 — Ruhsal İyi Oluş Asistanı (`services/core-api` & `apps/vehicle-app`)
+* **Ses Altyapısı:** Tarayıcı içi W3C Web Speech API (`SpeechRecognition` + `SpeechSynthesis`) ile Türkçe canlı ses tanıma ve okuma.
+* **Sağlayıcı Soyutlaması (`MentalConversationProvider`):** `OPENAI_API_KEY` tanımlıysa canlı LLM devreye girer; anahtar yoksa açıkça `[Demo / Fallback Modu]` rozeti taşıyan yerel kural motoru çalışır.
+* **Sürüş Modu Sınırları:** Araç hareket halindeyken yanıtlar en fazla 25 kelimeyle sınırlandırılır, ekrana baktırmaz, sürüşe odaklanmayı teşvik eder.
+* **Dinamik Oturum Özeti (`MentalSessionAnalyzer`):** Seans sonunda kullanıcının gerçek ifadelerinden yapılandırılmış özet ve temalar çıkarılır; sabit/ezbere temalar yazılmaz.
+* **İki Katmanlı Kriz Güvenliği:**
+  - *Katman 1:* Deterministik anahtar kelime filtresi (pre-LLM).
+  - *Katman 2:* Yapılandırılmış LLM güvenlik değerlendirmesi.
+  - Akut krizde yalnızca **112 Acil Çağrı Merkezi** ve güvenli duruş talimatı verilir. 182 hiçbir kriz mesajında yer almaz.
+* **Gizlilik:** Kullanıcı gizlilik ekranında mental özet saklamayı kapattıysa oturum belleğe veya diske kesinlikle yazılmaz.
 
-### 3.4. Modül 4 — Sağlık Profesyoneli & Randevu Asistanı (`services/care-agent`)
-* **Otonom Tarama:** Microsoft Playwright tabanlı otonom browser-agent. Türkiye'deki sağlık randevu platformlarından (DoktorTakvimi, Doktorsitesi vb.) hekim müsaitlik slotlarını toplar.
-* **Takvim ve Ulaşım Eşleştirme:**
-  - `CalendarProvider` arayüzü kullanıcının mevcut takvimini inceler.
-  - `TravelTimeProvider` araç konumu ve trafik bilgisinden tahmini sürüş süresini ekler.
-  - Sadece kullanıcının gerçekten yetişebileceği slotlar listelenir.
-* **Açık Onay Kapısı:** Kullanıcı ekranda açık onay vermeden randevu kesinleştirilemez. CAPTCHA veya ödeme gereken durumlarda güvenli insan devri (handoff) yapılır.
+### 3.4. Modül 4 — Sağlık Asistanı ve Hekim Randevusu (`services/core-api/care_provider.py`)
+* **Hekim Arama ve Keşif (Doctor Discovery):** Microsoft Playwright ile kamuya açık hekim sayfalarında salt-okunur arama yapılır. Bot koruması veya CAPTCHA durumunda bypass yapılmaz; şeffaf `FALLBACK_BLOCKED` durumu ve güvenli web devri (safe handoff) sunulur.
+* **Müsaitlik Dürüstlüğü:**
+  - Gerçek DOM'dan slot saati açıkça okunamadığında uydurma randevu tarihi üretilmez; durum `LIVE_PROVIDER_ONLY` olarak işaretlenir ve kullanıcıya *"Doktor profili canlı kaynaktan bulundu — müsaitlik için siteyi aç"* denir.
+  - Yalnızca DOM'dan gerçek zaman okunabilirse `LIVE_AVAILABILITY` kullanılır.
+  - Demo slotlar açıkça `[Demo Randevu Verisi]` rozeti taşır ve tamamen sentetik hekim/klinik isimleri kullanılır.
+* **Takvim Kesişim Matematiği (`CalendarProvider`):** Mevcut program aralıkları ile talep edilen slot arasında $\max(start_1, start_2) < \min(end_1, end_2)$ formülüyle gerçek çarpışma denetimi yapılır. Durum açıkça "Demo Takvim (Yerel Simülasyon)" olarak etiketlenir; gerçek Google/Apple Calendar OAuth entegrasyonu planlanmıştır.
+* **Ulaşım Süresi (`TravelTimeProvider`):** Harita API anahtarı olmadığında açıkça "Tahmini Süre — Demo Model" etiketiyle çalışır.
+* **Açık Onay Kapısı:** Kullanıcının açık checkbox onayı olmadan randevu kesinleştirilemez.
 
 ---
 
 ## 4. Araç Bağlamı Soyutlama Katmanı (Vehicle Context)
 
-Togg'un gelecekteki resmi araç yazılımı API'leri doğrudan tak-çalıştır bağlanabilecek şekilde `IVehicleProvider` / `VehicleDataProvider` arayüzü ile soyutlanmıştır (*Doğrudan fiziksel CAN-bus erişimi varsayılmaz, resmi Togg yazılım köprüleri hedeflenir*):
+Togg tarafından sağlanacak resmi araç API'leri / SDK'ları doğrudan tak-çalıştır bağlanabilecek şekilde `VehicleDataProvider` / `ToggVehicleProvider` mimari soyutlaması kullanılmıştır:
 
 ```typescript
 export interface VehicleState {
@@ -110,19 +116,18 @@ export interface VehicleState {
   driverAuthenticated: boolean;
   driverName: string;
   driverFatigueSignal: 'LOW' | 'MEDIUM' | 'HIGH';
-  chargingStatus: 'DISCONNECTED' | 'CHARGING' | 'COMPLETED';
   cabinCameraAvailable: boolean;
   microphoneAvailable: boolean;
 }
 ```
 
-MVP'de bu arayüzü `MockVehicleProvider` doldurur ve geliştirici arayüzdeki durum çubuğundan aracı tek tıkla "Park Modu (0 km/s)" veya "Sürüş Modu (75 km/s)" konumuna alabilir.
+MVP ortamında bu arayüz `MockVehicleProvider` tarafından beslenir ve üst bardan araç hız simülasyonu (0 km/s - Park / 50 km/s - Sürüş) yönetilir.
 
 ---
 
 ## 5. Gizlilik ve Veri Güvenliği (Privacy-by-Design & /privacy Ekranı)
 
-- **Sıfır Ham Veri İlkesi:** Ham yüz görüntüleri, video kareleri veya mikrofon ses dalgaları sunucu diskine veya yerel depolamaya kalıcı olarak kaydedilmez; analiz tamamlandıktan hemen sonra bellekten silinir.
-- **Yerel Depolama (Local-First):** Tüm sayısal sağlık eğilimleri ve seans özetleri yerel tarayıcı depolamasında ve yerel SQLite servisinde tutulur.
-- **Gizlilik Yönetim Ekranı (`/privacy`):** Kamera/mikrofon donanım izinlerinin durumu, mental özet saklama tercihi, kayıt istatistikleri ve tek tıkla "Tüm Yerel Veriyi Sil (Geçmişimi Sıfırla)" fonksiyonu kullanıcı denetimine sunulmuştur.
-- Kamusal depoya hiçbir kullanıcı verisi veya API anahtarı dahil edilmez. Kod tabanımız UNLICENSED statüsündedir.
+- **Ham Veri Politikası:** Ham yüz görüntüleri veya mikrofon ses dalgaları Togg Health MVP tarafından kalıcı olarak saklanmaz. Web Speech API'nin tarayıcı/cihaz seviyesinde çalışması platforma bağlıdır. Canlı LLM etkinse metin transkripti yanıt üretimi için ilgili sağlayıcıya iletilir.
+- **Yerel Depolama (Local-First):** Görme ölçüm sonuçları, cilt baz çizgisi ve mental oturum özetleri yerel tarayıcı depolamasında (`localStorage`) ve yerel backend JSON oturum dosyasında tutulur.
+- **Gizlilik Yönetim Ekranı (`/privacy`):** Donanım izinlerinin testi, seans özeti kaydetme tercihi, kayıtlı telemetri sayaçları ve tek tıkla "Tüm Yerel Veriyi Kalıcı Olarak Sil" imkânı sunulur.
+- Kod tabanımız UNLICENSED (özel mülkiyet) statüsündedir; üçüncü taraf kütüphaneler (Next.js, FastAPI, MediaPipe, Playwright) izin verici açık kaynak lisanslara sahiptir.

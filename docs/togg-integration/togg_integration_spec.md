@@ -45,7 +45,7 @@ Bu doküman, **Togg Health MVP**'nin mevcut mock soyutlama katmanlarından gerç
 ## 3. Telemetri ve Güvenlik Sinyalleri (Togg Araç API Soyutlaması — Gelecek Plan)
 
 > [!NOTE]
-> Togg'un doğrudan fiziksel CAN-bus erişimi sağlayacağı varsayılmamaktadır. Tüm araç telemetrisi `VehicleDataProvider` / `ToggVehicleProvider` soyutlama katmanı üzerinden ve Togg tarafından sağlanacak resmi yazılım API'ları aracılığıyla dinlenecektir.
+> Tüm araç telemetrisi teknik olarak `VehicleDataProvider` / `ToggVehicleProvider` soyutlama katmanı üzerinden ve Togg tarafından sağlanacak resmi araç API'leri / SDK'ları aracılığıyla dinlenecektir.
 
 Gelecekte `ToggVehicleProvider` tarafından Togg resmi API'larından alınması hedeflenen sinyaller:
 1. `Vehicle_Speed_kmh`: $v > 0$ ise Görme ve Cilt modülleri derhal dondurulur.

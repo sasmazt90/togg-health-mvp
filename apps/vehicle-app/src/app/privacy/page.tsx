@@ -139,10 +139,10 @@ export default function PrivacyPage() {
       <div className="bg-gradient-to-r from-cyan-950/40 via-slate-900/90 to-indigo-950/40 border border-cyan-800/60 rounded-2xl p-5 shadow-lg space-y-2">
         <div className="flex items-center gap-2 text-sm font-bold text-cyan-300">
           <Lock className="w-4 h-4 text-cyan-400" />
-          <span>Sıfır Ham Veri İlkesi (Privacy-by-Design)</span>
+          <span>Veri İşleme ve Gizlilik Esasları</span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
-          Togg Health MVP, gizliliğinizi donanım seviyesinde korur. Kamera tarafından okunan yüz görüntüleri ve video kareleri, mikrofon tarafından kaydedilen ses dalgaları <strong>asla sunucuya gönderilmez veya kalıcı olarak kaydedilmez</strong>. Görüntü işleme ve ses analizi tamamen tarayıcınızda veya yerel bellek tamponunda yürütülür; ardından derhal bellekten silinir. Yalnızca türetilmiş sayısal eğilim indeksleri yerel cihazınızda saklanır.
+          Ham ses kayıtları ve kamera görüntüleri Togg Health MVP uygulaması tarafından kalıcı olarak saklanmaz. Konuşma tanıma işleminin cihaz üzerinde veya harici bir hizmet üzerinden gerçekleştirilmesi kullanılan tarayıcıya/cihaza bağlı olabilir. Canlı yapay zekâ sağlayıcısı etkinse konuşmanın metne dönüştürülmüş içeriği yanıt üretmek amacıyla yapılandırılmış sağlayıcıya gönderilebilir. Yüz görüntüleri sunucuya yüklenmez, cihaz üzerinde piksel metrikleri çıkarıldıktan sonra ham görüntü tutulmaz.
         </p>
       </div>
 

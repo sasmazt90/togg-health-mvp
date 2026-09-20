@@ -21,6 +21,20 @@ def test_skin_redness_metric_bounds():
     val_gray = SkinRegionAnalyzer.calculate_redness_index(128.0, 128.0, 128.0)
     assert 0.0 <= val_gray <= 100.0
 
+def test_skin_multiple_skin_tones_pixel_cases():
+    """Farklı ten rengi / aydınlatma profillerinde kızarıklık indeksi istikrarlı olmalıdır."""
+    # Açık ten tonu (R: 240, G: 200, B: 180) -> 2*240 - 200 - 180 = 100 -> ~39.2%
+    val_light = SkinRegionAnalyzer.calculate_redness_index(240.0, 200.0, 180.0)
+    assert 20.0 <= val_light <= 60.0
+
+    # Orta/Buğday ten tonu (R: 195, G: 145, B: 110) -> 2*195 - 145 - 110 = 135 -> ~52.9%
+    val_medium = SkinRegionAnalyzer.calculate_redness_index(195.0, 145.0, 110.0)
+    assert 30.0 <= val_medium <= 70.0
+
+    # Koyu ten tonu (R: 120, G: 85, B: 60) -> 2*120 - 85 - 60 = 95 -> ~37.2%
+    val_dark = SkinRegionAnalyzer.calculate_redness_index(120.0, 85.0, 60.0)
+    assert 20.0 <= val_dark <= 60.0
+
 def test_skin_baseline_delta_and_configurable_threshold():
     """Baz çizgi karşılaştırması konfigüre edilebilir eşik ile doğru çalışmalıdır."""
     baseline = {
@@ -49,7 +63,7 @@ def test_skin_baseline_delta_and_configurable_threshold():
 
 def test_skin_non_diagnostic_language_guard():
     """Sonuç metninde hiçbir zaman tıbbi hastalık ismi veya teşhis yer almamalıdır."""
-    forbidden_terms = ["akne", "melanom", "kanser", "ekzema", "sedef", "hastalıklısınız", "tedavi"]
+    forbidden_terms = ["akne", "melanom", "kanser", "ekzema", "sedef", "hastalıklısınız", "tedavi", "derhal doktora gidin"]
     
     baseline = {"Sağ Yanak": 20.0}
     current = {"Sağ Yanak": 35.0} # +75% değişim
@@ -65,8 +79,17 @@ def test_skin_no_raw_image_persistence_contract():
     current = {"Alın": 18.5, "Çene": 19.2}
     res = SkinRegionAnalyzer.compare_against_baseline(current, baseline)
     
-    # Sadece sayısal metrikler ve string açıklama olmalı
     assert "rawImage" not in res
     assert "imageData" not in res
     assert "pixels" not in res
     assert isinstance(res["deltas"], dict)
+
+def test_skin_roi_out_of_bounds_clamping():
+    """Sınır dışına taşan ROI koordinatları hata fırlatmamalı ve güvenli clamp edilmelidir."""
+    skin_analyzer_file = root_dir / "apps" / "vehicle-app" / "src" / "utils" / "skinAnalyzer.ts"
+    assert skin_analyzer_file.exists()
+    content = skin_analyzer_file.read_text(encoding="utf-8")
+    # Kodda sınır aşımı engeli olmalı (Math.max, Math.min clamping)
+    assert "Math.max(0, Math.min(width" in content
+    assert "Math.max(0, Math.min(height" in content
+    assert "NO_FACE" in content

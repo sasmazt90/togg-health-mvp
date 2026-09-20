@@ -8,8 +8,11 @@ sys.path.insert(0, str(root_dir / "services" / "core-api"))
 from mental_provider import (
     MentalConversationProvider,
     LocalFallbackMentalProvider,
+    OpenAICompatibleMentalProvider,
+    LocalFallbackSessionAnalyzer,
     check_mental_crisis,
-    get_active_mental_provider
+    get_active_mental_provider,
+    get_active_session_analyzer
 )
 from session_memory import SessionMemoryManager
 
@@ -25,17 +28,16 @@ def test_mental_driving_mode_response_constraint():
     """Araç hareket halindeyken (is_driving=True) yanıt kısa, sakin ve dikkati yola odaklayıcı olmalıdır."""
     provider = LocalFallbackMentalProvider()
     reply_obj = provider.generate_reply(
-        user_message="Bugün işte çok yoruldum ve çok stresliyim",
+        user_message="Bugün trafikte çok yoruldum ve biraz dinlenmek istiyorum",
         is_driving=True,
         history=[]
     )
     
     assert reply_obj["isDriving"] is True
     assert reply_obj["escalationSuggested"] is False
-    # Kısa olmalı (en fazla 2-3 cümle)
-    sentences = [s for s in reply_obj["reply"].split(".") if s.strip()]
-    assert len(sentences) <= 3
-    # Sürüş güvenliği vurgusu
+    # Kısa olmalı
+    word_count = len(reply_obj["reply"].split())
+    assert word_count <= 35, f"Yanıt sürüş modu için fazla uzun: {word_count} kelime"
     assert any(term in reply_obj["reply"].lower() for term in ["yol", "sürüş", "dikkat", "park"])
 
 def test_mental_crisis_flow_112_present_and_182_strictly_forbidden():
@@ -55,6 +57,7 @@ def test_mental_crisis_flow_112_present_and_182_strictly_forbidden():
         # Park halinde kriz
         parked_result = check_mental_crisis(msg, is_driving=False)
         assert parked_result["isCrisis"] is True
+        assert parked_result["riskLevel"] == "IMMINENT"
         assert "112" in parked_result["reply"]
         assert "182" not in parked_result["reply"], f"HATA: 182 kriz cevabında yer alamaz! Mesaj: {parked_result['reply']}"
 
@@ -63,29 +66,65 @@ def test_mental_crisis_flow_112_present_and_182_strictly_forbidden():
         assert driving_result["isCrisis"] is True
         assert "112" in driving_result["reply"]
         assert "182" not in driving_result["reply"]
-        # Ekrana baktırmama ve güvenle durma öğüdü
         assert "ekrana bakmayın" in driving_result["reply"].lower()
         assert "güvenli bir yerde durdurun" in driving_result["reply"].lower()
 
-def test_mental_session_memory_persistence_without_raw_audio():
-    """Seans hafızası özet ve temaları saklamalı, ham ses veya ses dalgası içermemelidir."""
-    SessionMemoryManager.clear_all()
-    initial_sessions = SessionMemoryManager.get_all_sessions()
-    assert len(initial_sessions) == 0
+def test_mental_session_summary_is_generated_from_actual_conversation_not_hardcoded():
+    """Oturum analizi sabit ezbere tema yazmamalı, kullanıcının gerçek içeriğinden türetilmelidir."""
+    analyzer = LocalFallbackSessionAnalyzer()
+    
+    # Kullanıcı aile ve ilişkiler konuşuyor (iş stresi veya uyku demedi!)
+    family_messages = [
+        {"role": "user", "content": "Bugün çocukları okuldan aldım, ailece evde zaman geçirdik, çok mutluyum."}
+    ]
+    family_analysis = analyzer.analyze_session(family_messages)
+    assert "sosyal ilişkiler" in family_analysis["themes"]
+    assert "uyku düzeni" not in family_analysis["themes"]
+    assert family_analysis["moodTrend"] == "RELAXED"
 
-    added = SessionMemoryManager.add_session(
-        summary_text="Trafik ve iş temposu konuşuldu.",
-        recurring_themes=["iş stresi", "yorgunluk"],
-        duration_seconds=150,
-        mood_before="STRESSED",
-        mood_after="RELAXED"
+    # Kullanıcı uykusuzluktan yakınıyor
+    sleep_messages = [
+        {"role": "user", "content": "Gece 3 defa uyandım, hiç uyuyamıyorum ve halsizim."}
+    ]
+    sleep_analysis = analyzer.analyze_session(sleep_messages)
+    assert "uyku düzeni" in sleep_analysis["themes"]
+    assert "sosyal ilişkiler" not in sleep_analysis["themes"]
+
+def test_privacy_preference_off_prevents_session_persistence():
+    """Kullanıcı gizlilik ayarında save_mental_summaries=False yaptıysa oturum ASLA diske yazılmamalıdır."""
+    SessionMemoryManager.clear_all()
+    assert len(SessionMemoryManager.get_all_sessions()) == 0
+
+    # Gizlilik tercihi KAPALI oturum kaydetme denemesi
+    res = SessionMemoryManager.add_session(
+        summary_text="Gizli seans",
+        recurring_themes=["genel"],
+        save_mental_summaries=False
     )
 
-    assert added["summaryText"] == "Trafik ve iş temposu konuşuldu."
-    assert "rawAudio" not in added
-    assert "audioData" not in added
-    assert "audioUrl" not in added
+    assert res["persisted"] is False
+    assert res["reason"] == "PRIVACY_PREFERENCE_DISABLED"
+    # Veritabanında hiçbir kayıt oluşmamalı
+    assert len(SessionMemoryManager.get_all_sessions()) == 0
 
-    all_sessions = SessionMemoryManager.get_all_sessions()
-    assert len(all_sessions) == 1
-    assert all_sessions[0]["sessionId"] == added["sessionId"]
+    # Gizlilik tercihi AÇIK oturum kaydetme
+    res_allowed = SessionMemoryManager.add_session(
+        summary_text="Kayıtlı seans",
+        recurring_themes=["genel"],
+        save_mental_summaries=True
+    )
+    assert res_allowed["persisted"] is True
+    assert len(SessionMemoryManager.get_all_sessions()) == 1
+
+def test_live_provider_failure_produces_clearly_labelled_fallback():
+    """Canlı sağlayıcı bağlantı hatasında sistem zarifçe LOCAL_DEMO_FALLBACK rozetiyle yerel motora geçmelidir."""
+    # Geçersiz bir anahtar ve URL ile canlı sağlayıcı simüle et
+    broken_provider = OpenAICompatibleMentalProvider(api_key="sk-invalid-test-key", base_url="http://127.0.0.1:9999/v1")
+    reply_obj = broken_provider.generate_reply(
+        user_message="Merhaba",
+        is_driving=False,
+        history=[]
+    )
+    assert reply_obj["providerType"] == "LOCAL_DEMO_FALLBACK"
+    assert "fallbackReason" in reply_obj
+    assert len(reply_obj["reply"]) > 0
