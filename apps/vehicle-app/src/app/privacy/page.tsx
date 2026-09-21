@@ -39,7 +39,7 @@ export default function PrivacyPage() {
         navigator.permissions
           .query({ name: 'camera' as any })
           .then((p) => {
-            setCameraStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'GRANTED');
+            setCameraStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'PROMPT');
           })
           .catch(() => {});
       }
@@ -51,7 +51,7 @@ export default function PrivacyPage() {
         navigator.permissions
           .query({ name: 'microphone' as any })
           .then((p) => {
-            setMicStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'GRANTED');
+            setMicStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'PROMPT');
           })
           .catch(() => {});
       }
@@ -166,10 +166,12 @@ export default function PrivacyPage() {
                 className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                   cameraStatus === 'GRANTED'
                     ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-800/70'
-                    : 'bg-rose-950/70 text-rose-400 border border-rose-800/70'
+                    : cameraStatus === 'DENIED'
+                    ? 'bg-rose-950/70 text-rose-400 border border-rose-800/70'
+                    : 'bg-amber-950/70 text-amber-400 border border-amber-800/70'
                 }`}
               >
-                {cameraStatus === 'GRANTED' ? 'Açık' : 'Kapalı'}
+                {cameraStatus === 'GRANTED' ? 'Açık' : cameraStatus === 'DENIED' ? 'Kapalı' : 'Sorulacak'}
               </span>
             </div>
 
@@ -203,10 +205,12 @@ export default function PrivacyPage() {
                 className={`text-xs px-2.5 py-1 rounded-full font-bold ${
                   micStatus === 'GRANTED'
                     ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-800/70'
-                    : 'bg-rose-950/70 text-rose-400 border border-rose-800/70'
+                    : micStatus === 'DENIED'
+                    ? 'bg-rose-950/70 text-rose-400 border border-rose-800/70'
+                    : 'bg-amber-950/70 text-amber-400 border border-amber-800/70'
                 }`}
               >
-                {micStatus === 'GRANTED' ? 'Açık' : 'Kapalı'}
+                {micStatus === 'GRANTED' ? 'Açık' : micStatus === 'DENIED' ? 'Kapalı' : 'Sorulacak'}
               </span>
             </div>
 

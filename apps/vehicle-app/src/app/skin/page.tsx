@@ -42,6 +42,8 @@ export default function SkinPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState<boolean>(false);
+  const isMediaPipeLoadedRef = useRef<boolean>(false);
+  const demoTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLiveVideo, setIsLiveVideo] = useState<boolean>(false);
 
   // Hizalama ve kalite telemetrisi
@@ -104,6 +106,7 @@ export default function SkinPage() {
     let isMounted = true;
     SkinAnalyzer.getFaceLandmarker().then((landmarker) => {
       if (isMounted && landmarker) {
+        isMediaPipeLoadedRef.current = true;
         setIsMediaPipeLoaded(true);
       }
     });
@@ -112,17 +115,38 @@ export default function SkinPage() {
     };
   }, []);
 
-  // Temizlik: Kamera akışını ve animasyon karesini durdur
+  // Temizlik: Kamera akışını, zamanlayıcıyı ve animasyon karesini durdur
   useEffect(() => {
     return () => {
       if (animFrameIdRef.current) {
         cancelAnimationFrame(animFrameIdRef.current);
+      }
+      if (demoTimerRef.current) {
+        clearInterval(demoTimerRef.current);
       }
       if (mediaStream) {
         mediaStream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [mediaStream]);
+
+  // Real modda COMPLETED durumu doğrulaması: Kayıtlı gerçek analiz yoksa COMPLETED state'e izin verilmez
+  useEffect(() => {
+    if (scanState === 'COMPLETED' && !isDemoMode() && !analysisResult) {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEYS.LATEST_SKIN);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.regions) {
+            setAnalysisResult(parsed);
+            return;
+          }
+        }
+      } catch {}
+      setErrorMessage('Kayıtlı gerçek analiz sonucu bulunamadı. Lütfen yeni bir tarama yapın.');
+      setScanState('ERROR');
+    }
+  }, [scanState, analysisResult]);
 
   // Klavye ile döngüsel bölge navigasyonu ve modal kontrolü
   useEffect(() => {
@@ -182,15 +206,53 @@ export default function SkinPage() {
     );
   }
 
+  // Demo modda kamera olmadan sentetik portreyle doğrudan deterministik tarama
+  const startSyntheticDemoScan = () => {
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+      animFrameIdRef.current = null;
+    }
+    if (demoTimerRef.current) {
+      clearInterval(demoTimerRef.current);
+      demoTimerRef.current = null;
+    }
+    setScanProgress(5);
+    setGuidanceText('Demo portre taranıyor...');
+    let currentProg = 5;
+    demoTimerRef.current = setInterval(() => {
+      currentProg += 5;
+      if (currentProg >= 100) {
+        if (demoTimerRef.current) {
+          clearInterval(demoTimerRef.current);
+          demoTimerRef.current = null;
+        }
+        setScanProgress(100);
+        finishScan(true);
+      } else {
+        setScanProgress(currentProg);
+      }
+    }, 80);
+  };
+
   // Taramayı başarıyla tamamlama fonksiyonu
-  const finishScan = (isDemo: boolean = false) => {
+  const finishScan = (
+    isDemo: boolean = false,
+    finalAlignment?: FaceAlignment,
+    finalQuality?: ImageQuality
+  ) => {
+    if (demoTimerRef.current) {
+      clearInterval(demoTimerRef.current);
+      demoTimerRef.current = null;
+    }
     if (animFrameIdRef.current) {
       cancelAnimationFrame(animFrameIdRef.current);
       animFrameIdRef.current = null;
     }
 
     if (isDemo) {
-      // DEMO MODE: Fikstür verisini kullanır, gerçek kullanıcı anahtarını bozmaz
+      // DEMO MODE: Fikstür verisini kullanır, gerçek kullanıcı anahtarını bozmaz.
+      // Sentetik portre kullanıldığından usedMediaPipe dürüstçe false olarak işaretlenir.
+      const isRealMP = Boolean(isLiveVideo && (isMediaPipeLoadedRef.current || isMediaPipeLoaded));
       const demoResult: SkinAnalysisResult = {
         id: `demo-skin-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -201,7 +263,7 @@ export default function SkinPage() {
         referralSuggested: true,
         isBaseline: false,
         clinicalNoteTr: 'Sağ yanak bölgesinde baz çizgi referansına göre %22 görsel değişim gözlendi.',
-        usedMediaPipe: true
+        usedMediaPipe: isRealMP ? true : false
       };
 
       try {
@@ -215,8 +277,12 @@ export default function SkinPage() {
     }
 
     // REAL MODE: Yalnızca MediaPipe aktifse ve doğrulanmışsa hesaplar
+    const alignToUse = finalAlignment || alignment;
+    const qualToUse = finalQuality || quality;
+    const isMPLoaded = isMediaPipeLoadedRef.current || isMediaPipeLoaded;
+
     const canvas = canvasRef.current;
-    if (!canvas || !isMediaPipeLoaded || !alignment.isMediaPipeActive) {
+    if (!canvas || !isMPLoaded || !alignToUse.isMediaPipeActive) {
       setErrorMessage(
         'Cilt analiz motoru kullanılamıyor. Lütfen kamera iznini ve bağlantınızı kontrol edip tekrar deneyin.'
       );
@@ -233,7 +299,7 @@ export default function SkinPage() {
 
     let regionMetrics: Record<string, RegionMetrics>;
     try {
-      regionMetrics = SkinAnalyzer.analyzeRegions(ctx, canvas.width, canvas.height, alignment);
+      regionMetrics = SkinAnalyzer.analyzeRegions(ctx, canvas.width, canvas.height, alignToUse);
     } catch (err: any) {
       console.warn('MediaPipe ROI analizi başarısız:', err);
       setErrorMessage(
@@ -258,7 +324,7 @@ export default function SkinPage() {
     const finalResult: SkinAnalysisResult = {
       id: `skin-${Date.now()}`,
       timestamp: new Date().toISOString(),
-      quality,
+      quality: qualToUse,
       regions: comparison.comparedRegions,
       highestChangeRegion: isFirstScan ? 'Tüm Bölgeler' : comparison.highestChangeRegion,
       highestChangePct: isFirstScan ? 0 : comparison.highestChangePct,
@@ -317,6 +383,16 @@ export default function SkinPage() {
 
     const loop = () => {
       if (!videoRef.current || !canvasRef.current) {
+        if (isDemo) {
+          // Demo modda video elementi hazır değilse de deterministic ilerleme sağlanır
+          consecutiveValidFramesRef.current += 1;
+          const progress = Math.min(100, Math.round((consecutiveValidFramesRef.current / 30) * 100));
+          setScanProgress(progress);
+          if (progress >= 100) {
+            finishScan(true);
+            return;
+          }
+        }
         animFrameIdRef.current = requestAnimationFrame(loop);
         return;
       }
@@ -352,8 +428,9 @@ export default function SkinPage() {
             }
           } else {
             // REAL MOD: Gerçek MediaPipe + Yüz Tespiti + Hizalama + Kalite Doğrulaması
+            const isMPLoaded = isMediaPipeLoadedRef.current || isMediaPipeLoaded;
             const isValid =
-              isMediaPipeLoaded &&
+              isMPLoaded &&
               curAlign.faceDetected &&
               curAlign.isMediaPipeActive &&
               curAlign.isAligned &&
@@ -366,7 +443,7 @@ export default function SkinPage() {
               setGuidanceText('Hizalama uygun. Lütfen sabit durun...');
 
               if (progress >= 100) {
-                finishScan(false);
+                finishScan(false, curAlign, curQual);
                 return;
               }
             } else {
@@ -431,9 +508,9 @@ export default function SkinPage() {
     } catch (err: any) {
       console.warn('Kamera erişimi sağlanamadı:', err);
       if (isDemo) {
-        // Demo modda sentetik portreyle devam edebilir
+        // Demo modda kamera erişilemezse videoRef beklemeksizin sentetik taramayı tamamlar
         setIsLiveVideo(false);
-        startRealtimeLoop();
+        startSyntheticDemoScan();
       } else {
         setIsLiveVideo(false);
         setErrorMessage(
@@ -551,7 +628,7 @@ export default function SkinPage() {
       {/* ============================================================ */}
       {/* SCREEN 3: SKIN RESULT VIEW (REFERANS 1, 2, 3, 4)            */}
       {/* ============================================================ */}
-      {scanState === 'COMPLETED' && (
+      {scanState === 'COMPLETED' && (isDemoMode() || !!analysisResult) && (
         <SkinResultView
           currentRegion={currentRegionData}
           onPrev={handlePrevRegion}

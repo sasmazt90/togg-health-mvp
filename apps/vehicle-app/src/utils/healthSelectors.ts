@@ -89,15 +89,16 @@ export function getVisionSummary(demoMode: boolean = isDemoMode()): VisionSummar
     const parsed = JSON.parse(raw);
     const dateObj = parsed.date ? new Date(parsed.date) : new Date();
     const dateTr = dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
-    const right = parsed.acuityRightSnellen || '20/30';
-    const left = parsed.acuityLeftSnellen || '20/25';
+    const right = parsed.acuityRightSnellen || '—';
+    const left = parsed.acuityLeftSnellen || '—';
+    const acuitySummary = (right === '—' && left === '—') ? '—' : `${right} • ${left}`;
     const contrastVal = parsed.contrastSensitivityLogCS ? `${Number(parsed.contrastSensitivityLogCS).toFixed(2)} LogCS` : 'Ön Değerlendirme';
 
     return {
       hasData: true,
       isDemo: false,
       dateTr,
-      acuitySummary: `${right} • ${left}`,
+      acuitySummary,
       contrastSummary: contrastVal,
       referralRecommended: !!parsed.ophthalmologistReferralRecommended,
       rawRecord: parsed

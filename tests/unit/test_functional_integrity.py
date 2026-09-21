@@ -34,11 +34,15 @@ def test_skin_real_mode_mediapipe_unavailable_no_fake_result_or_persistence():
     content = skin_page.read_text(encoding="utf-8")
 
     # Real mode MediaPipe kontrolü
-    assert "!isMediaPipeLoaded && !isDemoMode()" in content or "!isMediaPipeLoaded || !alignment.isMediaPipeActive" in content
+    assert "!isMPLoaded || !alignToUse.isMediaPipeActive" in content or "!isDemo && !isMediaPipeLoaded" in content
     # Hata durumu ayarlanmalı
     assert "setScanState('ERROR')" in content
     # canPersistResult kontrolü olmadan kayıt yapılmamalı
     assert "SkinAnalyzer.canPersistResult" in content
+    # finishScan accepts passed frame alignment/quality parameters
+    assert "finalAlignment?: FaceAlignment" in content
+    assert "finalQuality?: ImageQuality" in content
+    assert "finishScan(false, curAlign, curQual)" in content
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +62,11 @@ def test_skin_demo_mode_allows_fixture_with_separate_keys():
     skin_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "skin" / "page.tsx"
     page_content = skin_page.read_text(encoding="utf-8")
     assert "STORAGE_KEYS.DEMO_SKIN_RESULT" in page_content
+
+    # Demo camera-failure path triggers demo completion without waiting on videoRef
+    assert "startSyntheticDemoScan" in page_content
+    # Demo synthetic result has usedMediaPipe: false when synthetic portrait is used
+    assert "usedMediaPipe: isRealMP ? true : false" in page_content or "usedMediaPipe: false" in page_content
 
 
 # ---------------------------------------------------------------------------
@@ -116,12 +125,15 @@ def test_skin_real_result_ui_uses_analysis_result_not_demo_fixture():
 # 6. Demo Result UI: Uses Demo Fixture
 # ---------------------------------------------------------------------------
 def test_skin_demo_result_ui_uses_demo_fixture():
-    """Demo modunda buildSkinRegionViewModel onaylı demo fikstürünü döndürmelidir."""
+    """Demo modunda buildSkinRegionViewModel onaylı demo fikstürünü döndürmelidir; Real modda asla demo fikstüre düşmemelidir."""
     fixture_file = root_dir / "apps" / "vehicle-app" / "src" / "data" / "skinDemoFixture.ts"
     content = fixture_file.read_text(encoding="utf-8")
 
-    assert "if (isDemo || !analysisResult" in content
+    assert "if (isDemo) {" in content
     assert "return base;" in content
+    # Real mode missing analysisResult cannot return demo fixture metrics
+    assert "if (!analysisResult || !analysisResult.regions || !analysisResult.regions[regionId])" in content
+    assert "displayValue: '—'" in content
 
 
 # ---------------------------------------------------------------------------
@@ -140,10 +152,10 @@ def test_skin_history_strictly_excludes_raw_images():
 
 
 # ---------------------------------------------------------------------------
-# 8. Privacy: Empty Storage Counts Strictly Zero
+# 8. Privacy: Empty Storage Counts Strictly Zero & Proper Permission Mapping
 # ---------------------------------------------------------------------------
 def test_privacy_empty_storage_counts_are_strictly_zero():
-    """Gizlilik sayfasında veri yoksa sayılar kesinlikle 0 olmalı; Math.max(1, ...) gibi sahte sayılar kaldırılmalıdır."""
+    """Gizlilik sayfasında veri yoksa sayılar kesinlikle 0 olmalı ve tarayıcı izin durumu PROMPT olarak korunmalıdır."""
     privacy_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "privacy" / "page.tsx"
     content = privacy_page.read_text(encoding="utf-8")
 
@@ -153,6 +165,8 @@ def test_privacy_empty_storage_counts_are_strictly_zero():
     assert "mental ? 2 : 2" not in content
     # Gerçek sayım mantığı bulunmalı
     assert "localStorage.getItem(STORAGE_KEYS.LATEST_VISION) ? 1 : 0" in content
+    # Browser permission mapping correctly preserves PROMPT
+    assert "p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'PROMPT'" in content
 
 
 # ---------------------------------------------------------------------------
@@ -198,10 +212,10 @@ def test_mental_summary_saving_false_prevents_session_persistence():
 
 
 # ---------------------------------------------------------------------------
-# 12. Dashboard & Profile: Real Result Display
+# 12. Dashboard & Profile: Real Result Display & No Fake Fallbacks
 # ---------------------------------------------------------------------------
 def test_dashboard_profile_displays_real_results_when_stored():
-    """healthSelectors gerçek depolanan görme ve cilt sonuçlarını parse edip sunmalıdır."""
+    """healthSelectors gerçek depolanan görme ve cilt sonuçlarını parse edip sunmalıdır; real modda sahte fallback üretmemelidir."""
     selectors_file = root_dir / "apps" / "vehicle-app" / "src" / "utils" / "healthSelectors.ts"
     content = selectors_file.read_text(encoding="utf-8")
 
@@ -209,6 +223,11 @@ def test_dashboard_profile_displays_real_results_when_stored():
     assert "getSkinSummary" in content
     assert "parsed.acuityRightSnellen" in content
     assert "parsed.highestChangeRegion" in content
+    # Real vision selector contains no '20/30' or '20/25' fallbacks outside demo branch
+    assert "parsed.acuityRightSnellen || '20/30'" not in content
+    assert "parsed.acuityLeftSnellen || '20/25'" not in content
+    assert "parsed.acuityRightSnellen || '—'" in content
+    assert "parsed.acuityLeftSnellen || '—'" in content
 
 
 # ---------------------------------------------------------------------------

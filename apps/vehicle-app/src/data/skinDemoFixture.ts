@@ -477,22 +477,63 @@ export function buildSkinRegionViewModel(
   isDemo: boolean = false
 ): SkinRegionData {
   const base = getRegionData(regionId);
-  if (isDemo || !analysisResult || !analysisResult.regions || !analysisResult.regions[regionId]) {
+  if (isDemo) {
     return base;
+  }
+
+  // REAL MODE: Analiz sonucu yoksa veya bölge verisi eksikse kesinlikle demo sayılarına düşülmez
+  if (!analysisResult || !analysisResult.regions || !analysisResult.regions[regionId]) {
+    return {
+      ...base,
+      changePct: 0,
+      badgeText: '—',
+      isAttentionRequired: false,
+      metrics: {
+        redness: {
+          label: 'Kızarıklık Eğilimi',
+          score: 0,
+          displayValue: '—',
+          status: 'cyan'
+        },
+        luminance: {
+          label: 'Ton / Parlaklık',
+          score: 0,
+          displayValue: '—',
+          status: 'cyan'
+        },
+        texture: {
+          label: 'Doku Değişimi',
+          score: 0,
+          displayValue: '—',
+          status: 'cyan'
+        },
+        baselineChange: {
+          label: 'Referansa Göre Değişim',
+          score: 0,
+          displayValue: '—',
+          status: 'emerald'
+        }
+      },
+      trend: [],
+      observation: {
+        headline: 'Analiz verisi bulunamadı',
+        details: 'Bu bölge için henüz gerçek zamanlı analiz sonucu mevcut değil.'
+      }
+    };
   }
 
   const real = analysisResult.regions[regionId];
   const changePct = typeof real.changeFromBaselinePct === 'number' ? real.changeFromBaselinePct : 0;
   const isAttentionRequired = Math.abs(changePct) >= 20;
 
-  const rednessScore = typeof real.rednessScore === 'number' ? real.rednessScore : base.metrics.redness.score;
+  const rednessScore = typeof real.rednessScore === 'number' ? real.rednessScore : 0;
   const rednessStatus: 'amber' | 'cyan' | 'emerald' = rednessScore > 50 ? 'amber' : 'cyan';
   const rednessDisplay = rednessScore > 50 ? 'Yüksek' : rednessScore > 35 ? 'Hafif Artış' : 'Stabil';
 
-  const lumScore = typeof real.luminanceScore === 'number' ? real.luminanceScore : base.metrics.luminance.score;
+  const lumScore = typeof real.luminanceScore === 'number' ? real.luminanceScore : 0;
   const lumDisplay = lumScore > 60 ? 'Optimal' : lumScore < 40 ? 'Düşük' : 'Dengeli';
 
-  const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : base.metrics.texture.score;
+  const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : 0;
   const textStatus: 'amber' | 'cyan' | 'emerald' = textScore > 40 ? 'amber' : 'cyan';
   const textDisplay = textScore > 40 ? 'Artış' : 'Stabil';
 
