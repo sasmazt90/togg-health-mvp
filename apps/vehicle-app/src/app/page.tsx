@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useVehicle } from '../context/VehicleContext';
 import {
@@ -16,11 +16,38 @@ import {
   Activity,
   ChevronRight,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Info
 } from 'lucide-react';
+import { isDemoMode } from '../utils/attuneMode';
+import {
+  getVisionSummary,
+  getSkinSummary,
+  getMentalSummary,
+  getHealthTimeline,
+  VisionSummaryData,
+  SkinSummaryData,
+  MentalSummaryData,
+  HealthTimelineItem
+} from '../utils/healthSelectors';
 
 export default function CockpitDashboard() {
   const { state, isParked } = useVehicle();
+
+  const [isDemo, setIsDemo] = useState<boolean>(true);
+  const [vision, setVision] = useState<VisionSummaryData>(() => getVisionSummary(true));
+  const [skin, setSkin] = useState<SkinSummaryData>(() => getSkinSummary(true));
+  const [mental, setMental] = useState<MentalSummaryData>(() => getMentalSummary(true));
+  const [timeline, setTimeline] = useState<HealthTimelineItem[]>(() => getHealthTimeline(true));
+
+  useEffect(() => {
+    const demo = isDemoMode();
+    setIsDemo(demo);
+    setVision(getVisionSummary(demo));
+    setSkin(getSkinSummary(demo));
+    setMental(getMentalSummary(demo));
+    setTimeline(getHealthTimeline(demo));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -34,6 +61,11 @@ export default function CockpitDashboard() {
             <div className="flex items-center gap-2 text-[11px] font-semibold text-togg-turquoise tracking-wider uppercase">
               <span className="w-2 h-2 rounded-full bg-togg-turquoise animate-pulse" />
               <span>Kişisel Önleyici Sağlık Kokpiti</span>
+              {isDemo && (
+                <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-cyan-950/80 border border-togg-turquoise/30 text-togg-turquoise lowercase font-mono">
+                  demo veri
+                </span>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -141,12 +173,12 @@ export default function CockpitDashboard() {
             {/* Sade Tek Katman İçgörü */}
             <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-[11px]">Son Sonuç</span>
-                <span className="font-mono text-white text-xs font-semibold">20/30 • 20/24</span>
+                <span className="text-slate-400 text-[11px]">{vision.hasData ? 'Son Sonuç' : 'Son Değerlendirme'}</span>
+                <span className="font-mono text-white text-xs font-semibold">{vision.acuitySummary}</span>
               </div>
               <div className="text-[11px] text-amber-400 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
-                <span>Kontrast değişimi</span>
-                <span className="text-slate-400 font-normal">İzleniyor</span>
+                <span>Kontrast</span>
+                <span className="text-slate-400 font-normal">{vision.contrastSummary}</span>
               </div>
             </div>
           </div>
@@ -193,12 +225,14 @@ export default function CockpitDashboard() {
             {/* Sade Tek Katman İçgörü */}
             <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-[11px]">Sağ Yanak</span>
-                <span className="font-mono text-amber-400 text-xs font-bold">+%22 Değişim</span>
+                <span className="text-slate-400 text-[11px]">{skin.hasData ? skin.regionNameTr : 'Son Tarama'}</span>
+                <span className={`font-mono text-xs font-bold ${skin.hasData ? 'text-amber-400' : 'text-slate-400 font-normal'}`}>
+                  {skin.changeLabel}
+                </span>
               </div>
               <div className="text-[11px] text-slate-300 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
-                <span>Doku ve kızarıklık</span>
-                <span className="text-amber-400 font-normal">Takip öneriliyor</span>
+                <span>Durum</span>
+                <span className="text-amber-400 font-normal">{skin.recommendation}</span>
               </div>
             </div>
           </div>
@@ -246,11 +280,11 @@ export default function CockpitDashboard() {
             <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-slate-400 text-[11px]">Tekrar Eden Tema</span>
-                <span className="text-white text-xs font-semibold">Uyku düzensizliği</span>
+                <span className="text-white text-xs font-semibold">{mental.primaryTheme}</span>
               </div>
               <div className="text-[11px] text-togg-turquoise font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
                 <span>Seans Hafızası</span>
-                <span className="text-slate-400 font-normal">4 görüşme</span>
+                <span className="text-slate-400 font-normal">{mental.sessionCountLabel}</span>
               </div>
             </div>
           </div>
@@ -328,43 +362,29 @@ export default function CockpitDashboard() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">21 Eylül 2026</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-medium">
-                Cilt Kontrolü
-              </span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              Sağ yanak bölgesinde baz çizgiye göre <strong>+%22 doku varyansı</strong> ve kızarıklık eğilimi kaydedildi. Uzman yönlendirme önerisi Care Agent'a iletildi.
-            </p>
+        {timeline.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {timeline.map((item) => (
+              <div key={item.id} className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">{item.dateTr}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${item.badgeClass}`}>
+                    {item.moduleName}
+                  </span>
+                </div>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  {item.description}
+                </p>
+              </div>
+            ))}
           </div>
-
-          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">19 Eylül 2026</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-400 border border-indigo-800/60 font-medium">
-                Ruhsal İyi Oluş
-              </span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              Akşam dönüş yolunda <strong>uyku düzensizliği</strong> ve yorgunluk teması öne çıktı. Seans hafızası güncellenerek rahatlatıcı kabin rehberliği sağlandı.
-            </p>
+        ) : (
+          <div className="p-6 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800/50 space-y-1">
+            <Info className="w-5 h-5 text-slate-500 mx-auto" />
+            <p>Henüz kayıtlı ölçüm geçmişi bulunmuyor.</p>
+            <p className="text-[11px] text-slate-500">Görme veya cilt kontrolünü tamamladığınızda eğilim akışınız burada listelenecektir.</p>
           </div>
-
-          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">18 Eylül 2026</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950/60 text-togg-turquoise border border-cyan-800/60 font-medium">
-                Görme Kontrolü
-              </span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              Kontrast hassasiyetinde baz çizgiye göre hafif değişim eğilimi (<strong>1.55 LogCS</strong>) izlendi. Keskinlik 20/30 seviyesinde sabit kaldı.
-            </p>
-          </div>
-        </div>
+        )}
       </section>
     </div>
   );

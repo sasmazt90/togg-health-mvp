@@ -23,6 +23,7 @@ import {
   Check,
   RotateCcw
 } from 'lucide-react';
+import { isCameraAllowed } from '../../utils/attuneMode';
 
 export default function VisionPage() {
   const router = useRouter();
@@ -107,6 +108,11 @@ export default function VisionPage() {
   // Kamera açma
   const startCamera = async () => {
     setCameraError(null);
+    if (!isCameraAllowed()) {
+      setCameraError('Kabin kamerası kullanım izni Gizlilik ayarlarında kapalıdır. Oturma pozisyonunuzu alarak doğrulamak istediğiniz mesafeyi manuel seçebilirsiniz.');
+      setCameraActive(false);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }

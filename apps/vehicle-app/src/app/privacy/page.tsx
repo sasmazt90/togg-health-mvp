@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Info
 } from 'lucide-react';
+import { STORAGE_KEYS, isDemoMode } from '../../utils/attuneMode';
 
 export default function PrivacyPage() {
   const [cameraStatus, setCameraStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('GRANTED');
@@ -24,32 +25,62 @@ export default function PrivacyPage() {
     visionCount: number;
     skinCount: number;
     mentalCount: number;
-  }>({ visionCount: 1, skinCount: 2, mentalCount: 2 });
+  }>({ visionCount: 0, skinCount: 0, mentalCount: 0 });
 
   const [wipeStatus, setWipeStatus] = useState<'IDLE' | 'CONFIRM' | 'SUCCESS'>('IDLE');
 
   const checkStatus = () => {
     if (typeof window !== 'undefined') {
-      if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions.query({ name: 'camera' as any }).then((p) => {
-          setCameraStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'GRANTED');
-        }).catch(() => {});
-
-        navigator.permissions.query({ name: 'microphone' as any }).then((p) => {
-          setMicStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'GRANTED');
-        }).catch(() => {});
+      // 1. Tarayıcı izin sorgusu ve uygulama içi izin tercihi
+      const camPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED);
+      if (camPref !== null) {
+        setCameraStatus(camPref === 'true' ? 'GRANTED' : 'DENIED');
+      } else if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions
+          .query({ name: 'camera' as any })
+          .then((p) => {
+            setCameraStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'GRANTED');
+          })
+          .catch(() => {});
       }
 
-      const mentalPref = localStorage.getItem('togg_privacy_mental_summary_allowed');
+      const micPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED);
+      if (micPref !== null) {
+        setMicStatus(micPref === 'true' ? 'GRANTED' : 'DENIED');
+      } else if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions
+          .query({ name: 'microphone' as any })
+          .then((p) => {
+            setMicStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'GRANTED');
+          })
+          .catch(() => {});
+      }
+
+      const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
       if (mentalPref !== null) {
         setSaveMentalSummaries(mentalPref === 'true');
       }
 
-      let vCount = localStorage.getItem('togg_health_latest_vision') ? 1 : 1;
-      let sCount = (localStorage.getItem('togg_health_latest_skin') ? 1 : 0) + (localStorage.getItem('togg_health_skin_baseline') ? 1 : 1);
-      let mCount = localStorage.getItem('togg_health_latest_mental') ? 2 : 2;
+      // 2. Gerçek Veri Sayımları (Demo vs Real)
+      if (isDemoMode()) {
+        setDataStats({ visionCount: 1, skinCount: 2, mentalCount: 2 });
+      } else {
+        const vCount = localStorage.getItem(STORAGE_KEYS.LATEST_VISION) ? 1 : 0;
 
-      setDataStats({ visionCount: vCount, skinCount: Math.max(1, sCount), mentalCount: mCount });
+        let skinHist: any[] = [];
+        try {
+          const rawHist = localStorage.getItem(STORAGE_KEYS.SKIN_HISTORY);
+          if (rawHist) skinHist = JSON.parse(rawHist);
+        } catch {}
+
+        const sCount = skinHist.length > 0
+          ? skinHist.length
+          : (localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) ? 1 : (localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE) ? 1 : 0));
+
+        const mCount = localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL) ? 1 : 0;
+
+        setDataStats({ visionCount: vCount, skinCount: sCount, mentalCount: mCount });
+      }
     }
   };
 
@@ -59,24 +90,31 @@ export default function PrivacyPage() {
 
   const handleToggleMentalSaving = (val: boolean) => {
     setSaveMentalSummaries(val);
-    localStorage.setItem('togg_privacy_mental_summary_allowed', String(val));
+    localStorage.setItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED, String(val));
   };
 
   const handleToggleCamera = () => {
-    setCameraStatus((prev) => (prev === 'GRANTED' ? 'DENIED' : 'GRANTED'));
+    const next = cameraStatus === 'GRANTED' ? 'DENIED' : 'GRANTED';
+    setCameraStatus(next);
+    localStorage.setItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED, String(next === 'GRANTED'));
   };
 
   const handleToggleMic = () => {
-    setMicStatus((prev) => (prev === 'GRANTED' ? 'DENIED' : 'GRANTED'));
+    const next = micStatus === 'GRANTED' ? 'DENIED' : 'GRANTED';
+    setMicStatus(next);
+    localStorage.setItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED, String(next === 'GRANTED'));
   };
 
   const handleWipeAllData = async () => {
     try {
-      localStorage.removeItem('togg_health_latest_vision');
-      localStorage.removeItem('togg_health_latest_skin');
-      localStorage.removeItem('togg_health_skin_baseline');
-      localStorage.removeItem('togg_health_latest_mental');
-      localStorage.removeItem('togg_active_referral_context');
+      localStorage.removeItem(STORAGE_KEYS.LATEST_VISION);
+      localStorage.removeItem(STORAGE_KEYS.LATEST_SKIN);
+      localStorage.removeItem(STORAGE_KEYS.SKIN_BASELINE);
+      localStorage.removeItem(STORAGE_KEYS.SKIN_HISTORY);
+      localStorage.removeItem(STORAGE_KEYS.LATEST_MENTAL);
+      localStorage.removeItem(STORAGE_KEYS.REFERRAL_CONTEXT);
+      localStorage.removeItem(STORAGE_KEYS.DEMO_SKIN_RESULT);
+      localStorage.removeItem(STORAGE_KEYS.DEMO_REFERRAL);
 
       await fetch('http://localhost:8000/api/privacy/wipe', { method: 'POST' }).catch(() => {});
 
@@ -138,18 +176,18 @@ export default function PrivacyPage() {
             <div>
               <h2 className="text-base font-bold text-white">Kabin Kamerası</h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yalnızca görme mesafesi ve cilt analizi anında kullanılır; ham görüntü kaydedilmez.
+                Yalnızca görme mesafesi ve cilt analizi sırasında yüz ROI tespiti için anlık kullanılır; ham görüntü kaydedilmez.
               </p>
             </div>
           </div>
 
           <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">İzin Durumu</span>
+            <span className="text-[11px] text-slate-400">Uygulama İzni</span>
             <button
               onClick={handleToggleCamera}
               className="text-xs font-semibold text-togg-turquoise hover:underline"
             >
-              {cameraStatus === 'GRANTED' ? 'İzni Kapat' : 'İzin Ver'}
+              {cameraStatus === 'GRANTED' ? 'Erişimi Kapat' : 'İzin Ver'}
             </button>
           </div>
         </div>
@@ -173,20 +211,20 @@ export default function PrivacyPage() {
             </div>
 
             <div>
-              <h2 className="text-base font-bold text-white">Mikrofon Sistemi</h2>
+              <h2 className="text-base font-bold text-white">Kabin Mikrofonu</h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Sesli ruhsal asistan diyaloğunda konuşma tanıma için kullanılır; ham ses tutulmaz.
+                Yalnızca sesli asistan diyalogları için kullanılır. Ses akışı RAM üzerinde işlenir, ses kaydı saklanmaz.
               </p>
             </div>
           </div>
 
           <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-            <span className="text-[11px] text-slate-400">İzin Durumu</span>
+            <span className="text-[11px] text-slate-400">Uygulama İzni</span>
             <button
               onClick={handleToggleMic}
               className="text-xs font-semibold text-togg-turquoise hover:underline"
             >
-              {micStatus === 'GRANTED' ? 'İzni Kapat' : 'İzin Ver'}
+              {micStatus === 'GRANTED' ? 'Erişimi Kapat' : 'İzin Ver'}
             </button>
           </div>
         </div>

@@ -19,6 +19,8 @@ import {
   ChevronDown
 } from 'lucide-react';
 
+import { isMicrophoneAllowed, isMentalSummarySavingAllowed, STORAGE_KEYS } from '../../utils/attuneMode';
+
 interface ChatMessage {
   sender: 'USER' | 'AI';
   text: string;
@@ -48,6 +50,7 @@ export default function MentalPage() {
   const [showTextInput, setShowTextInput] = useState<boolean>(false);
   const [inputText, setInputText] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [micNotice, setMicNotice] = useState<string | null>(null);
 
   const [providerInfo, setProviderInfo] = useState<{
     providerName: string;
@@ -139,6 +142,15 @@ export default function MentalPage() {
   };
 
   const toggleListening = () => {
+    if (!isMicrophoneAllowed()) {
+      setMicNotice(
+        'Mikrofon kullanım izni Gizlilik ayarlarında kapalıdır. Lütfen Gizlilik sayfasından açın veya yazarak iletişim kurun.'
+      );
+      setShowTextInput(true);
+      return;
+    }
+    setMicNotice(null);
+
     if (!recognitionRef.current) {
       setShowTextInput(true);
       return;
@@ -243,6 +255,25 @@ export default function MentalPage() {
       speakReply(fallbackReply);
     } finally {
       setIsProcessing(false);
+
+      // Seans Hafızası Gizlilik Kontrolü:
+      // Eğer togg_privacy_mental_summary_allowed KAPALI ise, özet kalıcı olarak kaydedilmez!
+      if (isMentalSummarySavingAllowed()) {
+        try {
+          const theme = lower.includes('uyku')
+            ? 'Uyku Düzensizliği'
+            : lower.includes('iş') || lower.includes('stres')
+            ? 'İş Temposu & Stres'
+            : 'Odaklanma & Rahatlama';
+          const mentalRecord = {
+            dateTr: new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
+            primaryTheme: theme,
+            sessionCount: 1,
+            recommendation: 'Kabin içi rahatlatıcı ses önerildi'
+          };
+          localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, JSON.stringify(mentalRecord));
+        } catch {}
+      }
     }
   };
 
@@ -355,6 +386,14 @@ export default function MentalPage() {
               <span>{voiceSpeechEnabled ? 'Sesli Yanıt Açık' : 'Sessiz'}</span>
             </button>
           </div>
+
+          {/* Mikrofon İzin Uyarısı */}
+          {micNotice && (
+            <div className="p-3 bg-amber-950/70 border border-amber-700/80 rounded-xl text-amber-200 text-xs flex items-center gap-2 text-left animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{micNotice}</span>
+            </div>
+          )}
 
           {/* İsteğe Bağlı Metin Girişi Kutusu */}
           {showTextInput && (

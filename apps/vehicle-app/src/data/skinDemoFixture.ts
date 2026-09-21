@@ -466,3 +466,76 @@ export const getRegionByIndex = (index: number): SkinRegionData => {
   const id = REGION_ORDER[safeIndex];
   return SKIN_REGIONS[id];
 };
+
+/**
+ * Real Mode analiz sonucunu veya Demo Mode fikstürünü UI view modeline dönüştürür.
+ * Görsel SVG geometrisi ve layout config korunur; metrikler Real Mode'da gerçek SkinAnalysisResult'tan gelir.
+ */
+export function buildSkinRegionViewModel(
+  regionId: SkinRegionId,
+  analysisResult: any | null,
+  isDemo: boolean = false
+): SkinRegionData {
+  const base = getRegionData(regionId);
+  if (isDemo || !analysisResult || !analysisResult.regions || !analysisResult.regions[regionId]) {
+    return base;
+  }
+
+  const real = analysisResult.regions[regionId];
+  const changePct = typeof real.changeFromBaselinePct === 'number' ? real.changeFromBaselinePct : 0;
+  const isAttentionRequired = Math.abs(changePct) >= 20;
+
+  const rednessScore = typeof real.rednessScore === 'number' ? real.rednessScore : base.metrics.redness.score;
+  const rednessStatus: 'amber' | 'cyan' | 'emerald' = rednessScore > 50 ? 'amber' : 'cyan';
+  const rednessDisplay = rednessScore > 50 ? 'Yüksek' : rednessScore > 35 ? 'Hafif Artış' : 'Stabil';
+
+  const lumScore = typeof real.luminanceScore === 'number' ? real.luminanceScore : base.metrics.luminance.score;
+  const lumDisplay = lumScore > 60 ? 'Optimal' : lumScore < 40 ? 'Düşük' : 'Dengeli';
+
+  const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : base.metrics.texture.score;
+  const textStatus: 'amber' | 'cyan' | 'emerald' = textScore > 40 ? 'amber' : 'cyan';
+  const textDisplay = textScore > 40 ? 'Artış' : 'Stabil';
+
+  const deltaDisplay = `${changePct > 0 ? '+' : ''}${changePct}%`;
+  const deltaStatus: 'amber' | 'cyan' | 'emerald' = isAttentionRequired ? 'amber' : 'emerald';
+
+  return {
+    ...base,
+    changePct,
+    badgeText: deltaDisplay,
+    isAttentionRequired,
+    metrics: {
+      redness: {
+        ...base.metrics.redness,
+        score: Math.round(rednessScore),
+        displayValue: rednessDisplay,
+        status: rednessStatus
+      },
+      luminance: {
+        ...base.metrics.luminance,
+        score: Math.round(lumScore),
+        displayValue: lumDisplay,
+        status: 'cyan'
+      },
+      texture: {
+        ...base.metrics.texture,
+        score: Math.round(textScore),
+        displayValue: textDisplay,
+        status: textStatus
+      },
+      baselineChange: {
+        ...base.metrics.baselineChange,
+        score: Math.min(100, Math.abs(changePct) * 3),
+        displayValue: deltaDisplay,
+        status: deltaStatus
+      }
+    },
+    observation: {
+      headline: isAttentionRequired
+        ? `${base.nameTr} bölgesinde baz çizgiye göre %${Math.abs(changePct)} görsel değişim izlendi.`
+        : `${base.nameTr} bölgesinde görsel telemetri referans bandında seyretmektedir.`,
+      details: analysisResult.clinicalNoteTr || base.observation.details
+    }
+  };
+}
+
