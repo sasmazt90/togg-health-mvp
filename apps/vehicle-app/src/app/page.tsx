@@ -9,333 +9,363 @@ import {
   HeartPulse,
   CalendarCheck,
   ArrowRight,
-  ShieldCheck,
   AlertCircle,
-  Clock,
   MapPin,
   CheckCircle2,
-  TrendingUp,
+  Lock,
+  Activity,
   ChevronRight,
-  Lock
+  Clock,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function CockpitDashboard() {
   const { state, isParked } = useVehicle();
 
   return (
-    <div className="space-y-8">
-      {/* Karşılama ve Hızlı Durum Paneli */}
-      <div className="bg-gradient-to-r from-cockpit-surface to-slate-900 border border-cockpit-border rounded-2xl p-6 md:p-8 relative overflow-hidden shadow-xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+    <div className="space-y-6">
+      {/* 1. Hero Karşılama ve Durum Alanı (İlk Viewport Üst %35-40) */}
+      <section className="bg-gradient-to-br from-cockpit-surface via-[#071322] to-cockpit-bg border border-white/10 rounded-2xl p-6 md:p-7 relative overflow-hidden shadow-2xl">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-togg-turquoise/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-cyan-900/20 rounded-full blur-2xl pointer-events-none" />
+
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex items-center gap-2 text-xs font-semibold text-cyan-400 tracking-wider uppercase">
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span>Bütünleşik Önleyici Sağlık Ekosistemi</span>
+          <div className="space-y-3 max-w-2xl">
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-togg-turquoise tracking-wider uppercase">
+              <span className="w-2 h-2 rounded-full bg-togg-turquoise animate-pulse" />
+              <span>Kişisel Önleyici Sağlık Kokpiti</span>
             </div>
-            <h1 className="text-2xl md:text-4xl font-bold tracking-tight text-white">
-              İyi Yolculuklar, {state.driverName}.
-            </h1>
-            <p className="text-sm md:text-base text-slate-300">
-              Araç sensörleriniz ve önleyici sağlık katmanınız aktif. Dört modül ortak sağlık profiliniz üzerinden zaman içindeki değişimleri takip etmektedir.
-            </p>
+
+            <div className="space-y-1">
+              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
+                <span>ATTUNE</span>
+                <span className="text-togg-turquoise">.more</span>
+              </h1>
+              <p className="text-sm md:text-base text-slate-300 leading-relaxed">
+                Sağlığınızdaki değişimleri yolculuk boyunca takip eden kişisel iyi oluş deneyimi.
+              </p>
+            </div>
+
+            {/* Modül Kategorileri Bandı */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-400">
+              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
+                Görme
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
+                Cilt
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
+                Ruhsal İyi Oluş
+              </span>
+              <span className="text-slate-600">•</span>
+              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
+                Uzman Erişimi
+              </span>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800 shrink-0">
+          {/* Minimal Araç ve Durum Bloğu */}
+          <div className="flex items-center gap-4 bg-slate-950/80 px-5 py-3.5 rounded-2xl border border-white/10 shrink-0 backdrop-blur-md shadow-lg">
             <div className="space-y-1">
-              <div className="text-xs text-slate-400">Araç Durumu</div>
-              <div className="text-sm font-semibold flex items-center gap-2 text-white">
-                <span className={`w-2.5 h-2.5 rounded-full ${isParked ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-                {isParked ? 'Park Halinde (0 km/s)' : `Sürüş Modunda (${state.currentSpeed} km/s)`}
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Araç Durumu</div>
+              <div className="text-xs font-semibold flex items-center gap-2 text-white">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isParked
+                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                      : 'bg-amber-400 animate-pulse'
+                  }`}
+                />
+                <span>{isParked ? 'Park Halinde' : `Sürüş (${state.currentSpeed} km/s)`}</span>
               </div>
             </div>
+
             <div className="h-8 w-px bg-slate-800" />
+
             <div className="space-y-1">
-              <div className="text-xs text-slate-400">Konum & Varış</div>
-              <div className="text-sm font-semibold text-slate-200 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-                {state.estimatedTravelTimeToDestMin} dk sürüş mesafesi
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Varış Süresi</div>
+              <div className="text-xs font-semibold text-slate-200 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-togg-turquoise" />
+                <span>22 dk varış</span>
+              </div>
+            </div>
+
+            <div className="h-8 w-px bg-slate-800" />
+
+            <div className="space-y-1">
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Sensörler</div>
+              <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Hazır</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Sürüş Modu Güvenlik İkaz Çubuğu */}
+        {/* Sürüş Modu Emniyet Uyarısı (Sadece hareket halindeyken) */}
         {!isParked && (
-          <div className="mt-6 bg-amber-950/40 border border-amber-800/80 rounded-xl p-4 flex items-center gap-3 text-amber-200 text-sm">
-            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
-            <div>
-              <strong>Sürüş Güvenliği Aktif:</strong> Araç hareket halindeyken dikkat dağıtmamak amacıyla Görme ve Cilt değerlendirmeleri kilitlenmiştir. Yalnızca <strong>Sesli Ruhsal Asistan</strong> kısa ve sakin yanıtlarla kullanılabilir.
-            </div>
+          <div className="mt-4 bg-amber-950/50 border border-amber-800/70 rounded-xl px-4 py-2.5 flex items-center gap-3 text-amber-200 text-xs shadow-md">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Sürüş Güvenliği Devrede:</strong> Görsel odak gerektiren testler kilitlenmiştir. Yalnızca sesli asistan kullanılabilir.
+            </span>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Dört Ana Modül Grid Kartları */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      {/* 2. Dört Eşit Modül Kartı Grid (1600x900 ilk ekranda görünür) */}
+      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         {/* Modül 1: Görme Kontrolü */}
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 flex flex-col justify-between hover:border-cyan-500/50 transition-all group shadow-lg">
-          <div className="space-y-4">
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-3 bg-cyan-950/60 border border-cyan-800/50 text-cyan-400 rounded-xl">
-                <Eye className="w-6 h-6" />
+              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
+                <Eye className="w-5 h-5" />
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                Modül 01
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
+                01 • GÖRME
               </span>
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-white group-hover:text-cyan-400 transition-colors">
+              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
                 Görme Kontrolü
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Araç ekranında Landolt C keskinlik ve kontrast hassasiyeti ön değerlendirmesi.
+                Landolt C halkalarıyla görme keskinliği ve kontrast ön değerlendirmesi.
               </p>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5">
-              <div className="text-slate-400">Son Ölçüm (18 Eylül):</div>
-              <div className="text-slate-200 font-medium flex justify-between">
-                <span>Sağ: <strong>20/30</strong></span>
-                <span>Sol: <strong>20/24</strong></span>
+            {/* Sade Tek Katman İçgörü */}
+            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-[11px]">Son Sonuç</span>
+                <span className="font-mono text-white text-xs font-semibold">20/30 • 20/24</span>
               </div>
-              <div className="text-amber-400 font-medium text-[11px] pt-1 border-t border-slate-800">
-                • Kontrast hassasiyetinde değişim gözlendi
+              <div className="text-[11px] text-amber-400 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
+                <span>Kontrast değişimi</span>
+                <span className="text-slate-400 font-normal">İzleniyor</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-cockpit-border/50">
+          <div className="mt-4 pt-3 border-t border-white/5">
             {isParked ? (
               <Link
                 href="/vision"
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
               >
-                <span>Görme Kontrolünü Başlat</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Kontrolü Başlat</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
-              <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-slate-800/80 text-slate-500 font-medium text-xs border border-slate-700 cursor-not-allowed">
+              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-900 text-slate-500 font-medium text-xs border border-slate-800 cursor-not-allowed">
                 <Lock className="w-3.5 h-3.5" />
-                <span>Park Halinde Açılabilir</span>
+                <span>Park Halinde Açılır</span>
               </div>
             )}
           </div>
         </div>
 
         {/* Modül 2: Cilt Kontrolü */}
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 flex flex-col justify-between hover:border-emerald-500/50 transition-all group shadow-lg">
-          <div className="space-y-4">
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-3 bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 rounded-xl">
-                <Sparkles className="w-6 h-6" />
+              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
+                <Sparkles className="w-5 h-5" />
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                Modül 02
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
+                02 • CİLT
               </span>
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">
+              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
                 Cilt Kontrolü
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Kamera ile 6 yüz bölgesi takibi ve zaman içindeki görsel değişim analizi.
+                6 anatomik yüz bölgesinde zaman içindeki piksel değişim takibi.
               </p>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5">
-              <div className="text-slate-400">Son Tarama (17 Eylül):</div>
-              <div className="text-slate-200 font-medium flex justify-between">
-                <span>Bölge: <strong>Sağ Yanak</strong></span>
-                <span className="text-amber-400">Δ +%24 Değişim</span>
+            {/* Sade Tek Katman İçgörü */}
+            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-[11px]">Sağ Yanak</span>
+                <span className="font-mono text-amber-400 text-xs font-bold">+%22 Değişim</span>
               </div>
-              <div className="text-slate-400 text-[11px] pt-1 border-t border-slate-800">
-                • Kızarıklık ve doku görünümünde artış
+              <div className="text-[11px] text-slate-300 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
+                <span>Doku ve kızarıklık</span>
+                <span className="text-amber-400 font-normal">Takip öneriliyor</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-cockpit-border/50">
+          <div className="mt-4 pt-3 border-t border-white/5">
             {isParked ? (
               <Link
                 href="/skin"
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-500 text-black font-semibold text-sm hover:bg-emerald-400 transition-all min-h-touch"
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
               >
                 <span>Cilt Taramasını Aç</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             ) : (
-              <div className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-slate-800/80 text-slate-500 font-medium text-xs border border-slate-700 cursor-not-allowed">
+              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-900 text-slate-500 font-medium text-xs border border-slate-800 cursor-not-allowed">
                 <Lock className="w-3.5 h-3.5" />
-                <span>Park Halinde Açılabilir</span>
+                <span>Park Halinde Açılır</span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Modül 3: Ruhsal İyi Oluş Asistanı */}
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-all group shadow-lg">
-          <div className="space-y-4">
+        {/* Modül 3: Ruhsal İyi Oluş */}
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-3 bg-indigo-950/60 border border-indigo-800/50 text-indigo-400 rounded-xl">
-                <HeartPulse className="w-6 h-6" />
+              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
+                <HeartPulse className="w-5 h-5" />
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                Modül 03
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
+                03 • RUHSAL
               </span>
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors">
+              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
                 Ruhsal İyi Oluş
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Sesli diyalog, seans hafızası, stres ve uyku eğilimlerinin uzun süreli takibi.
+                Kabin içi sesli diyalog, stres ve uyku eğilimleri takibi.
               </p>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5">
-              <div className="text-slate-400">Tekrar Eden Temalar:</div>
-              <div className="text-slate-200 font-medium">
-                Uyku düzensizliği, iş temposu
+            {/* Sade Tek Katman İçgörü */}
+            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-[11px]">Tekrar Eden Tema</span>
+                <span className="text-white text-xs font-semibold">Uyku düzensizliği</span>
               </div>
-              <div className="text-cyan-400 text-[11px] pt-1 border-t border-slate-800 flex items-center gap-1">
-                <TrendingUp className="w-3 h-3" /> Son 4 seans hafızası aktif
+              <div className="text-[11px] text-togg-turquoise font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
+                <span>Seans Hafızası</span>
+                <span className="text-slate-400 font-normal">4 görüşme</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-cockpit-border/50">
+          <div className="mt-4 pt-3 border-t border-white/5">
             <Link
               href="/mental"
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-500 text-white font-semibold text-sm hover:bg-indigo-400 transition-all min-h-touch"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
             >
               <span>{isParked ? 'Görüşmeyi Başlat' : 'Sesli Asistanı Aç'}</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
 
-        {/* Modül 4: Sağlık Profesyoneli ve Randevu */}
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 flex flex-col justify-between hover:border-violet-500/50 transition-all group shadow-lg">
-          <div className="space-y-4">
+        {/* Modül 4: Uzman & Randevu */}
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="p-3 bg-violet-950/60 border border-violet-800/50 text-violet-400 rounded-xl">
-                <CalendarCheck className="w-6 h-6" />
+              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
+                <CalendarCheck className="w-5 h-5" />
               </div>
-              <span className="text-xs px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                Modül 04
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
+                04 • UZMAN
               </span>
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-white group-hover:text-violet-400 transition-colors">
+              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
                 Uzman & Randevu
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Browser agent ile takvim ve araç sürüş süresi uyumlu otonom hekim randevusu.
+                Takvim ve araç rotasıyla uyumlu akıllı hekim randevusu.
               </p>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1.5">
-              <div className="text-slate-400">Bekleyen Öneri (Dermatoloji):</div>
-              <div className="text-slate-200 font-medium">
-                Doç. Dr. Selin Kaya
+            {/* Sade Tek Katman İçgörü */}
+            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 text-[11px]">Önerilen Branş</span>
+                <span className="text-white text-xs font-semibold">Dermatoloji</span>
               </div>
-              <div className="text-emerald-400 text-[11px] pt-1 border-t border-slate-800 flex items-center justify-between">
+              <div className="text-[11px] text-emerald-400 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
+                <span>Uzm. Dr. B. Kaya (Demo Hekim)</span>
                 <span>Yarın 18:20</span>
-                <span>Takviminiz Uygun</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-cockpit-border/50">
+          <div className="mt-4 pt-3 border-t border-white/5">
             <Link
               href="/care"
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-violet-500 text-white font-semibold text-sm hover:bg-violet-400 transition-all min-h-touch"
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
             >
               <span>Randevuları İncele</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Ortak Sağlık Profili & Entegrasyon Akışı Göstergesi */}
-      <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-cockpit-border/60 pb-6">
-          <div>
-            <h2 className="text-xl font-bold text-white">Bütünleşik Önleyici Sağlık Özeti</h2>
-            <p className="text-xs md:text-sm text-slate-400 mt-1">
-              Dört modül arasındaki ortak yönlendirme ve veri köprüsü haritası
-            </p>
+      {/* 3. Below Fold: Son Değişimler Zaman Çizelgesi */}
+      <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5 text-sm font-bold text-white">
+            <Activity className="w-4 h-4 text-togg-turquoise" />
+            <span>Son Değişimler & Eğilim Akışı</span>
           </div>
           <Link
             href="/profile"
-            className="flex items-center gap-2 text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-togg-turquoise hover:text-[#33D0EE] transition-colors font-semibold"
           >
-            <span>Detaylı Sağlık Geçmişim</span>
-            <ChevronRight className="w-4 h-4" />
+            <span>Tüm Sağlık Geçmişi</span>
+            <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-2 text-xs text-cyan-400 font-semibold">
-              <Eye className="w-4 h-4" />
-              <span>Görme Ön Değerlendirmesi</span>
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">21 Eylül 2026</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 font-medium">
+                Cilt Kontrolü
+              </span>
             </div>
-            <p className="text-xs text-slate-300">
-              Kontrast hassasiyetinde son 1 ayda baz çizgiye göre gerileme eğilimi kaydedildi.
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Sağ yanak bölgesinde baz çizgiye göre <strong>+%22 doku varyansı</strong> ve kızarıklık eğilimi kaydedildi. Uzman yönlendirme önerisi Care Agent'a iletildi.
             </p>
-            <div className="pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-              Göz hekimi önerisi Care Agent'a iletildi
-            </div>
           </div>
 
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold">
-              <Sparkles className="w-4 h-4" />
-              <span>Cilt Değişim Takibi</span>
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">19 Eylül 2026</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-950/60 text-indigo-400 border border-indigo-800/60 font-medium">
+                Ruhsal İyi Oluş
+              </span>
             </div>
-            <p className="text-xs text-slate-300">
-              Sağ yanak bölgesinde kızarıklık ve doku varyansı artışı gözlemlendi.
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Akşam dönüş yolunda <strong>uyku düzensizliği</strong> ve yorgunluk teması öne çıktı. Seans hafızası güncellenerek rahatlatıcı kabin rehberliği sağlandı.
             </p>
-            <div className="pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              Dermatoloji slotu takvimle eşleştirildi
-            </div>
           </div>
 
-          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 space-y-2">
-            <div className="flex items-center gap-2 text-xs text-indigo-400 font-semibold">
-              <HeartPulse className="w-4 h-4" />
-              <span>Ruhsal İyi Oluş Eğilimi</span>
+          <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">18 Eylül 2026</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-950/60 text-togg-turquoise border border-cyan-800/60 font-medium">
+                Görme Kontrolü
+              </span>
             </div>
-            <p className="text-xs text-slate-300">
-              Son seanslarda uyku ve stres örüntüsü kaydedildi; sesli görüşme geçmişi korundu.
-            </p>
-            <div className="pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
-              Gerektiğinde klinik psikolog randevusu hazır
-            </div>
-          </div>
-        </div>
-
-        {/* Yasal ve Klinik Sorumluluk Reddi */}
-        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-xs text-slate-400 flex items-start gap-3">
-          <ShieldCheck className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <strong className="text-slate-300">Klinik Güvenlik ve Teşhis Bildirimi:</strong>
-            <p>
-              Togg Health MVP bir tıbbi cihaz veya teşhis aracı değildir. Hastalık tanısı koymaz. Yalnızca kullanıcıya zaman içindeki fonksiyonel ve görsel değişimleri bildirir ve gerektiğinde gerçek sağlık profesyonellerine erişim kolaylığı sağlar.
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              Kontrast hassasiyetinde baz çizgiye göre hafif değişim eğilimi (<strong>1.55 LogCS</strong>) izlendi. Keskinlik 20/30 seviyesinde sabit kaldı.
             </p>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

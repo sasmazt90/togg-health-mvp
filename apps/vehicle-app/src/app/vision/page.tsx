@@ -17,36 +17,32 @@ import {
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
-  RefreshCw,
-  Sliders,
+  Lock,
   ChevronRight,
-  Maximize2,
-  Sparkles,
   Info,
-  Check
+  Check,
+  RotateCcw
 } from 'lucide-react';
 
 export default function VisionPage() {
   const router = useRouter();
   const { isParked, state } = useVehicle();
 
-  // Test aşamaları
+  // Test adımları
   const [testStep, setTestStep] = useState<
     'IDLE' | 'SCREEN_CALIBRATION' | 'CAMERA_DISTANCE' | 'TESTING_RIGHT' | 'TESTING_LEFT' | 'TESTING_CONTRAST' | 'COMPLETED'
   >('IDLE');
 
-  // Ekran kalibrasyonu: Standart kredi kartı 85.6 mm. Varsayılan 96 DPI = 3.78 px/mm.
+  // Ekran kalibrasyonu: Standart kredi kartı 85.6 mm.
   const [cardWidthPx, setCardWidthPx] = useState<number>(324);
   const pixelsPerMm = Math.max(2.0, cardWidthPx / 85.6);
 
-  // Kamera ve Kullanıcı Doğrulamalı Test Mesafesi (Option B)
-  // Sentetik / sahte mesafe hesabı tamamen kaldırılmıştır.
+  // Kamera ve Kullanıcı Doğrulamalı Test Mesafesi
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [verifiedDistanceCm, setVerifiedDistanceCm] = useState<number>(55);
-  const [distanceConfirmed, setDistanceConfirmed] = useState<boolean>(false);
 
   // Staircase kontrolcüsü ve test durumu
   const [staircase, setStaircase] = useState<VisionStaircaseController | null>(null);
@@ -56,7 +52,7 @@ export default function VisionPage() {
   const [trialIndex, setTrialIndex] = useState<number>(1);
   const [contrastLevelPct, setContrastLevelPct] = useState<number>(100);
 
-  // Sonuçlar (Kesinlikle hardcoded fallback değer içermez, tamamlanana kadar null kalır)
+  // Sonuçlar (Tamamlanana kadar null)
   const [testResults, setTestResults] = useState<{
     rightEye: EyeTestResult | null;
     leftEye: EyeTestResult | null;
@@ -76,25 +72,39 @@ export default function VisionPage() {
     };
   }, [mediaStream]);
 
-  // Sürüş modunda erişim engeli
+  // SÜRÜŞ MODU KİLİDİ (SCREEN 11) - Tam merkezli, sade, otomotiv güvenlik arayüzü
   if (!isParked) {
     return (
-      <div className="bg-amber-950/30 border border-amber-800/80 rounded-2xl p-8 text-center max-w-2xl mx-auto my-12 space-y-4">
-        <div className="w-16 h-16 bg-amber-900/40 text-amber-400 rounded-full flex items-center justify-center mx-auto">
-          <AlertTriangle className="w-8 h-8" />
+      <div className="min-h-[70vh] flex items-center justify-center p-4">
+        <div className="bg-gradient-to-b from-cockpit-surface to-slate-950 border border-amber-500/50 rounded-3xl p-8 md:p-12 text-center max-w-lg w-full space-y-6 shadow-[0_0_60px_rgba(245,158,11,0.18)] backdrop-blur-xl">
+          <div className="w-20 h-20 bg-amber-500/15 border border-amber-500/40 text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <AlertTriangle className="w-10 h-10 animate-pulse" />
+          </div>
+
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold uppercase tracking-wider">
+              <span>SÜRÜŞ • {state.currentSpeed} km/s</span>
+            </div>
+
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">
+              Görme Kontrolü Kullanılamıyor
+            </h1>
+
+            <p className="text-sm text-slate-300 leading-relaxed max-w-sm mx-auto">
+              Bu özellik yalnızca araç park halindeyken kullanılabilir. Sürüş güvenliğiniz için görsel testler durdurulmuştur.
+            </p>
+          </div>
+
+          <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>Lütfen aracı güvenli bir noktada <strong>Park (P)</strong> moduna alın.</span>
+          </div>
         </div>
-        <h1 className="text-2xl font-bold text-amber-200">Sürüş Güvenliği Kilidi</h1>
-        <p className="text-sm text-amber-300/80 leading-relaxed">
-          Görme Kontrolü testi ekrana odaklanma ve göz kapatma gerektirdiğinden, sürüş güvenliğiniz için araç hareket halindeyken ({state.currentSpeed} km/s) başlatılamaz.
-        </p>
-        <p className="text-xs text-slate-400">
-          Lütfen aracı güvenli bir şekilde Park (P) moduna alın.
-        </p>
       </div>
     );
   }
 
-  // Kamera açma işlemi - Yalnızca canlı pozisyon kılavuzu sağlar, sentetik mesafe simülasyonu yapmaz
+  // Kamera açma
   const startCamera = async () => {
     setCameraError(null);
     try {
@@ -109,25 +119,21 @@ export default function VisionPage() {
       }
     } catch (err: any) {
       console.warn('Kamera erişimi sağlanamadı:', err);
-      setCameraError('Kamera erişimi sağlanamadı veya izin verilmedi. Pozisyonunuzu alarak doğrulamak istediğiniz test mesafesini aşağıdan seçebilirsiniz.');
+      setCameraError('Kamera erişimi sağlanamadı. Lütfen oturma pozisyonunuzu alarak doğrulamak istediğiniz mesafeyi seçin.');
       setCameraActive(false);
     }
   };
 
-  // 1. Ekran Kalibrasyonuna Başla
   const handleStartScreenCalibration = () => {
     setTestStep('SCREEN_CALIBRATION');
   };
 
-  // 2. Kamera Kadrajı & Doğrulanan Mesafeye Geç
   const handleProceedToCamera = () => {
     setTestStep('CAMERA_DISTANCE');
     startCamera();
   };
 
-  // 3. Testi Başlat (Sağ Göz)
   const handleStartTest = () => {
-    // Kamera akışını kapatıp kaynakları serbest bırakıyoruz
     if (mediaStream) {
       mediaStream.getTracks().forEach((t) => t.stop());
       setMediaStream(null);
@@ -141,7 +147,6 @@ export default function VisionPage() {
     setTestStep('TESTING_RIGHT');
   };
 
-  // Yön Cevabı Kaydı
   const handleAnswer = (chosen: OptotypeDirection) => {
     if (!staircase) return;
 
@@ -149,19 +154,16 @@ export default function VisionPage() {
       const isRight = testStep === 'TESTING_RIGHT';
       const outcome = staircase.registerResponse(currentDirection, chosen);
 
-      // Geri bildirim efekti
       setFeedbackEffect(outcome.isCorrect ? 'CORRECT' : 'WRONG');
-      setTimeout(() => setFeedbackEffect(null), 300);
+      setTimeout(() => setFeedbackEffect(null), 250);
 
       if (outcome.eyeFinished) {
         if (isRight) {
-          // Sol göze geçiş
           setTestStep('TESTING_LEFT');
           setCurrentDirection(staircase.getRandomDirection());
           setCurrentLogMAR(staircase.getCurrentLogMAR());
           setTrialIndex(1);
         } else {
-          // Kontrast testine geçiş
           setTestStep('TESTING_CONTRAST');
           setCurrentDirection(staircase.getRandomDirection());
           setContrastLevelPct(100);
@@ -175,16 +177,13 @@ export default function VisionPage() {
     } else if (testStep === 'TESTING_CONTRAST') {
       const isCorrect = chosen === currentDirection;
       setFeedbackEffect(isCorrect ? 'CORRECT' : 'WRONG');
-      setTimeout(() => setFeedbackEffect(null), 300);
+      setTimeout(() => setFeedbackEffect(null), 250);
 
       const outcome = staircase.registerContrastResponse(isCorrect);
       if (outcome.contrastFinished || trialIndex >= 5) {
-        // Test bitti - yalnızca gerçek sonuçları al
         const results = staircase.getResults();
         setTestResults(results);
         setTestStep('COMPLETED');
-
-        // Sağlık profiline kaydet (asla hardcoded fallback eklenmez)
         saveResultsToProfile(results);
       } else {
         setContrastLevelPct(outcome.currentContrastPct);
@@ -199,11 +198,7 @@ export default function VisionPage() {
     leftEye: EyeTestResult | null;
     contrast: ContrastResult | null;
   }) => {
-    // Yalnızca test tamamlanmışsa ve gerçek sonuç varsa kaydet
-    if (!results.rightEye || !results.leftEye || !results.contrast) {
-      return;
-    }
-
+    if (!results.rightEye || !results.leftEye || !results.contrast) return;
     try {
       const visionRecord = {
         id: `vis-${Date.now()}`,
@@ -215,25 +210,23 @@ export default function VisionPage() {
         acuityLeftSnellen: results.leftEye.snellen,
         contrastSensitivityLogCS: results.contrast.logCS,
         verifiedDistanceCm: verifiedDistanceCm,
-        comparisonNote: 'Ölçüm başarıyla tamamlandı. Değerler kullanıcı doğrulamalı test mesafesi ve adaptif basamak algoritmasıyla kaydedildi.',
+        comparisonNote: 'Ölçüm tamamlandı. Kullanıcı doğrulamalı test mesafesi ve adaptif basamak algoritmasıyla kaydedildi.',
         ophthalmologistReferralRecommended: results.rightEye.logMAR > 0.15 || results.leftEye.logMAR > 0.15
       };
       localStorage.setItem('togg_health_latest_vision', JSON.stringify(visionRecord));
     } catch (e) {
-      console.warn('LocalStorage kayıt hatası:', e);
+      console.warn('LocalStorage error:', e);
     }
   };
 
-  // Care Agent'a sevk aktarımı - Sadece gerçek sonuçlar aktarılır
   const handleNavigateToCare = () => {
     const isCompleted = !!testResults.rightEye && !!testResults.leftEye && !!testResults.contrast;
-    
     const referralContext = {
       sourceModule: 'VISION',
       specialty: 'Göz Hastalıkları',
       reasonSummary: isCompleted
-        ? `Ön değerlendirme sonucu: Sağ Göz ${testResults.rightEye!.snellen} (${testResults.rightEye!.logMAR.toFixed(2)} LogMAR), Sol Göz ${testResults.leftEye!.snellen} (${testResults.leftEye!.logMAR.toFixed(2)} LogMAR). Kontrast: ${testResults.contrast!.logCS.toFixed(2)} LogCS. Test mesafesi: ${verifiedDistanceCm} cm.`
-        : 'Görme testi tamamlanmadı; genel göz kontrolü ve muayene talebi.',
+        ? `Ön değerlendirme sonucu: Sağ Göz ${testResults.rightEye!.snellen}, Sol Göz ${testResults.leftEye!.snellen}. Kontrast: ${testResults.contrast!.logCS.toFixed(2)} LogCS. Test mesafesi: ${verifiedDistanceCm} cm.`
+        : 'Görme testi; genel göz hekimi kontrol ve muayene talebi.',
       timestamp: new Date().toISOString(),
       metricsSummary: isCompleted ? {
         rightSnellen: testResults.rightEye!.snellen,
@@ -242,9 +235,7 @@ export default function VisionPage() {
         leftLogMAR: testResults.leftEye!.logMAR,
         contrastLogCS: testResults.contrast!.logCS,
         verifiedDistanceCm
-      } : {
-        status: 'INCOMPLETE'
-      }
+      } : { status: 'INCOMPLETE' }
     };
     try {
       localStorage.setItem('togg_active_referral_context', JSON.stringify(referralContext));
@@ -258,7 +249,6 @@ export default function VisionPage() {
   const optotypeSizeMm = VisionStaircaseController.calculateOptotypeSizeMm(verifiedDistanceCm, currentLogMAR);
   const optotypeSizePx = VisionStaircaseController.mmToPixels(optotypeSizeMm, pixelsPerMm);
 
-  // Yön rotasyon açısı
   const directionAngles: Record<OptotypeDirection, number> = {
     RIGHT: 0,
     DOWN: 90,
@@ -267,103 +257,158 @@ export default function VisionPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Başlık Alanı */}
-      <div className="flex items-center justify-between border-b border-cockpit-border pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-cyan-950/80 border border-cyan-800 text-cyan-400 rounded-xl">
-            <Eye className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white">Görme Kontrolü ve Ön Değerlendirme</h1>
-            <p className="text-xs text-slate-400">
-              Adaptif Landolt C staircase motoru, ekran kalibrasyonu ve kullanıcı doğrulamalı test mesafesi
-            </p>
-          </div>
-        </div>
-        <div className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
-          Park Modu: <strong className="text-emerald-400">Aktif</strong>
-        </div>
-      </div>
-
-      {/* ADIM 1: BAŞLANGIÇ (IDLE) */}
+    <div className="space-y-6">
+      {/* SCREEN 02: GÖRME TESTİ BAŞLANGIÇ EKRANI (1600x900 İLK VİEWPORT İÇİNDE %55 / %45) */}
       {testStep === 'IDLE' && (
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-lg font-bold text-white">Ön Kontrol ve Protokol Bilgilendirmesi</h2>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Bu test, uluslararası standart Landolt C halkaları ve adaptif basamak (staircase) algoritması kullanarak görme keskinliğinizi ve kontrast algınızı değerlendirir.
-            </p>
-          </div>
+        <div className="space-y-6">
+          <section className="bg-gradient-to-br from-cockpit-surface via-[#071322] to-cockpit-bg border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              {/* Sol %55 Kolon: Başlık, 3 Aşamalı Yatay İlerleme, CTA */}
+              <div className="lg:col-span-7 space-y-6">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-togg-turquoise/10 border border-togg-turquoise/30 text-togg-turquoise text-[11px] font-semibold tracking-wider uppercase">
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Önleyici Görme Değerlendirmesi</span>
+                  </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-1">
-              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                1. Ekran Kalibrasyonu
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+                    Görme Kontrolü ve Ön Değerlendirme
+                  </h1>
+
+                  <p className="text-sm text-slate-300 leading-relaxed max-w-xl">
+                    Adaptif Landolt C staircase motoru ve kullanıcı doğrulamalı test mesafesiyle kabin ekranında görme keskinliği ve kontrast takibi.
+                  </p>
+                </div>
+
+                {/* 3 Aşamalı Yatay İlerleme Çubuğu */}
+                <div className="grid grid-cols-3 gap-3 p-3 bg-slate-950/80 rounded-xl border border-white/10 text-xs">
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-togg-darkBlue/70 border border-togg-turquoise/40 text-togg-turquoise font-medium">
+                    <span className="w-5 h-5 rounded-full bg-togg-turquoise text-togg-darkBlue font-bold flex items-center justify-center text-[10px]">1</span>
+                    <span>Ekranı Ayarla</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-400">
+                    <span className="w-5 h-5 rounded-full bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center text-[10px]">2</span>
+                    <span>Mesafeyi Doğrula</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-slate-400">
+                    <span className="w-5 h-5 rounded-full bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center text-[10px]">3</span>
+                    <span>Testi Tamamla</span>
+                  </div>
+                </div>
+
+                {/* Birincil Aksiyon Butonu ve Güvenlik Notu */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    onClick={handleStartScreenCalibration}
+                    className="w-full sm:w-auto flex items-center justify-center gap-3 py-3.5 px-8 rounded-xl bg-togg-turquoise text-togg-darkBlue font-bold text-sm hover:bg-[#33D0EE] transition-all min-h-touch shadow-[0_0_20px_rgba(0,194,231,0.25)]"
+                  >
+                    <span>TESTİ HAZIRLA</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Yalnızca araç park halindeyken kullanılabilir.</span>
+                  </div>
+                </div>
               </div>
-              <p className="text-slate-400">
-                Piksel yoğunluğunu fiziksel milimetreye dönüştürmek için standart bir kart referansı kullanılır.
-              </p>
-            </div>
 
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-1">
-              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
-                <Camera className="w-4 h-4 text-cyan-400" />
-                2. Doğrulanan Mesafe
+              {/* Sağ %45 Kolon: Büyük Landolt C Önizleme Kartı */}
+              <div className="lg:col-span-5 flex justify-center">
+                <div className="w-full max-w-sm aspect-square bg-slate-950/80 rounded-2xl border border-white/10 p-6 flex flex-col items-center justify-between shadow-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-togg-turquoise/10 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="flex items-center justify-between w-full text-[11px] text-slate-400">
+                    <span className="font-mono uppercase tracking-wider">Landolt C Referansı</span>
+                    <span className="text-togg-turquoise font-semibold">Ön Değerlendirme</span>
+                  </div>
+
+                  {/* Merkez Landolt C Halka Görseli */}
+                  <div className="relative my-auto flex items-center justify-center">
+                    <div className="w-36 h-36 rounded-full border border-dashed border-togg-turquoise/30 flex items-center justify-center animate-[spin_40s_linear_infinite]">
+                      <div className="w-28 h-28 rounded-full border border-white/5" />
+                    </div>
+
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <svg width="84" height="84" viewBox="0 0 100 100" className="filter drop-shadow-[0_0_20px_rgba(0,194,231,0.35)]">
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="none"
+                          stroke="#00E5FF"
+                          strokeWidth="18"
+                          strokeDasharray="210 30"
+                          strokeDashoffset="15"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="text-center space-y-0.5">
+                    <div className="text-xs font-semibold text-white">Optotip Keskinlik ve Kontrast Halkası</div>
+                    <div className="text-[11px] text-slate-400">Adaptif Basamak Test Motoru Hazır</div>
+                  </div>
+                </div>
               </div>
-              <p className="text-slate-400">
-                Kamera kılavuzuyla pozisyon alınır ve test mesafesi kullanıcı tarafından onaylanır (50, 55 veya 60 cm).
-              </p>
+            </div>
+          </section>
+
+          {/* Below Fold: Test Hakkında Bilgilendirme */}
+          <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+            <div className="flex items-center gap-2 text-sm font-bold text-white border-b border-white/10 pb-3">
+              <Info className="w-4 h-4 text-togg-turquoise" />
+              <span>Test Hakkında & Ön Değerlendirme Esasları</span>
             </div>
 
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-slate-800 space-y-1">
-              <div className="font-semibold text-cyan-300 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-cyan-400" />
-                3. Gerçek Staircase
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 space-y-1.5">
+                <div className="text-white font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-togg-turquoise" />
+                  <span>Landolt C Halkaları</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Uluslararası optotip standardına göre halkanın 4 yönündeki boşluk tespit edilerek görme keskinliği LogMAR olarak ölçülür.
+                </p>
               </div>
-              <p className="text-slate-400">
-                Halkaların boyutu verdiğiniz yanıtlara göre büyür veya küçülür; sağ ve sol göz ayrı test edilir.
-              </p>
-            </div>
-          </div>
 
-          <div className="bg-cyan-950/30 border border-cyan-800/60 rounded-xl p-4 text-xs text-cyan-300 space-y-1">
-            <div className="font-semibold flex items-center gap-1.5">
-              <Info className="w-4 h-4 text-cyan-400" />
-              <span>Klinik Ön Değerlendirme Bildirimi</span>
-            </div>
-            <p className="leading-relaxed text-cyan-300/80">
-              Bu test tıbbi muayene yerine geçmez. Ekran ölçeği ve kullanıcı doğrulamalı mesafeye dayalı işlevsel bir ön taramadır.
-            </p>
-          </div>
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 space-y-1.5">
+                <div className="text-white font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-togg-turquoise" />
+                  <span>Doğrulanmış Test Mesafesi</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Kart kalibrasyonu ve kullanıcı tarafından teyit edilen mesafeyle optotip ekranda milimetrik hassasiyetle ölçeklendirilir.
+                </p>
+              </div>
 
-          <div className="flex justify-end pt-2">
-            <button
-              onClick={handleStartScreenCalibration}
-              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch shadow-lg"
-            >
-              <span>Kalibrasyona Başla</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 space-y-1.5">
+                <div className="text-white font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  <span>İşlevsel Ön Tarama</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Bu test tıbbi muayene yerine geçmez; kabin içi konfor ve değişim takibine yönelik fonksiyonel bir ön değerlendirmedir.
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
       )}
 
       {/* ADIM 2: EKRAN KALİBRASYONU (CARD SLIDER) */}
       {testStep === 'SCREEN_CALIBRATION' && (
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 max-w-3xl mx-auto shadow-2xl">
           <div className="space-y-1">
-            <h2 className="text-lg font-bold text-white">Ekran Boyutu Kalibrasyonu</h2>
+            <h2 className="text-lg font-bold text-white">1. Adım: Ekran Boyutu Kalibrasyonu</h2>
             <p className="text-xs text-slate-300">
-              Landolt C halkasının fiziksel milimetre boyutunu ekranınızda tam tutturabilmek için lütfen ekranınıza standart bir kredi kartı / kimlik kartı (85.6 mm) tutun ve mavi kutuyu kartınızın genişliğiyle birebir örtüşene kadar kaydırıcıyla ayarlayın.
+              Landolt C halkasının fiziksel milimetre boyutunu ekranınızda tam tutturabilmek için lütfen ekranınıza standart bir kart (85.6 mm) tutun ve kutuyu genişliğiyle birebir örtüşene kadar kaydırıcıyla ayarlayın.
             </p>
           </div>
 
-          {/* Kart Referans Kutusu */}
-          <div className="flex flex-col items-center justify-center p-6 bg-slate-950 rounded-xl border border-slate-800 min-h-[160px]">
+          <div className="flex flex-col items-center justify-center p-6 bg-slate-950/80 rounded-xl border border-slate-800 min-h-[160px]">
             <div
-              className="h-28 bg-gradient-to-r from-cyan-950 to-blue-900 border-2 border-cyan-400 rounded-lg flex flex-col justify-between p-3 text-cyan-200 transition-all shadow-md"
+              className="h-28 bg-gradient-to-r from-cyan-950 to-blue-900 border-2 border-togg-turquoise rounded-lg flex flex-col justify-between p-3 text-cyan-200 transition-all shadow-md"
               style={{ width: `${cardWidthPx}px` }}
             >
               <div className="flex justify-between items-center text-[11px] font-mono">
@@ -379,12 +424,11 @@ export default function VisionPage() {
             </div>
           </div>
 
-          {/* Slider Kontrolü */}
           <div className="space-y-2 max-w-md mx-auto">
             <div className="flex justify-between text-xs text-slate-400">
-              <span>Daha Dar (Düşük DPI)</span>
-              <span className="font-mono text-cyan-400 font-bold">{cardWidthPx} px</span>
-              <span>Daha Geniş (Yüksek DPI)</span>
+              <span>Daha Dar</span>
+              <span className="font-mono text-togg-turquoise font-bold">{cardWidthPx} px</span>
+              <span>Daha Geniş</span>
             </div>
             <input
               type="range"
@@ -392,20 +436,20 @@ export default function VisionPage() {
               max="520"
               value={cardWidthPx}
               onChange={(e) => setCardWidthPx(Number(e.target.value))}
-              className="w-full accent-cyan-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+              className="w-full accent-togg-turquoise h-2 bg-slate-800 rounded-lg cursor-pointer"
             />
           </div>
 
-          <div className="flex justify-between items-center pt-4 border-t border-cockpit-border">
+          <div className="flex justify-between items-center pt-4 border-t border-white/10">
             <button
               onClick={() => setTestStep('IDLE')}
-              className="text-xs text-slate-400 hover:text-white"
+              className="text-xs text-slate-400 hover:text-white px-3 py-2"
             >
               İptal
             </button>
             <button
               onClick={handleProceedToCamera}
-              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch"
+              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-togg-turquoise text-togg-darkBlue font-bold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
             >
               <span>Ölçek Doğrulandı, Mesafeye Geç</span>
               <ArrowRight className="w-4 h-4" />
@@ -414,18 +458,17 @@ export default function VisionPage() {
         </div>
       )}
 
-      {/* ADIM 3: KAMERA KILAVUZU & DOĞRULANAN TEST MESAFESİ (SEÇENEK B) */}
+      {/* ADIM 3: TEST MESAFESİ SEÇİMİ VE KAMERA */}
       {testStep === 'CAMERA_DISTANCE' && (
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6 text-center">
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 text-center max-w-3xl mx-auto shadow-2xl">
           <div className="space-y-1">
-            <h2 className="text-lg font-bold text-white">Kamera Kadrajı ve Kullanıcı Doğrulamalı Test Mesafesi</h2>
+            <h2 className="text-lg font-bold text-white">2. Adım: Kadraj ve Doğrulanan Test Mesafesi</h2>
             <p className="text-xs text-slate-300">
-              Kamera aracılığıyla yüzünüzü kadraja hizalayın ve araç ekranıyla aranızdaki fiziksel mesafeyi doğrulayın.
+              Koltuk pozisyonunuzu alarak ekranla aranızdaki fiziksel mesafeyi doğrulayın.
             </p>
           </div>
 
-          {/* Video Canlı Önizleme */}
-          <div className="relative max-w-md mx-auto aspect-video bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center justify-center overflow-hidden">
+          <div className="relative max-w-md mx-auto aspect-video bg-slate-950 rounded-xl border border-slate-800 flex flex-col items-center justify-center overflow-hidden shadow-inner">
             <video
               ref={videoRef}
               autoPlay
@@ -435,40 +478,38 @@ export default function VisionPage() {
             />
             {!cameraActive && (
               <div className="p-4 space-y-2">
-                <Camera className="w-12 h-12 text-cyan-400 animate-pulse mx-auto" />
+                <Camera className="w-10 h-10 text-togg-turquoise animate-pulse mx-auto" />
                 <div className="text-sm font-semibold text-slate-200">Kamera Başlatılıyor...</div>
-                <div className="text-xs text-slate-400">Kamera yoksa veya izin verilmezse mesafe onaylayarak devam edebilirsiniz.</div>
+                <div className="text-xs text-slate-400">Kamera yoksa mesafeyi aşağıdan seçebilirsiniz.</div>
               </div>
             )}
 
-            {/* Kadraj Rehber Çizgisi */}
             {cameraActive && (
-              <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 border-2 border-dashed border-cyan-500/40 rounded-xl m-2">
-                <div className="flex justify-between items-center text-[10px] bg-black/60 px-2 py-1 rounded text-cyan-300">
+              <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-3 border-2 border-dashed border-togg-turquoise/50 rounded-xl m-2">
+                <div className="flex justify-between items-center text-[10px] bg-black/70 px-2.5 py-1 rounded text-togg-turquoise backdrop-blur-sm">
                   <span>CANLI KABİN KAMERASI</span>
                   <span className="flex items-center gap-1 text-emerald-400">
-                    <CheckCircle2 className="w-3 h-3" /> Konumlandırma Aktif
+                    <CheckCircle2 className="w-3 h-3" /> Konumlandırma
                   </span>
                 </div>
-                <div className="w-28 h-36 border-2 border-dashed border-emerald-400/70 rounded-full mx-auto self-center" />
-                <div className="bg-black/70 px-3 py-1 rounded text-center text-xs text-slate-200">
-                  Kadraj Rehberi: Yüzünüzü oval alana ortalayın
+                <div className="w-24 h-32 border-2 border-dashed border-togg-turquoise/80 rounded-full mx-auto self-center shadow-[0_0_15px_rgba(0,194,231,0.2)]" />
+                <div className="bg-black/75 px-3 py-1 rounded text-center text-xs text-slate-200">
+                  Yüzünüzü oval alana hizalayın
                 </div>
               </div>
             )}
           </div>
 
           {cameraError && (
-            <div className="bg-amber-950/40 border border-amber-800/80 p-3 rounded-xl text-xs text-amber-300 text-left">
+            <div className="bg-amber-950/40 border border-amber-800/80 p-3 rounded-xl text-xs text-amber-300 text-left max-w-md mx-auto">
               {cameraError}
             </div>
           )}
 
-          {/* Kullanıcı Doğrulamalı Mesafe Seçimi */}
-          <div className="max-w-md mx-auto bg-slate-900/80 p-4 rounded-xl border border-slate-800 text-left space-y-3">
+          <div className="max-w-md mx-auto bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-left space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-200">Doğrulanan Test Mesafesi:</span>
-              <span className="text-xs font-mono font-bold text-cyan-400">{verifiedDistanceCm} cm</span>
+              <span className="text-xs font-mono font-bold text-togg-turquoise">{verifiedDistanceCm} cm</span>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[50, 55, 60].map((dist) => (
@@ -478,8 +519,8 @@ export default function VisionPage() {
                   onClick={() => setVerifiedDistanceCm(dist)}
                   className={`py-2 px-3 rounded-lg text-xs font-medium border transition-all flex items-center justify-center gap-1.5 ${
                     verifiedDistanceCm === dist
-                      ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow'
-                      : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
+                      ? 'bg-togg-turquoise text-togg-darkBlue border-togg-turquoise font-bold shadow'
+                      : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   {verifiedDistanceCm === dist && <Check className="w-3.5 h-3.5" />}
@@ -487,12 +528,9 @@ export default function VisionPage() {
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              Optotip fiziksel boyutu, seçtiğiniz <strong>{verifiedDistanceCm} cm</strong> mesafesine ve kredi kartı kalibrasyonuna göre milimetrik hassasiyetle hesaplanacaktır.
-            </p>
           </div>
 
-          <div className="flex justify-center gap-4 pt-2">
+          <div className="flex justify-between items-center pt-2 max-w-md mx-auto">
             <button
               onClick={() => setTestStep('SCREEN_CALIBRATION')}
               className="text-xs text-slate-400 hover:text-white"
@@ -501,7 +539,7 @@ export default function VisionPage() {
             </button>
             <button
               onClick={handleStartTest}
-              className="py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch shadow-lg"
+              className="py-3 px-6 rounded-xl bg-togg-turquoise text-togg-darkBlue font-bold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-lg"
             >
               Doğrulandı, Testi Başlat
             </button>
@@ -509,39 +547,52 @@ export default function VisionPage() {
         </div>
       )}
 
-      {/* ADIM 4: TEST AKIŞI (SAĞ GÖZ, SOL GÖZ, KONTRAST) */}
+      {/* SCREEN 03: AKTİF TEST EKRANI (LANDOLT C + 4 DOKUNMATİK YÖN BUTONU) */}
       {(testStep === 'TESTING_RIGHT' || testStep === 'TESTING_LEFT' || testStep === 'TESTING_CONTRAST') && (
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6 text-center">
-          {/* Test Durum Çubuğu */}
-          <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800 pb-3">
-            <div>
-              Aktif Aşama:{' '}
-              <strong className="text-cyan-400">
-                {testStep === 'TESTING_RIGHT' && '1. SAĞ GÖZ (Sol Gözünüzü Kapatın)'}
-                {testStep === 'TESTING_LEFT' && '2. SOL GÖZ (Sağ Gözünüzü Kapatın)'}
-                {testStep === 'TESTING_CONTRAST' && '3. Ekran Tabanlı Kontrast Duyarlılığı Ön Değerlendirmesi (İki Göz Açık)'}
-              </strong>
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 max-w-3xl mx-auto shadow-2xl">
+          {/* Üst Bilgi: Sol Taraf Göz Talimatı, Sağ Taraf İlerleme Noktaları */}
+          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-togg-turquoise animate-pulse" />
+              <h2 className="text-sm md:text-base font-bold text-white tracking-wide uppercase">
+                {testStep === 'TESTING_RIGHT' && 'SAĞ GÖZ • Sol gözünüzü kapatın'}
+                {testStep === 'TESTING_LEFT' && 'SOL GÖZ • Sağ gözünüzü kapatın'}
+                {testStep === 'TESTING_CONTRAST' && 'KONTRAST DUYARLILIĞI • İki göz açık'}
+              </h2>
             </div>
-            <div className="font-mono text-slate-400">
-              Deneme: {trialIndex} / {testStep === 'TESTING_CONTRAST' ? '5' : '6'}
+
+            {/* İlerleme Noktaları (Minimal Dots) */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400 font-mono text-xs">
+                {trialIndex} / {testStep === 'TESTING_CONTRAST' ? '5' : '6'}
+              </span>
+              <div className="flex gap-1.5">
+                {Array.from({ length: testStep === 'TESTING_CONTRAST' ? 5 : 6 }).map((_, i) => (
+                  <span
+                    key={i}
+                    className={`w-2.5 h-2.5 rounded-full transition-all ${
+                      i < trialIndex ? 'bg-togg-turquoise shadow-[0_0_8px_rgba(0,194,231,0.5)]' : 'bg-slate-800'
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Landolt C Görsel Sunumu */}
-          <div className="py-8 flex flex-col items-center justify-center min-h-[260px] relative">
-            <div className="text-xs text-slate-400 mb-4">
+          {/* Merkez: Büyük Landolt C Görseli */}
+          <div className="py-8 flex flex-col items-center justify-center min-h-[260px] bg-slate-950/70 rounded-2xl border border-slate-900 shadow-inner">
+            <div className="text-xs text-slate-300 mb-6 font-medium">
               {testStep === 'TESTING_CONTRAST'
-                ? `Kontrast Seviyesi: %${contrastLevelPct} — Halkanın açık olan ucu hangi yönde?`
-                : 'Aşağıdaki halkanın açık olan ucu hangi yönde? (Yönü seçin)'}
+                ? `Kontrast Ön Değerlendirmesi — Boşluk hangi yönde?`
+                : 'Boşluk hangi yönde?'}
             </div>
 
-            {/* Dinamik Ölçekli Landolt C SVG */}
             <div
-              className={`relative flex items-center justify-center transition-all duration-200 p-4 rounded-2xl ${
+              className={`relative flex items-center justify-center transition-all duration-200 p-6 rounded-2xl ${
                 feedbackEffect === 'CORRECT'
-                  ? 'ring-4 ring-emerald-400 bg-emerald-950/20'
+                  ? 'ring-4 ring-emerald-400/80 bg-emerald-950/30'
                   : feedbackEffect === 'WRONG'
-                  ? 'ring-4 ring-rose-500 bg-rose-950/20'
+                  ? 'ring-4 ring-rose-500/80 bg-rose-950/30'
                   : ''
               }`}
               style={{
@@ -549,147 +600,158 @@ export default function VisionPage() {
               }}
             >
               <svg
-                width={Math.max(40, optotypeSizePx)}
-                height={Math.max(40, optotypeSizePx)}
+                width={Math.max(88, optotypeSizePx * 1.35)}
+                height={Math.max(88, optotypeSizePx * 1.35)}
                 viewBox="0 0 100 100"
                 style={{
                   transform: `rotate(${directionAngles[currentDirection]}deg)`,
                   transition: 'transform 0.15s ease-out'
                 }}
+                className="filter drop-shadow-[0_0_20px_rgba(0,194,231,0.3)]"
               >
                 <circle
                   cx="50"
                   cy="50"
                   r="40"
                   fill="none"
-                  stroke={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#22d3ee'}
+                  stroke={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#00E5FF'}
                   strokeWidth="20"
                   strokeDasharray="231.32 20"
                   strokeDashoffset="10"
                 />
               </svg>
             </div>
-
-            <div className="text-[11px] text-slate-500 font-mono mt-4">
-              Hesaplanan Fiziksel Çap: {optotypeSizeMm.toFixed(1)} mm ({optotypeSizePx} px) • LogMAR: {currentLogMAR.toFixed(2)} • Mesafe: {verifiedDistanceCm} cm
-            </div>
           </div>
 
-          {/* 4 Yön Dokunmatik Seçim Butonları */}
-          <div className="max-w-xs mx-auto grid grid-cols-3 gap-2">
+          {/* Alt: 4 Büyük Dokunmatik Yön Butonu (100-120px Touch Targets) */}
+          <div className="max-w-xs mx-auto grid grid-cols-3 gap-3 pt-2">
             <div />
             <button
               onClick={() => handleAnswer('UP')}
-              className="p-4 bg-slate-900 border border-slate-700 rounded-xl hover:bg-cyan-500 hover:text-black font-bold text-sm transition-all min-h-touch active:scale-95"
+              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              title="Yukarı"
             >
-              ▲ Yukarı
+              <span className="text-2xl leading-none group-hover:scale-110 transition-transform">▲</span>
+              <span className="text-[11px] tracking-wider font-semibold">YUKARI</span>
             </button>
             <div />
+
             <button
               onClick={() => handleAnswer('LEFT')}
-              className="p-4 bg-slate-900 border border-slate-700 rounded-xl hover:bg-cyan-500 hover:text-black font-bold text-sm transition-all min-h-touch active:scale-95"
+              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              title="Sol"
             >
-              ◄ Sol
+              <span className="text-2xl leading-none group-hover:scale-110 transition-transform">◄</span>
+              <span className="text-[11px] tracking-wider font-semibold">SOL</span>
             </button>
-            <div className="p-4 flex items-center justify-center text-xs text-slate-500 font-semibold">YÖN</div>
+
+            <div className="flex flex-col items-center justify-center text-[10px] text-slate-500 font-mono tracking-widest text-center">
+              <span>DOKUNMATİK</span>
+              <span>YÖN</span>
+            </div>
+
             <button
               onClick={() => handleAnswer('RIGHT')}
-              className="p-4 bg-slate-900 border border-slate-700 rounded-xl hover:bg-cyan-500 hover:text-black font-bold text-sm transition-all min-h-touch active:scale-95"
+              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              title="Sağ"
             >
-              Sağ ►
+              <span className="text-2xl leading-none group-hover:scale-110 transition-transform">►</span>
+              <span className="text-[11px] tracking-wider font-semibold">SAĞ</span>
             </button>
+
             <div />
             <button
               onClick={() => handleAnswer('DOWN')}
-              className="p-4 bg-slate-900 border border-slate-700 rounded-xl hover:bg-cyan-500 hover:text-black font-bold text-sm transition-all min-h-touch active:scale-95"
+              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              title="Aşağı"
             >
-              ▼ Aşağı
+              <span className="text-2xl leading-none group-hover:scale-110 transition-transform">▼</span>
+              <span className="text-[11px] tracking-wider font-semibold">AŞAĞI</span>
             </button>
             <div />
           </div>
         </div>
       )}
 
-      {/* ADIM 5: GERÇEK SONUÇLAR VE CARE AGENT AKTARIMI */}
+      {/* ADIM 5: TEST SONUÇLARI VE SEVK */}
       {testStep === 'COMPLETED' && (
-        <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
+        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 max-w-3xl mx-auto shadow-2xl">
           <div className="flex items-center gap-3 text-emerald-400">
             <CheckCircle2 className="w-8 h-8 shrink-0" />
             <div>
               <h2 className="text-xl font-bold text-white">Görme Ön Değerlendirmesi Tamamlandı</h2>
               <p className="text-xs text-slate-400">
-                Sonuçlar verdiğiniz yanıtlardan ve adaptif basamak motorundan gerçek zamanlı hesaplandı.
+                Sonuçlar yanıtlarınızdan ve adaptif basamak algoritmasından gerçek zamanlı hesaplandı.
               </p>
             </div>
           </div>
 
-          {/* Sonuç Kartları (Asla sahte fallback göstermez) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
               <div className="text-xs text-slate-400">Sağ Göz Keskinliği</div>
-              <div className="text-2xl font-bold text-cyan-400 pt-1">
+              <div className="text-2xl font-bold text-togg-turquoise pt-1 font-mono">
                 {testResults.rightEye ? testResults.rightEye.snellen : 'Değerlendirilemedi'}
               </div>
               <div className="text-[11px] text-slate-500">
                 {testResults.rightEye
-                  ? `LogMAR: ${testResults.rightEye.logMAR.toFixed(2)} (${testResults.rightEye.correctTrials}/${testResults.rightEye.totalTrials} Doğru)`
-                  : 'Sonuç mevcut değil'}
+                  ? `LogMAR: ${testResults.rightEye.logMAR.toFixed(2)}`
+                  : 'Sonuç yok'}
               </div>
             </div>
 
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
               <div className="text-xs text-slate-400">Sol Göz Keskinliği</div>
-              <div className="text-2xl font-bold text-cyan-400 pt-1">
+              <div className="text-2xl font-bold text-togg-turquoise pt-1 font-mono">
                 {testResults.leftEye ? testResults.leftEye.snellen : 'Değerlendirilemedi'}
               </div>
               <div className="text-[11px] text-slate-500">
                 {testResults.leftEye
-                  ? `LogMAR: ${testResults.leftEye.logMAR.toFixed(2)} (${testResults.leftEye.correctTrials}/${testResults.leftEye.totalTrials} Doğru)`
-                  : 'Sonuç mevcut değil'}
+                  ? `LogMAR: ${testResults.leftEye.logMAR.toFixed(2)}`
+                  : 'Sonuç yok'}
               </div>
             </div>
 
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
-              <div className="text-xs text-slate-400">Ekran Tabanlı Kontrast Duyarlılığı (Ön Değerlendirme)</div>
-              <div className="text-2xl font-bold text-amber-400 pt-1">
+              <div className="text-xs text-slate-400">Kontrast Duyarlılığı</div>
+              <div className="text-2xl font-bold text-amber-400 pt-1 font-mono">
                 {testResults.contrast ? `${testResults.contrast.logCS.toFixed(2)} LogCS` : 'Değerlendirilemedi'}
               </div>
               <div className="text-[11px] text-slate-500">
                 {testResults.contrast
-                  ? `En Düşük Algılanan Kontrast: %${testResults.contrast.contrastPct}`
-                  : 'Sonuç mevcut değil'}
+                  ? `Algılanan Kontrast: %${testResults.contrast.contrastPct}`
+                  : 'Sonuç yok'}
               </div>
             </div>
           </div>
 
-          {/* Klinik Olmayan Ön Değerlendirme & Sorumluluk Reddi */}
-          <div className="bg-cyan-950/30 border border-cyan-800/60 rounded-xl p-4 text-xs text-cyan-200 space-y-2">
+          <div className="bg-togg-darkBlue/40 border border-togg-darkTurquoise/60 rounded-xl p-4 text-xs text-togg-turquoise space-y-2">
             <div className="font-bold flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span>Ön Değerlendirme ve Bilgilendirme:</span>
+              <ShieldCheck className="w-4 h-4 text-togg-turquoise" />
+              <span>Ön Değerlendirme Bilgilendirmesi:</span>
             </div>
-            <p className="leading-relaxed text-cyan-300/90">
-              Bu test sonuçları klinik bir göz muayenesi veya kesin tıbbi tanı değildir. Standart tüketici ekranı fotometrik olarak kalibre edilmiş bir klinik cihaz olmayıp; ölçülen değerler kullanıcı doğrulamalı test mesafesi ({verifiedDistanceCm} cm) ve ekran ölçeğine dayalı işlevsel bir ön değerlendirmedir. Görme keskinliğinizde veya kontrast algınızda değişim hissediyorsanız bir göz hekimine danışmanız önerilir.
+            <p className="leading-relaxed text-slate-300">
+              Bu test sonuçları klinik muayene niteliğinde olmayıp; doğrulanmış test mesafesi ({verifiedDistanceCm} cm) ve ekran kalibrasyonuna dayalı işlevsel bir ön taramadır. Görme keskinliğinizde veya kontrast algınızda değişim hissediyorsanız bir göz hekimine danışmanız önerilir.
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-cockpit-border">
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-white/10">
             <button
               onClick={() => {
                 setTestStep('IDLE');
                 setStaircase(null);
                 setTestResults({ rightEye: null, leftEye: null, contrast: null });
               }}
-              className="w-full sm:w-auto text-xs text-slate-400 hover:text-white px-4 py-2"
+              className="text-xs text-slate-400 hover:text-white px-4 py-2 flex items-center gap-1.5"
             >
-              Testi Tekrarla
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Testi Tekrarla</span>
             </button>
 
             <button
               onClick={handleNavigateToCare}
-              className="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl bg-cyan-500 text-black font-semibold text-sm hover:bg-cyan-400 transition-all min-h-touch shadow-lg"
+              className="flex items-center gap-2 py-3 px-6 rounded-xl bg-togg-turquoise text-togg-darkBlue font-bold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-lg"
             >
-              <span>Göz Doktorlarını İncele (Care Agent)</span>
+              <span>Göz Hekimlerini İncele (Care Agent)</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

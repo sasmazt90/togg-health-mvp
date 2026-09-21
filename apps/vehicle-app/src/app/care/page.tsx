@@ -6,8 +6,6 @@ import { useVehicle } from '../../context/VehicleContext';
 import { ReferralContext } from '@packages/health-profile/types';
 import {
   CalendarCheck,
-  Search,
-  Clock,
   MapPin,
   Calendar,
   CheckCircle2,
@@ -17,13 +15,12 @@ import {
   ExternalLink,
   Car,
   Filter,
-  UserCheck,
-  RefreshCw,
   Sparkles,
   Eye,
   HeartPulse,
   AlertTriangle,
-  Globe
+  Clock,
+  ChevronRight
 } from 'lucide-react';
 
 interface CareSlot {
@@ -36,18 +33,11 @@ interface CareSlot {
   isOnline: boolean;
   dateTime?: string;
   displayTime?: string;
-  rawExtractedTime?: string;
   travelTimeMin: number;
-  trafficBadge?: string;
   calendarConflict: boolean;
-  calendarFits: boolean;
-  calendarBadge?: string;
-  sourceType: 'LIVE_AVAILABILITY' | 'LIVE_PROVIDER_ONLY' | 'DEMO';
   sourceBadge: string;
   matchScore: number;
   bookingUrl?: string;
-  bookingStatus?: string;
-  instructions?: string;
 }
 
 function CareContent() {
@@ -60,17 +50,8 @@ function CareContent() {
   const [filterType, setFilterType] = useState<'ALL' | 'IN_PERSON' | 'ONLINE'>('ALL');
   const [slots, setSlots] = useState<CareSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [searchProviderStatus, setSearchProviderStatus] = useState<{
-    status: string;
-    sourceBadge: string;
-    handoffNote?: string;
-    liveSearchUrl?: string;
-  }>({
-    status: 'SUCCESS',
-    sourceBadge: 'Browser Agent Hazır'
-  });
 
-  // Ortak Sevk / Yönlendirme Bağlamı
+  // Ortak Sevk Bağlamı
   const [referralContext, setReferralContext] = useState<ReferralContext | null>(null);
 
   // Rezervasyon Onay Modalı
@@ -78,7 +59,6 @@ function CareContent() {
   const [confirmationStep, setConfirmationStep] = useState<'SELECTING' | 'CONFIRM_MODAL' | 'BOOKED'>('SELECTING');
   const [consentApproved, setConsentApproved] = useState<boolean>(false);
 
-  // Sevk bağlamını localStorage'dan yükle
   useEffect(() => {
     try {
       const stored = localStorage.getItem('togg_active_referral_context');
@@ -94,7 +74,6 @@ function CareContent() {
     }
   }, [paramSpecialty]);
 
-  // Backend API'den randevuları çek
   const fetchAppointments = async (specialty: string) => {
     setLoading(true);
     try {
@@ -112,64 +91,126 @@ function CareContent() {
       if (res.ok) {
         const data = await res.json();
         setSlots(data.matchedSlots || []);
-        setSearchProviderStatus({
-          status: data.status,
-          sourceBadge: data.sourceBadge || 'Browser Agent',
-          handoffNote: data.handoffNote,
-          liveSearchUrl: data.liveSearchUrl
-        });
       } else {
         throw new Error('API Hatası');
       }
     } catch (err) {
-      // Jenerik Sentetik Fallback (Asla gerçek marka veya gerçek hekim ismi kullanılmaz)
-      setSlots([
-        {
-          id: 'fb-01',
-          specialty,
-          providerName: 'Uzm. Dr. A. Yılmaz (Demo Hekim)',
-          title: `${specialty} Uzmanı`,
-          clinicName: 'Demo Göz & Cilt Sağlığı Merkezi',
-          locationLabel: 'Merkez Şube, İstanbul',
-          isOnline: false,
-          dateTime: '2026-09-22T18:20:00',
-          displayTime: 'Yarın 18:20',
-          travelTimeMin: 14,
-          trafficBadge: 'Tahmini Süre — Demo Model',
-          calendarConflict: true,
-          calendarFits: false,
-          calendarBadge: 'Demo Takvim (Yerel Simülasyon)',
-          sourceType: 'DEMO',
-          sourceBadge: 'Demo Randevu Verisi',
-          matchScore: 88,
-          bookingUrl: 'https://www.doktortakvimi.com'
-        },
-        {
-          id: 'fb-02',
-          specialty,
-          providerName: 'Doç. Dr. B. Kaya (Demo Hekim)',
-          title: `${specialty} Danışmanı`,
-          clinicName: 'Demo Sağlık Grubu',
-          locationLabel: 'Batı Yakası, İstanbul',
-          isOnline: false,
-          dateTime: '2026-09-23T17:45:00',
-          displayTime: 'Çarşamba 17:45',
-          travelTimeMin: 22,
-          trafficBadge: 'Tahmini Süre — Demo Model',
-          calendarConflict: false,
-          calendarFits: true,
-          calendarBadge: 'Demo Takvim (Yerel Simülasyon)',
-          sourceType: 'DEMO',
-          sourceBadge: 'Demo Randevu Verisi',
-          matchScore: 95,
-          bookingUrl: 'https://www.doktortakvimi.com'
-        }
-      ]);
-      setSearchProviderStatus({
-        status: 'OFFLINE_FALLBACK',
-        sourceBadge: 'Demo Randevu Verisi',
-        handoffNote: 'Ağ bağlantısı kurulamadı; yerel demo hekim profilleri görüntülendi.'
-      });
+      // Demo Hekim Verileri
+      if (specialty === 'Dermatoloji') {
+        setSlots([
+          {
+            id: 'care-01',
+            specialty: 'Dermatoloji',
+            providerName: 'Uzm. Dr. B. Kaya (Demo Hekim)',
+            title: 'Dermatoloji Uzmanı',
+            clinicName: 'Demo Dermatoloji Kliniği',
+            locationLabel: 'Ataşehir, İstanbul',
+            isOnline: false,
+            displayTime: 'Yarın 18:20',
+            travelTimeMin: 14,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 96,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          },
+          {
+            id: 'care-02',
+            specialty: 'Dermatoloji',
+            providerName: 'Uzm. Dr. K. Arslan (Demo Hekim)',
+            title: 'Klinik Dermatolog',
+            clinicName: 'Demo Kadıköy Cilt Sağlığı Merkezi',
+            locationLabel: 'Moda, İstanbul',
+            isOnline: false,
+            displayTime: 'Çarşamba 11:30',
+            travelTimeMin: 18,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 90,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          },
+          {
+            id: 'care-03',
+            specialty: 'Dermatoloji',
+            providerName: 'Doç. Dr. A. Erdem (Demo Danışman)',
+            title: 'Dermatoloji & Estetik Konsültanı',
+            clinicName: 'Demo Online Teledermatoloji',
+            locationLabel: 'Görüntülü Görüşme',
+            isOnline: true,
+            displayTime: 'Yarın 20:00',
+            travelTimeMin: 0,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 88,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          }
+        ]);
+      } else if (specialty === 'Göz Hastalıkları') {
+        setSlots([
+          {
+            id: 'care-vis-01',
+            specialty: 'Göz Hastalıkları',
+            providerName: 'Uzm. Dr. A. Yılmaz (Demo Hekim)',
+            title: 'Oftalmoloji & Refraktif Muayene',
+            clinicName: 'Demo Göz Sağlığı Merkezi',
+            locationLabel: 'Üsküdar, İstanbul',
+            isOnline: false,
+            displayTime: 'Yarın 15:40',
+            travelTimeMin: 12,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 95,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          },
+          {
+            id: 'care-vis-02',
+            specialty: 'Göz Hastalıkları',
+            providerName: 'Op. Dr. E. Çetin (Demo Hekim)',
+            title: 'Göz Hastalıkları Uzmanı',
+            clinicName: 'Demo Göztepe Polikliniği',
+            locationLabel: 'Kadıköy, İstanbul',
+            isOnline: false,
+            displayTime: 'Perşembe 10:00',
+            travelTimeMin: 16,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 89,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          }
+        ]);
+      } else {
+        setSlots([
+          {
+            id: 'care-men-01',
+            specialty: 'Klinik Psikoloji',
+            providerName: 'Uzm. Psk. C. Bilgin (Demo Danışman)',
+            title: 'Uzman Klinik Psikolog',
+            clinicName: 'Demo Kabin & Online Terapi',
+            locationLabel: 'Online Görüntülü',
+            isOnline: true,
+            displayTime: 'Bu Akşam 20:30',
+            travelTimeMin: 0,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 98,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          },
+          {
+            id: 'care-men-02',
+            specialty: 'Klinik Psikoloji',
+            providerName: 'Psk. Dr. E. Sönmez (Demo Danışman)',
+            title: 'Bilişsel Davranışçı Terapist',
+            clinicName: 'Bağdat Caddesi Psikoloji Enstitüsü',
+            locationLabel: 'Kadıköy, İstanbul',
+            isOnline: false,
+            displayTime: 'Çarşamba 17:00',
+            travelTimeMin: 15,
+            calendarConflict: false,
+            sourceBadge: 'Demo Randevu Verisi',
+            matchScore: 91,
+            bookingUrl: 'https://www.doktortakvimi.com'
+          }
+        ]);
+      }
     } finally {
       setLoading(false);
     }
@@ -185,6 +226,9 @@ function CareContent() {
     return true;
   });
 
+  const featuredSlot = filteredSlots[0];
+  const secondarySlots = filteredSlots.slice(1);
+
   const handleSelectSlot = (slot: CareSlot) => {
     setSelectedSlot(slot);
     setConsentApproved(false);
@@ -197,72 +241,71 @@ function CareContent() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Üst Başlık */}
-      <div className="flex items-center justify-between border-b border-cockpit-border pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-violet-950/80 border border-violet-800 text-violet-400 rounded-xl">
-            <CalendarCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white">Sağlık Asistanı ve Hekim Randevusu (Care Agent)</h1>
-            <p className="text-xs text-slate-400">
-              Web hekim arama motoru, yerel takvim çakışma kontrolü ve güvenli dış sevk el sıkışması
+    <div className="space-y-6">
+      {/* 1. SCREEN 08: ÜST BAŞLIK VE FİLTRE ÇUBUĞU (FIRST VIEWPORT) */}
+      <section className="bg-gradient-to-br from-cockpit-surface via-[#071322] to-cockpit-bg border border-white/10 rounded-2xl p-6 md:p-7 shadow-2xl space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-togg-turquoise/10 border border-togg-turquoise/30 text-togg-turquoise text-[11px] font-semibold tracking-wider uppercase">
+              <CalendarCheck className="w-3.5 h-3.5" />
+              <span>Care Agent • Akıllı Hekim Erişimi</span>
+            </div>
+
+            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+              Sizin için uygun uzmanlar
+            </h1>
+
+            <p className="text-sm text-slate-300">
+              Kabin içi sağlık değerlendirmeleriniz, takviminiz ve araç rotanızla eşleştirilmiş uzman randevuları.
             </p>
           </div>
-        </div>
-        <div className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
-          Durum: <strong className="text-emerald-400">Aktif</strong>
-        </div>
-      </div>
 
-      {/* AKTİF SEVK BAĞLAMI BİLDİRİMİ */}
-      {referralContext && (
-        <div className="bg-gradient-to-r from-violet-950/50 via-slate-900/90 to-cyan-950/40 border border-violet-700/80 rounded-2xl p-5 shadow-lg space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-violet-300 font-bold text-sm">
-              <Sparkles className="w-4 h-4 text-violet-400" />
-              <span>
-                {referralContext.sourceModule === 'VISION' && '👁️ Görme Kontrolü Modülünden Sevk Edildi'}
-                {referralContext.sourceModule === 'SKIN' && '✨ Cilt Takip Modülünden Sevk Edildi'}
-                {referralContext.sourceModule === 'MENTAL' && '🧠 Ruhsal Asistan Modülünden Sevk Edildi'}
-              </span>
+          <div className="flex items-center gap-2 self-start md:self-auto text-xs bg-slate-950/80 px-3 py-1.5 rounded-xl border border-white/10 text-slate-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>Demo Takvim • Tahmini Ulaşım</span>
+          </div>
+        </div>
+
+        {/* AKTİF SEVK BAĞLAMI BİLDİRİMİ */}
+        {referralContext && (
+          <div className="bg-togg-darkBlue/40 border border-togg-turquoise/40 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-4 h-4 text-togg-turquoise shrink-0" />
+              <div className="text-slate-200">
+                <span className="font-bold text-white">
+                  {referralContext.sourceModule === 'SKIN' && 'Cilt Analizi → Dermatoloji'}
+                  {referralContext.sourceModule === 'VISION' && 'Görme Kontrolü → Göz Hastalıkları'}
+                  {referralContext.sourceModule === 'MENTAL' && 'Ruhsal İyi Oluş → Klinik Psikoloji'}
+                </span>
+                <span className="text-slate-400 mx-1.5">•</span>
+                <span className="text-slate-300 text-[11px]">{referralContext.reasonSummary}</span>
+              </div>
             </div>
+
             <button
               onClick={() => {
                 localStorage.removeItem('togg_active_referral_context');
                 setReferralContext(null);
               }}
-              className="text-xs text-slate-400 hover:text-white"
+              className="text-[11px] text-slate-400 hover:text-white underline shrink-0 self-end sm:self-auto"
             >
-              Bağlamı Temizle
+              Bağlamı Kaldır
             </button>
           </div>
+        )}
 
-          <p className="text-xs text-slate-200 leading-relaxed bg-black/40 p-3 rounded-xl border border-violet-900/50">
-            <strong>Klinik Olmayan Ön Bulgu Özeti:</strong> {referralContext.reasonSummary}
-          </p>
-
-          <div className="flex items-center justify-between text-[11px] text-slate-400">
-            <span>Önerilen Uzmanlık: <strong className="text-violet-300">{referralContext.specialty}</strong></span>
-            <span>Tarih: {new Date(referralContext.timestamp).toLocaleDateString('tr-TR')}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Branş ve Filtre Çubuğu */}
-      <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-4 md:p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        {/* BRANŞ VE GÖRÜŞME TÜRÜ FİLTRE HAPLARI */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-1 border-t border-white/10">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-1">Branş:</span>
             {['Dermatoloji', 'Göz Hastalıkları', 'Klinik Psikoloji'].map((spec) => (
               <button
                 key={spec}
                 onClick={() => setSelectedSpecialty(spec)}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all min-h-touch ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all min-h-touch ${
                   selectedSpecialty === spec
-                    ? 'bg-violet-600 text-white shadow-md'
-                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                    ? 'bg-togg-turquoise text-togg-darkBlue shadow-[0_0_15px_rgba(0,194,231,0.3)]'
+                    : 'bg-slate-900/90 text-slate-400 hover:text-white border border-slate-800'
                 }`}
               >
                 {spec}
@@ -270,16 +313,15 @@ function CareContent() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-400 mr-1">Görüşme Türü:</span>
+          <div className="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-xl border border-slate-800 text-xs">
             {(['ALL', 'IN_PERSON', 'ONLINE'] as const).map((type) => (
               <button
                 key={type}
                 onClick={() => setFilterType(type)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
                   filterType === type
-                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                    : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white'
+                    ? 'bg-togg-turquoise/15 text-togg-turquoise border border-togg-turquoise/30 font-semibold'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
                 {type === 'ALL' ? 'Tümü' : type === 'IN_PERSON' ? 'Yüz Yüze' : 'Online'}
@@ -287,220 +329,174 @@ function CareContent() {
             ))}
           </div>
         </div>
+      </section>
 
-        {/* Browser Agent ve Veri Kaynağı Durum Çubuğu */}
-        <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs text-slate-400 flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-2.5 h-2.5 rounded-full ${loading ? 'bg-amber-400 animate-ping' : 'bg-emerald-400'}`} />
-            <span>
-              {loading
-                ? 'Playwright Browser Agent: Hekim arama dizinleri taranıyor...'
-                : searchProviderStatus.handoffNote ||
-                  'Browser Agent Taraması Tamamlandı. Yerel takvim simülasyonu ve sürüş süreleri eşleştirildi.'}
-            </span>
-          </div>
+      {/* 2. ÖNE ÇIKAN UZMAN KARTI (FEATURED PROVIDER CARD) */}
+      {featuredSlot && (
+        <section className="bg-cockpit-surface border border-togg-turquoise/30 rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden group hover:border-togg-turquoise/60 transition-all">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-togg-turquoise/5 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="flex items-center gap-2">
-            <span
-              className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold border ${
-                searchProviderStatus.sourceBadge.includes('Canlı')
-                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
-                  : 'bg-amber-950/80 text-amber-300 border-amber-700'
-              }`}
-            >
-              {searchProviderStatus.sourceBadge}
-            </span>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+            {/* Sol: Doktor Bilgileri & Rozetler */}
+            <div className="space-y-3 max-w-2xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 text-[10px] font-semibold tracking-wider uppercase">
+                  Önerilen Eşleşme (%{featuredSlot.matchScore})
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-800 text-[10px] font-mono">
+                  {featuredSlot.isOnline ? 'Online Görüşme' : 'Yüz Yüze Muayene'}
+                </span>
+                <span className="px-2 py-0.5 rounded bg-white/5 text-slate-400 text-[10px] font-mono">
+                  {featuredSlot.sourceBadge}
+                </span>
+              </div>
 
-            {searchProviderStatus.liveSearchUrl && (
-              <a
-                href={searchProviderStatus.liveSearchUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] text-cyan-400 hover:underline flex items-center gap-1"
-              >
-                <Globe className="w-3 h-3" /> Canlı Arama Sayfası
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Randevu Slot Kartları */}
-      <div className="space-y-3">
-        {loading ? (
-          <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-12 text-center space-y-3">
-            <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <div className="text-sm font-semibold text-white">Uygun Hekimler Aranıyor...</div>
-            <div className="text-xs text-slate-400">
-              Playwright browser agent hekim portallarını tarıyor ve araç içi simüle takvimle eşleştiriyor.
-            </div>
-          </div>
-        ) : filteredSlots.length === 0 ? (
-          <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-8 text-center text-xs text-slate-400">
-            Seçilen kriterlere uygun hekim bulunamadı.
-          </div>
-        ) : (
-          filteredSlots.map((slot) => {
-            const hasConflict = slot.calendarConflict;
-            const isLiveProviderOnly = slot.sourceType === 'LIVE_PROVIDER_ONLY';
-
-            return (
-              <div
-                key={slot.id}
-                className={`bg-cockpit-surface border rounded-2xl p-5 md:p-6 transition-all hover:border-violet-500/60 shadow-lg ${
-                  hasConflict ? 'border-amber-900/60 bg-slate-950/50 opacity-80' : 'border-cockpit-border'
-                }`}
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  {/* Hekim Bilgileri */}
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-bold text-white">{slot.providerName}</h3>
-                      <span className="text-[11px] bg-slate-900 border border-slate-700 text-slate-300 px-2 py-0.5 rounded">
-                        {slot.title}
-                      </span>
-                      {slot.isOnline ? (
-                        <span className="text-[10px] bg-indigo-950/60 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded">
-                          Online Görüşme
-                        </span>
-                      ) : (
-                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded">
-                          Yüz Yüze
-                        </span>
-                      )}
-
-                      {/* Canlı / Demo Rozeti */}
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
-                          slot.sourceType === 'LIVE_AVAILABILITY'
-                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700'
-                            : slot.sourceType === 'LIVE_PROVIDER_ONLY'
-                            ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-700'
-                            : 'bg-amber-950/80 text-amber-300 border border-amber-700'
-                        }`}
-                      >
-                        {slot.sourceBadge}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-slate-300 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                      <span>{slot.clinicName} • {slot.locationLabel}</span>
-                    </p>
-
-                    {/* Sürüş Süresi & Demo Takvim Durumu */}
-                    <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
-                      <div className="flex items-center gap-1.5 text-slate-400">
-                        <Car className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span>Araçla Ulaşım: <strong>{slot.travelTimeMin} dk</strong></span>
-                        <span className="text-[10px] text-slate-500">({slot.trafficBadge || 'Tahmini Süre — Demo Model'})</span>
-                      </div>
-
-                      {slot.dateTime && (
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                          {hasConflict ? (
-                            <span className="text-amber-400 flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                              <strong>Demo Takvim: Çakışıyor (Mevcut Program Dolu)</strong>
-                            </span>
-                          ) : (
-                            <span className="text-emerald-400 flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <strong>Demo Takvim: Uygun</strong>
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {isLiveProviderOnly && (
-                      <div className="text-[11px] text-cyan-300/80 pt-1">
-                        ℹ️ {slot.instructions || 'Doktor profili canlı kaynaktan bulundu — müsaitlik için siteyi aç'}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Tarih & Seçim Butonu */}
-                  <div className="flex md:flex-col items-center md:items-end justify-between gap-3 shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-800">
-                    <div className="text-right">
-                      <div className="text-xs text-slate-400">
-                        {isLiveProviderOnly ? 'Müsaitlik Durumu' : 'Önerilen Saat'}
-                      </div>
-                      <div className="text-sm font-bold text-white">
-                        {isLiveProviderOnly ? 'Siteden Seçiniz' : slot.displayTime}
-                      </div>
-                    </div>
-
-                    {isLiveProviderOnly ? (
-                      <a
-                        href={slot.bookingUrl || searchProviderStatus.liveSearchUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="py-2.5 px-5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs transition-all min-h-touch flex items-center gap-1.5 shadow"
-                      >
-                        <span>Siteyi Aç ve Müsaitliği Gör</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    ) : (
-                      <button
-                        onClick={() => handleSelectSlot(slot)}
-                        className="py-2.5 px-5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition-all min-h-touch flex items-center gap-1.5 shadow"
-                      >
-                        <span>Randevu Planla</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+              <div>
+                <h2 className="text-xl md:text-2xl font-extrabold text-white group-hover:text-togg-turquoise transition-colors">
+                  {featuredSlot.providerName}
+                </h2>
+                <div className="text-xs text-slate-400 font-medium mt-0.5">
+                  {featuredSlot.title}
                 </div>
               </div>
-            );
-          })
-        )}
-      </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 pt-1">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-togg-turquoise" />
+                  <span>{featuredSlot.clinicName} • {featuredSlot.locationLabel}</span>
+                </span>
+
+                <span className="flex items-center gap-1.5">
+                  <Car className="w-4 h-4 text-togg-turquoise" />
+                  <span>{featuredSlot.isOnline ? 'Ulaşım Gerektirmez' : `${featuredSlot.travelTimeMin} dk araçla`}</span>
+                </span>
+
+                <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Takviminizle Uyumlu</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Sağ: Önerilen Saat ve Birincil CTA */}
+            <div className="flex lg:flex-col items-center lg:items-end justify-between gap-4 shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-white/10">
+              <div className="text-left lg:text-right space-y-0.5">
+                <div className="text-[11px] text-slate-400 uppercase tracking-wider font-mono">Önerilen Saat</div>
+                <div className="text-lg md:text-xl font-bold text-white font-mono">{featuredSlot.displayTime}</div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => handleSelectSlot(featuredSlot)}
+                  className="py-3 px-6 rounded-xl bg-togg-turquoise hover:bg-[#33D0EE] text-togg-darkBlue font-bold text-xs flex items-center gap-2 transition-all shadow-[0_0_15px_rgba(0,194,231,0.25)] min-h-touch"
+                >
+                  <span>RANDEVUYU İNCELE</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                <a
+                  href={featuredSlot.bookingUrl || 'https://www.doktortakvimi.com'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition-colors"
+                  title="Sağlayıcı sayfasını aç"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 3. BELOW FOLD: ALTERNATİF UZMAN SEÇENEKLERİ */}
+      {secondarySlots.length > 0 && (
+        <section className="space-y-3">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+            Diğer Uygun Seçenekler
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {secondarySlots.map((slot) => (
+              <div
+                key={slot.id}
+                className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-white/20 transition-all shadow-lg space-y-4"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base font-bold text-white">{slot.providerName}</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">
+                      {slot.isOnline ? 'Online' : 'Yüz Yüze'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                    <span>{slot.clinicName} • {slot.locationLabel}</span>
+                  </p>
+
+                  <div className="flex items-center gap-3 text-xs text-slate-300 pt-1">
+                    <span className="text-togg-turquoise font-mono font-bold">{slot.displayTime}</span>
+                    <span className="text-slate-600">•</span>
+                    <span>{slot.isOnline ? 'Online' : `${slot.travelTimeMin} dk sürüş`}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-end">
+                  <button
+                    onClick={() => handleSelectSlot(slot)}
+                    className="py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-togg-turquoise border border-togg-turquoise/30 font-semibold text-xs transition-all flex items-center gap-1.5"
+                  >
+                    <span>İncele</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* AÇIK ONAY MODALI (CONSENT GATE) */}
       {confirmationStep === 'CONFIRM_MODAL' && selectedSlot && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl animate-in fade-in">
-            <div className="flex items-center justify-between border-b border-cockpit-border pb-3">
-              <div className="flex items-center gap-2 text-violet-400 font-bold text-base">
+          <div className="bg-cockpit-surface border border-white/20 rounded-2xl max-w-lg w-full p-6 md:p-7 space-y-5 shadow-2xl animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-togg-turquoise font-bold text-base">
                 <ShieldCheck className="w-5 h-5" />
-                <span>Açık Kullanıcı Onayı (Randevu Yönlendirmesi)</span>
+                <span>Kullanıcı Onayı ve Sevk Bağlamı</span>
               </div>
               <button
                 onClick={() => setConfirmationStep('SELECTING')}
-                className="text-xs text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white text-xs"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-3 text-xs text-slate-300">
-              <p className="leading-relaxed">
-                Togg Health MVP, onayınız olmadan dış web sitelerine adınıza bağlayıcı bir hasta kaydı oluşturmaz.
+            <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
+              <p>
+                Attune.more açık onayınız olmadan dış hekim randevu portallarına adınıza kayıt oluşturmaz.
               </p>
 
-              <div className="bg-slate-900 p-3 rounded-xl border border-slate-800 space-y-1 text-slate-200">
-                <div className="font-semibold text-white">{selectedSlot.providerName}</div>
+              <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-1">
+                <div className="font-bold text-white text-sm">{selectedSlot.providerName}</div>
                 <div className="text-slate-400">{selectedSlot.clinicName} • {selectedSlot.locationLabel}</div>
-                <div className="text-cyan-400 font-mono font-bold pt-1">{selectedSlot.displayTime}</div>
-                <div className="text-[10px] text-amber-400">Veri Niteliği: {selectedSlot.sourceBadge}</div>
+                <div className="text-togg-turquoise font-mono font-bold pt-1">{selectedSlot.displayTime}</div>
               </div>
 
               {referralContext && (
-                <div className="bg-violet-950/30 border border-violet-800/40 p-2.5 rounded-lg text-[11px] text-violet-300">
-                  ℹ️ Bu randevu talebine <strong>{referralContext.specialty}</strong> ön sevk bağlamı eklenecektir.
+                <div className="bg-togg-darkBlue/40 border border-togg-turquoise/40 p-3 rounded-xl text-[11px] text-togg-turquoise">
+                  ℹ️ Randevu talebine <strong>{referralContext.specialty}</strong> ön değerlendirme özeti eklenecektir.
                 </div>
               )}
 
-              {/* Zorunlu Açık Onay Checkbox */}
-              <label className="flex items-start gap-2.5 pt-2 cursor-pointer select-none">
+              <label className="flex items-start gap-3 pt-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={consentApproved}
                   onChange={(e) => setConsentApproved(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 accent-violet-600 cursor-pointer"
+                  className="mt-0.5 w-4 h-4 rounded border-slate-700 bg-slate-900 accent-togg-turquoise cursor-pointer"
                 />
                 <span className="text-slate-300 leading-snug">
                   Randevu bilgilerimin sağlık asistanı tarafından işlenmesini, sevk bağlamımın hekime aktarılmak üzere hazırlanmasını ve harici sağlayıcı bağlantısına yönlendirilmeyi <strong>açıkça onaylıyorum</strong>.
@@ -508,7 +504,7 @@ function CareContent() {
               </label>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-cockpit-border">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
               <button
                 onClick={() => setConfirmationStep('SELECTING')}
                 className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white"
@@ -518,9 +514,9 @@ function CareContent() {
               <button
                 onClick={handleConfirmBooking}
                 disabled={!consentApproved}
-                className={`py-2.5 px-5 rounded-xl font-semibold text-xs flex items-center gap-1.5 transition-all ${
+                className={`py-2.5 px-5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
                   consentApproved
-                    ? 'bg-violet-600 hover:bg-violet-500 text-white cursor-pointer shadow-lg'
+                    ? 'bg-togg-turquoise hover:bg-[#33D0EE] text-togg-darkBlue cursor-pointer shadow-lg'
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                 }`}
               >
@@ -532,23 +528,22 @@ function CareContent() {
         </div>
       )}
 
-      {/* BAŞARILI REZERVASYON DEVİR EKRANI */}
+      {/* BAŞARILI DEVİR EKRANI */}
       {confirmationStep === 'BOOKED' && selectedSlot && (
-        <div className="bg-cockpit-surface border border-emerald-800/80 rounded-2xl p-6 md:p-8 space-y-4 text-center">
-          <div className="w-12 h-12 bg-emerald-950 text-emerald-400 border border-emerald-700 rounded-full flex items-center justify-center mx-auto">
+        <div className="bg-cockpit-surface border border-emerald-800/80 rounded-2xl p-6 md:p-8 space-y-4 text-center max-w-xl mx-auto shadow-2xl">
+          <div className="w-12 h-12 bg-emerald-950 text-emerald-400 border border-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
             <CheckCircle2 className="w-6 h-6" />
           </div>
 
           <h2 className="text-xl font-bold text-white">Randevu Yönlendirmesi Hazırlandı</h2>
-          <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-            Seçtiğiniz randevu için sevk bağlamınız oluşturuldu. Hekim sisteminde randevunuzu tamamlamak için harici doğrulama sayfasına geçebilirsiniz.
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Seçtiğiniz hekim için klinik dışı sevk bağlamınız oluşturuldu. Hekim sisteminde randevunuzu tamamlamak için harici sayfaya geçebilirsiniz.
           </p>
 
-          <div className="max-w-sm mx-auto bg-slate-900/90 border border-slate-800 p-4 rounded-xl text-xs text-left space-y-1">
+          <div className="max-w-sm mx-auto bg-slate-950/80 border border-slate-800 p-4 rounded-xl text-xs text-left space-y-1">
             <div className="font-bold text-white">{selectedSlot.providerName}</div>
             <div className="text-slate-400">{selectedSlot.clinicName}</div>
-            <div className="text-cyan-400 font-mono">{selectedSlot.displayTime}</div>
-            <div className="text-[11px] text-amber-400/80 pt-1">Veri Kaynağı: {selectedSlot.sourceBadge}</div>
+            <div className="text-togg-turquoise font-mono">{selectedSlot.displayTime}</div>
           </div>
 
           <div className="flex justify-center gap-3 pt-2">
@@ -565,7 +560,7 @@ function CareContent() {
               href={selectedSlot.bookingUrl || 'https://www.doktortakvimi.com'}
               target="_blank"
               rel="noreferrer"
-              className="py-2.5 px-6 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow"
+              className="py-2.5 px-6 rounded-xl bg-togg-turquoise hover:bg-[#33D0EE] text-togg-darkBlue font-bold text-xs flex items-center gap-1.5 shadow-md"
             >
               <span>Sağlayıcı Sayfasına Git</span>
               <ExternalLink className="w-3.5 h-3.5" />

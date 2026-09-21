@@ -9,14 +9,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        togg: {
+          turquoise: '#00C2E7',
+          darkTurquoise: '#185A7D',
+          darkBlue: '#000050',
+          teal: '#0E839B',
+          glow: 'rgba(0, 194, 231, 0.25)',
+          subtle: 'rgba(0, 194, 231, 0.12)'
+        },
         cockpit: {
-          bg: '#080c14',
-          surface: '#0f1726',
-          card: '#162033',
-          border: '#24324d',
-          accent: '#00d2ff',
-          text: '#f1f5f9',
-          muted: '#94a3b8'
+          bg: '#060B12',
+          surface: '#0B1320',
+          card: '#101B2E',
+          border: '#1C2C45',
+          accent: '#00C2E7',
+          hover: '#33D0EE',
+          text: '#F8FAFC',
+          muted: '#94A3B8'
         }
       },
       fontFamily: {
