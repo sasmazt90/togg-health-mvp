@@ -43,6 +43,9 @@ def test_skin_real_mode_mediapipe_unavailable_no_fake_result_or_persistence():
     assert "finalAlignment?: FaceAlignment" in content
     assert "finalQuality?: ImageQuality" in content
     assert "finishScan(false, curAlign, curQual)" in content
+    # mediaStream has deterministic video attachment path
+    assert "mediaStream && videoRef.current && scanState === 'CAMERA_ACTIVE'" in content
+    assert "videoRef.current.srcObject = mediaStream" in content
 
 
 # ---------------------------------------------------------------------------
@@ -65,8 +68,8 @@ def test_skin_demo_mode_allows_fixture_with_separate_keys():
 
     # Demo camera-failure path triggers demo completion without waiting on videoRef
     assert "startSyntheticDemoScan" in page_content
-    # Demo synthetic result has usedMediaPipe: false when synthetic portrait is used
-    assert "usedMediaPipe: isRealMP ? true : false" in page_content or "usedMediaPipe: false" in page_content
+    # Demo synthetic result has usedMediaPipe: false explicitly
+    assert "usedMediaPipe: false" in page_content
 
 
 # ---------------------------------------------------------------------------
@@ -165,8 +168,11 @@ def test_privacy_empty_storage_counts_are_strictly_zero():
     assert "mental ? 2 : 2" not in content
     # Gerçek sayım mantığı bulunmalı
     assert "localStorage.getItem(STORAGE_KEYS.LATEST_VISION) ? 1 : 0" in content
-    # Browser permission mapping correctly preserves PROMPT
-    assert "p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'PROMPT'" in content
+    # Browser denied cannot become effective GRANTED merely due to app preference
+    assert "deriveEffectiveStatus" in content
+    assert "if (!appAllowed)" in content
+    assert "if (browserState === 'denied')" in content
+    assert "deriveEffectiveStatus(camAllowed, bState)" in content
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +247,17 @@ def test_dashboard_profile_displays_empty_state_when_no_real_results():
     assert "Henüz değerlendirme yok" in content
     assert "Henüz görüşme yok" in content
     assert "0 görüşme" in content
+
+    # Dashboard/Profile initial state does not call get*Summary(true)
+    dashboard_file = root_dir / "apps" / "vehicle-app" / "src" / "app" / "page.tsx"
+    dash_content = dashboard_file.read_text(encoding="utf-8")
+    assert "useState<boolean>(false)" in dash_content
+    assert "getVisionSummary(true)" not in dash_content
+
+    profile_file = root_dir / "apps" / "vehicle-app" / "src" / "app" / "profile" / "page.tsx"
+    profile_content = profile_file.read_text(encoding="utf-8")
+    assert "useState<boolean>(false)" in profile_content
+    assert "getVisionSummary(true)" not in profile_content
 
 
 # ---------------------------------------------------------------------------

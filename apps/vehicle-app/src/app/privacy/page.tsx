@@ -18,8 +18,12 @@ import {
 import { STORAGE_KEYS, isDemoMode } from '../../utils/attuneMode';
 
 export default function PrivacyPage() {
-  const [cameraStatus, setCameraStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('GRANTED');
-  const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('GRANTED');
+  const [cameraAppAllowed, setCameraAppAllowed] = useState<boolean>(true);
+  const [micAppAllowed, setMicAppAllowed] = useState<boolean>(true);
+  const [browserCameraState, setBrowserCameraState] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  const [browserMicState, setBrowserMicState] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  const [cameraStatus, setCameraStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
+  const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [saveMentalSummaries, setSaveMentalSummaries] = useState<boolean>(true);
   const [dataStats, setDataStats] = useState<{
     visionCount: number;
@@ -29,31 +33,59 @@ export default function PrivacyPage() {
 
   const [wipeStatus, setWipeStatus] = useState<'IDLE' | 'CONFIRM' | 'SUCCESS'>('IDLE');
 
+  const deriveEffectiveStatus = (
+    appAllowed: boolean,
+    browserState: 'granted' | 'denied' | 'prompt'
+  ): 'GRANTED' | 'DENIED' | 'PROMPT' => {
+    if (!appAllowed) {
+      return 'DENIED';
+    }
+    if (browserState === 'granted') {
+      return 'GRANTED';
+    }
+    if (browserState === 'denied') {
+      return 'DENIED';
+    }
+    return 'PROMPT';
+  };
+
   const checkStatus = () => {
     if (typeof window !== 'undefined') {
-      // 1. Tarayıcı izin sorgusu ve uygulama içi izin tercihi
+      // 1. Uygulama içi izin tercihi (App preference)
       const camPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED);
-      if (camPref !== null) {
-        setCameraStatus(camPref === 'true' ? 'GRANTED' : 'DENIED');
-      } else if (navigator.permissions && navigator.permissions.query) {
+      const camAllowed = camPref === null ? true : camPref === 'true';
+      setCameraAppAllowed(camAllowed);
+
+      const micPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED);
+      const micAllowed = micPref === null ? true : micPref === 'true';
+      setMicAppAllowed(micAllowed);
+
+      // 2. Tarayıcı izin sorgusu - App preference var diye atlanmaz
+      if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions
           .query({ name: 'camera' as any })
           .then((p) => {
-            setCameraStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'PROMPT');
+            const bState = (p.state as 'granted' | 'denied' | 'prompt') || 'prompt';
+            setBrowserCameraState(bState);
+            setCameraStatus(deriveEffectiveStatus(camAllowed, bState));
           })
-          .catch(() => {});
-      }
+          .catch(() => {
+            setCameraStatus(deriveEffectiveStatus(camAllowed, 'prompt'));
+          });
 
-      const micPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED);
-      if (micPref !== null) {
-        setMicStatus(micPref === 'true' ? 'GRANTED' : 'DENIED');
-      } else if (navigator.permissions && navigator.permissions.query) {
         navigator.permissions
           .query({ name: 'microphone' as any })
           .then((p) => {
-            setMicStatus(p.state === 'granted' ? 'GRANTED' : p.state === 'denied' ? 'DENIED' : 'PROMPT');
+            const bState = (p.state as 'granted' | 'denied' | 'prompt') || 'prompt';
+            setBrowserMicState(bState);
+            setMicStatus(deriveEffectiveStatus(micAllowed, bState));
           })
-          .catch(() => {});
+          .catch(() => {
+            setMicStatus(deriveEffectiveStatus(micAllowed, 'prompt'));
+          });
+      } else {
+        setCameraStatus(deriveEffectiveStatus(camAllowed, 'prompt'));
+        setMicStatus(deriveEffectiveStatus(micAllowed, 'prompt'));
       }
 
       const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
@@ -61,7 +93,7 @@ export default function PrivacyPage() {
         setSaveMentalSummaries(mentalPref === 'true');
       }
 
-      // 2. Gerçek Veri Sayımları (Demo vs Real)
+      // 3. Gerçek Veri Sayımları (Demo vs Real)
       if (isDemoMode()) {
         setDataStats({ visionCount: 1, skinCount: 2, mentalCount: 2 });
       } else {
@@ -94,15 +126,17 @@ export default function PrivacyPage() {
   };
 
   const handleToggleCamera = () => {
-    const next = cameraStatus === 'GRANTED' ? 'DENIED' : 'GRANTED';
-    setCameraStatus(next);
-    localStorage.setItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED, String(next === 'GRANTED'));
+    const next = !cameraAppAllowed;
+    setCameraAppAllowed(next);
+    localStorage.setItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED, String(next));
+    setCameraStatus(deriveEffectiveStatus(next, browserCameraState));
   };
 
   const handleToggleMic = () => {
-    const next = micStatus === 'GRANTED' ? 'DENIED' : 'GRANTED';
-    setMicStatus(next);
-    localStorage.setItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED, String(next === 'GRANTED'));
+    const next = !micAppAllowed;
+    setMicAppAllowed(next);
+    localStorage.setItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED, String(next));
+    setMicStatus(deriveEffectiveStatus(next, browserMicState));
   };
 
   const handleWipeAllData = async () => {
@@ -189,7 +223,7 @@ export default function PrivacyPage() {
               onClick={handleToggleCamera}
               className="text-xs font-semibold text-togg-turquoise hover:underline"
             >
-              {cameraStatus === 'GRANTED' ? 'Erişimi Kapat' : 'İzin Ver'}
+              {cameraAppAllowed ? 'Erişimi Kapat' : 'İzin Ver'}
             </button>
           </div>
         </div>
@@ -228,7 +262,7 @@ export default function PrivacyPage() {
               onClick={handleToggleMic}
               className="text-xs font-semibold text-togg-turquoise hover:underline"
             >
-              {micStatus === 'GRANTED' ? 'Erişimi Kapat' : 'İzin Ver'}
+              {micAppAllowed ? 'Erişimi Kapat' : 'İzin Ver'}
             </button>
           </div>
         </div>

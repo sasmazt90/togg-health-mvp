@@ -130,6 +130,18 @@ export default function SkinPage() {
     };
   }, [mediaStream]);
 
+  // Deterministik video akışı bağlama: mediaStream, videoRef ve CAMERA_ACTIVE yarışını çözer
+  useEffect(() => {
+    if (mediaStream && videoRef.current && scanState === 'CAMERA_ACTIVE') {
+      if (videoRef.current.srcObject !== mediaStream) {
+        videoRef.current.srcObject = mediaStream;
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn('Video oynatma başlatılamadı:', err);
+      });
+    }
+  }, [mediaStream, scanState]);
+
   // Real modda COMPLETED durumu doğrulaması: Kayıtlı gerçek analiz yoksa COMPLETED state'e izin verilmez
   useEffect(() => {
     if (scanState === 'COMPLETED' && !isDemoMode() && !analysisResult) {
@@ -251,8 +263,7 @@ export default function SkinPage() {
 
     if (isDemo) {
       // DEMO MODE: Fikstür verisini kullanır, gerçek kullanıcı anahtarını bozmaz.
-      // Sentetik portre kullanıldığından usedMediaPipe dürüstçe false olarak işaretlenir.
-      const isRealMP = Boolean(isLiveVideo && (isMediaPipeLoadedRef.current || isMediaPipeLoaded));
+      // Demo metrikleri her zaman fikstürden geldiğinden usedMediaPipe her zaman false'tur.
       const demoResult: SkinAnalysisResult = {
         id: `demo-skin-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -263,7 +274,7 @@ export default function SkinPage() {
         referralSuggested: true,
         isBaseline: false,
         clinicalNoteTr: 'Sağ yanak bölgesinde baz çizgi referansına göre %22 görsel değişim gözlendi.',
-        usedMediaPipe: isRealMP ? true : false
+        usedMediaPipe: false
       };
 
       try {

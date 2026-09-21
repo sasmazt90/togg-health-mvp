@@ -37,11 +37,11 @@ export default function ProfilePage() {
   const profile = mockInitialHealthProfile;
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
-  const [isDemo, setIsDemo] = useState<boolean>(true);
-  const [vision, setVision] = useState<VisionSummaryData>(() => getVisionSummary(true));
-  const [skin, setSkin] = useState<SkinSummaryData>(() => getSkinSummary(true));
-  const [mental, setMental] = useState<MentalSummaryData>(() => getMentalSummary(true));
-  const [timeline, setTimeline] = useState<HealthTimelineItem[]>(() => getHealthTimeline(true));
+  const [isDemo, setIsDemo] = useState<boolean>(false);
+  const [vision, setVision] = useState<VisionSummaryData>(() => getVisionSummary(false));
+  const [skin, setSkin] = useState<SkinSummaryData>(() => getSkinSummary(false));
+  const [mental, setMental] = useState<MentalSummaryData>(() => getMentalSummary(false));
+  const [timeline, setTimeline] = useState<HealthTimelineItem[]>(() => getHealthTimeline(false));
 
   useEffect(() => {
     const demo = isDemoMode();
