@@ -17,9 +17,9 @@ Bu doküman, **Togg Health MVP**'nin mevcut mock soyutlama katmanlarından gerç
               |                                 |
    [MockVehicleProvider]              [ToggVehicleProvider]
       (Mevcut MVP)                       (Hedef PoC)
-   - Simüle hız (0/75 km/s)           - Togg Vehicle API Telemetrisi
-   - Web kamera / mic                 - Kabin tavan kamerası (API)
-   - Sentetik GPS                     - Dahili Togg Navigasyonu
+   - Simüle hız (0/75 km/s)           - Resmi Togg Araç Telemetrisi
+   - Web kamera / mic                 - Uygun kabin kamerası (PoC API erişiminde)
+   - Sentetik GPS                     - Harita ve rota entegrasyonu
    - Mock Tru.ID                      - Gerçek Tru.ID OAuth2
 ```
 
@@ -28,17 +28,16 @@ Bu doküman, **Togg Health MVP**'nin mevcut mock soyutlama katmanlarından gerç
 ## 2. Donanım ve Arayüz Bileşenleri
 
 ### 2.1. Araç Ekranı (Widescreen Infotainment Display)
-- **Tasarım Standartları:** Togg'un uçtan uca uzanan panoramik kokpit ekranında, sürücü ve yolcu görüş açılarına optimize edilmiş koyu tema (slate/zinc) ve minimum 56px dokunma hedefleri kullanılır.
+- **Tasarım Standartları:** Togg kokpit ekranında sürücü ve yolcu görüş açılarına optimize edilmiş koyu tema (slate/zinc) ve minimum 56px dokunma hedefleri kullanılır.
 - **Çözünürlük:** Yatay format (16:9 / 24:9) reaktif grid düzeni ile desteklenir.
 
 ### 2.2. Kabin İçi Kamera (In-Cabin Camera)
-- **Kullanım:** Görme keskinliği testi için mesafe/IPD ölçümü ve cilt analizi için 6 yüz bölgesi tespiti.
-- **Protokol:** RTSP / GStreamer video stream veya Togg Kamera SDK'sı üzerinden yerel bellek tamponuna aktarılır.
-- **Gizlilik:** Ham video kareleri asla diske yazılmaz; analiz tamamlandıktan hemen sonra bellekten silinir.
+- **Kullanım:** Togg tarafından PoC kapsamında erişime açılacak uygun kamera, giriş, ses, navigasyon ve araç bağlamı API/SDK'ları doğrultusunda uyarlanacaktır.
+- **Gizlilik:** Ham video kareleri asla diske veya uzak sunucuya yazılmaz; analiz anında RAM üzerinde çalışır ve görüntü kalıcı tutulmaz.
 
-### 2.3. Direksiyon ve Ses Kontrolleri
-- **Fiziksel Butonlar:** Landolt C görme testi yönlendirmeleri direksiyondaki tuşlar ile kontrol edilebilir.
-- **Mikrofon Dizilimi:** Kabin içi hüzmeleme (beamforming) destekli stereo mikrofon ile arka plan yol ve motor gürültüsü filtrelenir.
+### 2.3. Giriş ve Ses Kontrolleri
+- **Fiziksel Tuşlar:** Direksiyon tuşları erişilebilir ise Landolt C yön seçiminde alternatif bir giriş yöntemi olarak değerlendirilebilir.
+- **Ses Girişi:** Togg araç içi mikrofon ve ses altyapısı üzerinden sesli diyalog entegrasyonu (uygun ses API/SDK erişimi kapsamında).
 
 ---
 

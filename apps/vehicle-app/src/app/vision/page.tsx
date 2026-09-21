@@ -519,7 +519,7 @@ export default function VisionPage() {
               <strong className="text-cyan-400">
                 {testStep === 'TESTING_RIGHT' && '1. SAĞ GÖZ (Sol Gözünüzü Kapatın)'}
                 {testStep === 'TESTING_LEFT' && '2. SOL GÖZ (Sağ Gözünüzü Kapatın)'}
-                {testStep === 'TESTING_CONTRAST' && '3. KONTRAST HASSASİYETİ (İki Göz Açık)'}
+                {testStep === 'TESTING_CONTRAST' && '3. Ekran Tabanlı Kontrast Duyarlılığı Ön Değerlendirmesi (İki Göz Açık)'}
               </strong>
             </div>
             <div className="font-mono text-slate-400">
@@ -650,7 +650,7 @@ export default function VisionPage() {
             </div>
 
             <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-xl space-y-1">
-              <div className="text-xs text-slate-400">Kontrast Hassasiyeti</div>
+              <div className="text-xs text-slate-400">Ekran Tabanlı Kontrast Duyarlılığı (Ön Değerlendirme)</div>
               <div className="text-2xl font-bold text-amber-400 pt-1">
                 {testResults.contrast ? `${testResults.contrast.logCS.toFixed(2)} LogCS` : 'Değerlendirilemedi'}
               </div>
@@ -669,7 +669,7 @@ export default function VisionPage() {
               <span>Ön Değerlendirme ve Bilgilendirme:</span>
             </div>
             <p className="leading-relaxed text-cyan-300/90">
-              Bu test sonuçları klinik bir göz muayenesi veya kesin tıbbi tanı değildir. Ölçülen değerler kullanıcı doğrulamalı test mesafesi ({verifiedDistanceCm} cm) ve kalibre ekran ölçeğine dayalı işlevsel bir ön değerlendirmedir. Görme keskinliğinizde veya kontrast algınızda değişim hissediyorsanız bir göz doktoruna danışmanız önerilir.
+              Bu test sonuçları klinik bir göz muayenesi veya kesin tıbbi tanı değildir. Standart tüketici ekranı fotometrik olarak kalibre edilmiş bir klinik cihaz olmayıp; ölçülen değerler kullanıcı doğrulamalı test mesafesi ({verifiedDistanceCm} cm) ve ekran ölçeğine dayalı işlevsel bir ön değerlendirmedir. Görme keskinliğinizde veya kontrast algınızda değişim hissediyorsanız bir göz hekimine danışmanız önerilir.
             </p>
           </div>
 

@@ -79,8 +79,8 @@ Asistan; kendine zarar verme, intihar düşüncesi veya akut şiddet belirten an
 ## 4. Otonom Randevu Asistanı Sınırları & Açık Onay Kapısı
 
 ### 4.1. Geri Döndürülemez Eylem Yasağı (No Irreversible Action)
-Browser Agent altyapısı sağlık sitelerinden (DoktorTakvimi, Doktorsitesi vb.) boş slotları çeker, kullanıcının takvim boşlukları ve araç ulaşım süresi ile harmanlar.
-**Ancak kullanıcı açıkça "Onaylıyorum" demeden hiçbir rezervasyon formu gönderilemez, randevu kesinleştirilemez ve ödeme yapılamaz.**
+Browser Agent, teknik ve hukuki olarak erişilebilir kamuya açık kaynaklarda hekim ve görünür müsaitlik bilgilerini salt-okunur biçimde araştırabilir. Canlı müsaitliğin alınamadığı durumlarda kullanıcı ilgili randevu sayfasına güvenli biçimde yönlendirilir.
+**Kullanıcı açıkça "Onaylıyorum" demeden hiçbir rezervasyon formu gönderilemez, randevu kesinleştirilemez ve ödeme yapılamaz.**
 
 ### 4.2. İnsan Devri (Human Handoff) & Güvenli Düşüş (Fallback)
 Web sitelerinde CAPTCHA, SMS onay kodu, zorunlu kullanıcı girişi veya ödeme adımı ile karşılaşıldığında sistem kilitlenmez; kullanıcıya güvenli handoff mesajı ile ilgili sayfa sunulur:

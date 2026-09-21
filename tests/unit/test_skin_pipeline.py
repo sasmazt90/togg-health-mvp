@@ -93,3 +93,28 @@ def test_skin_roi_out_of_bounds_clamping():
     assert "Math.max(0, Math.min(width" in content
     assert "Math.max(0, Math.min(height" in content
     assert "NO_FACE" in content
+
+def test_skin_mediapipe_required_for_persistence_contract():
+    """MediaPipe FaceLandmarker olmadan sağlık metriği persist edilemez ve ROI üretilemez."""
+    skin_analyzer_file = root_dir / "apps" / "vehicle-app" / "src" / "utils" / "skinAnalyzer.ts"
+    assert skin_analyzer_file.exists()
+    content = skin_analyzer_file.read_text(encoding="utf-8")
+
+    # 1. canPersistResult fonksiyonu ve usedMediaPipe kontrolü var olmalı
+    assert "canPersistResult" in content
+    assert "result.usedMediaPipe === true" in content
+
+    # 2. analyzeRegions içinde MediaPipe landmark zorunluluğu (MEDIAPIPE_REQUIRED) olmalı
+    assert "MEDIAPIPE_REQUIRED" in content
+    assert "isMediaPipeActive" in content
+
+    # 3. CDN WASM yolu latest değil 1.0.1 olarak pinlenmiş olmalı
+    assert "@mediapipe/tasks-vision@latest" not in content
+    assert "@mediapipe/tasks-vision@1.0.1/wasm" in content
+
+    # 4. skin/page.tsx içinde de persist öncesi MediaPipe doğrulaması yapılmalı
+    skin_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "skin" / "page.tsx"
+    page_content = skin_page.read_text(encoding="utf-8")
+    assert "canPersistResult" in page_content
+    assert "isMediaPipeLoaded" in page_content
+

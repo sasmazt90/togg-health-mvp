@@ -40,6 +40,7 @@ export default function SkinPage() {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState<boolean>(false);
+  const [mediaPipeError, setMediaPipeError] = useState<string | null>(null);
 
   // Canlı hizalama ve kalite durumu
   const [alignment, setAlignment] = useState<FaceAlignment>({
@@ -66,8 +67,14 @@ export default function SkinPage() {
   useEffect(() => {
     let isMounted = true;
     SkinAnalyzer.getFaceLandmarker().then((landmarker) => {
-      if (isMounted && landmarker) {
-        setIsMediaPipeLoaded(true);
+      if (isMounted) {
+        if (landmarker) {
+          setIsMediaPipeLoaded(true);
+          setMediaPipeError(null);
+        } else {
+          setIsMediaPipeLoaded(false);
+          setMediaPipeError('Yüz analiz motoru yüklenemedi. İnternet bağlantısını kontrol edip tekrar deneyin.');
+        }
       }
     });
     return () => {
@@ -153,6 +160,11 @@ export default function SkinPage() {
 
   // Taramayı gerçekleştir
   const handlePerformScan = () => {
+    if (!isMediaPipeLoaded || !alignment.isMediaPipeActive) {
+      setCameraError('Yüz analiz motoru yüklenemedi. İnternet bağlantısını kontrol edip tekrar deneyin.');
+      return;
+    }
+
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -165,7 +177,15 @@ export default function SkinPage() {
       const h = canvas.height;
 
       // 6 ROI bölgesini gerçek landmarklar üzerinden hesapla
-      const regionMetrics = SkinAnalyzer.analyzeRegions(ctx, w, h, alignment);
+      let regionMetrics: Record<string, RegionMetrics>;
+      try {
+        regionMetrics = SkinAnalyzer.analyzeRegions(ctx, w, h, alignment);
+      } catch (err: any) {
+        console.warn(err);
+        setCameraError(err.message || 'Cilt analizi için MediaPipe yüz tespiti gereklidir.');
+        setScanState('CAMERA_ACTIVE');
+        return;
+      }
 
       // Baz çizgi (Baseline) okuma ve karşılaştırma
       let storedBaseline: Record<string, RegionMetrics> | null = null;
@@ -178,15 +198,6 @@ export default function SkinPage() {
 
       const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, storedBaseline, 20.0);
 
-      // Eğer ilk taramaysa baseline olarak kaydet
-      if (comparison.isBaseline) {
-        try {
-          localStorage.setItem('togg_health_skin_baseline', JSON.stringify(regionMetrics));
-        } catch (e) {
-          console.warn(e);
-        }
-      }
-
       const finalResult: SkinAnalysisResult = {
         id: `skin-${Date.now()}`,
         timestamp: new Date().toISOString(),
@@ -197,17 +208,29 @@ export default function SkinPage() {
         referralSuggested: comparison.referralSuggested,
         isBaseline: comparison.isBaseline,
         clinicalNoteTr: comparison.clinicalNoteTr,
-        usedMediaPipe: alignment.isMediaPipeActive
+        usedMediaPipe: alignment.isMediaPipeActive && isMediaPipeLoaded
       };
 
-      setAnalysisResult(finalResult);
+      // Yalnızca MediaPipe doğrulaması olan gerçek sonuçlar kalıcı kaydedilir
+      if (SkinAnalyzer.canPersistResult(finalResult)) {
+        if (comparison.isBaseline) {
+          try {
+            localStorage.setItem('togg_health_skin_baseline', JSON.stringify(regionMetrics));
+          } catch (e) {
+            console.warn(e);
+          }
+        }
 
-      // Geçmişe kaydet (Ham görüntü ASLA kaydedilmez!)
-      try {
-        localStorage.setItem('togg_health_latest_skin', JSON.stringify(finalResult));
-      } catch (e) {
-        console.warn(e);
+        try {
+          localStorage.setItem('togg_health_latest_skin', JSON.stringify(finalResult));
+        } catch (e) {
+          console.warn(e);
+        }
+      } else {
+        console.warn('MediaPipe doğrulaması olmadan cilt sonucu persist edilemez.');
       }
+
+      setAnalysisResult(finalResult);
 
       // Kamerayı kapat
       if (mediaStream) {
@@ -256,8 +279,21 @@ export default function SkinPage() {
             </p>
           </div>
         </div>
-        <div className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
-          Park Modu: <strong className="text-emerald-400">Aktif</strong>
+        <div className="flex items-center gap-2">
+          {isMediaPipeLoaded && alignment.isMediaPipeActive ? (
+            <span className="text-[11px] bg-emerald-950/80 border border-emerald-800 px-2.5 py-1 rounded-lg text-emerald-400 font-mono flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Yüz Analizi: MediaPipe Face Landmarker
+            </span>
+          ) : (
+            <span className="text-[11px] bg-rose-950/80 border border-rose-800 px-2.5 py-1 rounded-lg text-rose-300 font-mono flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              Yüz Analizi: Analiz kullanılamıyor
+            </span>
+          )}
+          <div className="text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-slate-300">
+            Park Modu: <strong className="text-emerald-400">Aktif</strong>
+          </div>
         </div>
       </div>
 
@@ -283,6 +319,13 @@ export default function SkinPage() {
               Kamerayı açarak yüzünüzü rehber çerçeve içine hizalayın.
             </div>
           </div>
+
+          {mediaPipeError && (
+            <div className="bg-rose-950/40 border border-rose-800 p-3 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{mediaPipeError}</span>
+            </div>
+          )}
 
           {cameraError && (
             <div className="bg-amber-950/40 border border-amber-800 p-3 rounded-xl text-xs text-amber-300 flex items-center gap-2">
@@ -397,9 +440,9 @@ export default function SkinPage() {
 
             <button
               onClick={handlePerformScan}
-              disabled={!alignment.faceDetected || !quality.isValid}
+              disabled={!isMediaPipeLoaded || !alignment.isMediaPipeActive || !alignment.faceDetected || !quality.isValid}
               className={`py-3 px-6 rounded-xl font-semibold text-sm transition-all min-h-touch shadow-lg ${
-                alignment.faceDetected && quality.isValid
+                isMediaPipeLoaded && alignment.isMediaPipeActive && alignment.faceDetected && quality.isValid
                   ? 'bg-emerald-500 text-black hover:bg-emerald-400 cursor-pointer'
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}
@@ -424,16 +467,27 @@ export default function SkinPage() {
       {/* ADIM 4: SONUÇ RAPORU & DEĞİŞİM KARŞILAŞTIRMASI */}
       {scanState === 'COMPLETED' && (
         <div className="bg-cockpit-surface border border-cockpit-border rounded-2xl p-6 md:p-8 space-y-6">
-          <div className="flex items-center gap-3 text-emerald-400">
-            <CheckCircle2 className="w-8 h-8 shrink-0" />
-            <div>
-              <h2 className="text-xl font-bold text-white">Cilt Değişim Analizi Tamamlandı</h2>
-              <p className="text-xs text-slate-400">
-                {analysisResult?.isBaseline
-                  ? 'İlk referans taramanız kaydedildi. Gelecek taramalarda değişimler bu referansa göre karşılaştırılacaktır.'
-                  : 'Kayıtlı baz çizgi referansı ile yeni tarama karşılaştırıldı.'}
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-emerald-400">
+              <CheckCircle2 className="w-8 h-8 shrink-0" />
+              <div>
+                <h2 className="text-xl font-bold text-white">Cilt Değişim Analizi Tamamlandı</h2>
+                <p className="text-xs text-slate-400">
+                  {analysisResult?.isBaseline
+                    ? 'İlk referans taramanız kaydedildi. Gelecek taramalarda değişimler bu referansa göre karşılaştırılacaktır.'
+                    : 'Kayıtlı baz çizgi referansı ile yeni tarama karşılaştırıldı.'}
+                </p>
+              </div>
             </div>
+            {analysisResult?.usedMediaPipe ? (
+              <span className="self-start sm:self-auto text-[11px] bg-emerald-950/80 border border-emerald-800 px-3 py-1 rounded-lg text-emerald-400 font-mono">
+                Yüz Analizi: MediaPipe Face Landmarker
+              </span>
+            ) : (
+              <span className="self-start sm:self-auto text-[11px] bg-rose-950/80 border border-rose-800 px-3 py-1 rounded-lg text-rose-300 font-mono">
+                Yüz Analizi: Analiz kullanılamıyor
+              </span>
+            )}
           </div>
 
           {/* Bölgesel Kartlar */}

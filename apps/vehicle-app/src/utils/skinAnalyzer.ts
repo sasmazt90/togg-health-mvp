@@ -94,7 +94,7 @@ export class SkinAnalyzer {
     this.isInitializing = true;
     try {
       const filesetResolver = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm'
       );
       this.landmarkerInstance = await FaceLandmarker.createFromOptions(filesetResolver, {
         baseOptions: {
@@ -107,12 +107,20 @@ export class SkinAnalyzer {
       });
       return this.landmarkerInstance;
     } catch (err) {
-      console.warn('MediaPipe FaceLandmarker yüklenemedi (yedek geometrik dedektör devrede):', err);
+      console.warn('MediaPipe FaceLandmarker yüklenemedi:', err);
       this.initializationFailed = true;
       return null;
     } finally {
       this.isInitializing = false;
     }
+  }
+
+  public static isMediaPipeReady(): boolean {
+    return this.landmarkerInstance !== null;
+  }
+
+  public static hasInitializationFailed(): boolean {
+    return this.initializationFailed;
   }
 
   /**
@@ -422,35 +430,29 @@ export class SkinAnalyzer {
     // 6 ROI Tanımı
     let roiDefinitions: { id: string; nameTr: string; x: number; y: number; w: number; h: number }[];
 
-    if (lms && lms.length >= 400) {
-      // Landmark merkezli ROI'ler
-      const fh = lms[LM.FOREHEAD_TOP];
-      const rc = lms[LM.RIGHT_CHEEK_CENTER];
-      const lc = lms[LM.LEFT_CHEEK_CENTER];
-      const ns = lms[LM.NOSE_BRIDGE];
-      const ch = lms[LM.CHIN_BOTTOM];
-      const rw = b.width * 0.22;
-      const rh = b.height * 0.16;
-
-      roiDefinitions = [
-        { id: 'forehead', nameTr: 'Alın', x: fh.x * width - rw * 0.8, y: fh.y * height, w: rw * 1.6, h: rh * 0.8 },
-        { id: 'rightCheek', nameTr: 'Sağ Yanak', x: rc.x * width - rw / 2, y: rc.y * height - rh / 2, w: rw, h: rh },
-        { id: 'leftCheek', nameTr: 'Sol Yanak', x: lc.x * width - rw / 2, y: lc.y * height - rh / 2, w: rw, h: rh },
-        { id: 'nose', nameTr: 'Burun', x: ns.x * width - rw * 0.4, y: ns.y * height - rh * 0.4, w: rw * 0.8, h: rh * 0.8 },
-        { id: 'chin', nameTr: 'Çene', x: ch.x * width - rw * 0.6, y: ch.y * height - rh * 0.8, w: rw * 1.2, h: rh * 0.7 },
-        { id: 'periorbital', nameTr: 'Göz Çevresi', x: b.x + b.width * 0.2, y: b.y + b.height * 0.28, w: b.width * 0.6, h: b.height * 0.12 }
-      ];
-    } else {
-      // Geometrik ROI'ler
-      roiDefinitions = [
-        { id: 'forehead', nameTr: 'Alın', x: b.x + b.width * 0.2, y: b.y + b.height * 0.08, w: b.width * 0.6, h: b.height * 0.18 },
-        { id: 'rightCheek', nameTr: 'Sağ Yanak', x: b.x + b.width * 0.08, y: b.y + b.height * 0.45, w: b.width * 0.28, h: b.height * 0.25 },
-        { id: 'leftCheek', nameTr: 'Sol Yanak', x: b.x + b.width * 0.64, y: b.y + b.height * 0.45, w: b.width * 0.28, h: b.height * 0.25 },
-        { id: 'nose', nameTr: 'Burun', x: b.x + b.width * 0.38, y: b.y + b.height * 0.38, w: b.width * 0.24, h: b.height * 0.25 },
-        { id: 'chin', nameTr: 'Çene', x: b.x + b.width * 0.32, y: b.y + b.height * 0.78, w: b.width * 0.36, h: b.height * 0.18 },
-        { id: 'periorbital', nameTr: 'Göz Çevresi', x: b.x + b.width * 0.18, y: b.y + b.height * 0.26, w: b.width * 0.64, h: b.height * 0.16 }
-      ];
+    if (!alignment?.isMediaPipeActive || !lms || lms.length < 400) {
+      throw new Error(
+        'MEDIAPIPE_REQUIRED: Yüz analiz motoru (MediaPipe FaceLandmarker) aktif olmadan cilt analizi yapılamaz. İnternet bağlantısını kontrol edip tekrar deneyin.'
+      );
     }
+
+    // Landmark merkezli 6 ROI
+    const fh = lms[LM.FOREHEAD_TOP];
+    const rc = lms[LM.RIGHT_CHEEK_CENTER];
+    const lc = lms[LM.LEFT_CHEEK_CENTER];
+    const ns = lms[LM.NOSE_BRIDGE];
+    const ch = lms[LM.CHIN_BOTTOM];
+    const rw = b.width * 0.22;
+    const rh = b.height * 0.16;
+
+    roiDefinitions = [
+      { id: 'forehead', nameTr: 'Alın', x: fh.x * width - rw * 0.8, y: fh.y * height, w: rw * 1.6, h: rh * 0.8 },
+      { id: 'rightCheek', nameTr: 'Sağ Yanak', x: rc.x * width - rw / 2, y: rc.y * height - rh / 2, w: rw, h: rh },
+      { id: 'leftCheek', nameTr: 'Sol Yanak', x: lc.x * width - rw / 2, y: lc.y * height - rh / 2, w: rw, h: rh },
+      { id: 'nose', nameTr: 'Burun', x: ns.x * width - rw * 0.4, y: ns.y * height - rh * 0.4, w: rw * 0.8, h: rh * 0.8 },
+      { id: 'chin', nameTr: 'Çene', x: ch.x * width - rw * 0.6, y: ch.y * height - rh * 0.8, w: rw * 1.2, h: rh * 0.7 },
+      { id: 'periorbital', nameTr: 'Göz Çevresi', x: b.x + b.width * 0.2, y: b.y + b.height * 0.28, w: b.width * 0.6, h: b.height * 0.12 }
+    ];
 
     const results: Record<string, RegionMetrics> = {};
 
@@ -582,4 +584,13 @@ export class SkinAnalyzer {
       isBaseline: false
     };
   }
+
+  /**
+   * Yalnızca MediaPipe FaceLandmarker ile doğrulanmış gerçek sonuçların
+   * kalıcı depolanmasına izin verir. Sentetik veya fallback sonuçlar persist edilemez.
+   */
+  public static canPersistResult(result: SkinAnalysisResult | null): boolean {
+    return result !== null && result.usedMediaPipe === true;
+  }
 }
+
