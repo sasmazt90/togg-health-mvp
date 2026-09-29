@@ -29,29 +29,40 @@ jobs:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: services/core-api/requirements.txt
-      - name: Install locked application and browser dependencies
+      - name: Install application browsers native audio and diagnostics
         run: |
           npm ci
-          python -m pip install -r services/core-api/requirements.txt
+          python -m pip install -r services/core-api/requirements.txt bandit
           python -m playwright install --with-deps chromium
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg espeak-ng xvfb
-      - name: TypeScript and existing tests
+          sudo apt-get install -y -qq ffmpeg espeak-ng xvfb pulseaudio pulseaudio-utils speech-dispatcher speech-dispatcher-espeak-ng
+      - name: TypeScript and original tests
         run: |
           mkdir -p audit-results
           node node_modules/typescript/bin/tsc --project apps/vehicle-app/tsconfig.json --noEmit
           python -m pytest tests/unit -v --junitxml=audit-results/unit.xml | tee audit-results/unit.log
+          python -m compileall -q services
       - name: Fresh production build
         run: npm run build 2>&1 | tee audit-results/build.log
-      - name: Dependency audit (report only)
-        run: npm audit --json > audit-results/npm-audit.json || true
-      - name: Controlled face and spoken Turkish media fixtures
+      - name: Security and environment reports
+        run: |
+          npm audit --json > audit-results/npm-audit.json || true
+          python -m bandit -r services -f json -o audit-results/bandit.json || true
+          python -m pip freeze > audit-results/python-freeze.txt
+      - name: Controlled image and spoken Turkish fixtures plus OS microphone
         run: |
           mkdir -p audit-fixtures
           ffmpeg -y -loop 1 -i apps/vehicle-app/public/images/demo-skin-face.jpg -vf 'scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2,setsar=1' -t 3 -r 15 -pix_fmt yuv420p audit-fixtures/face.y4m
           espeak-ng -v tr -s 135 -w audit-fixtures/speech-original.wav 'Bugün yeni bir kitap okudum. Kendimi iyi hissediyorum.'
           ffmpeg -y -i audit-fixtures/speech-original.wav -ar 48000 -ac 1 -c:a pcm_s16le audit-fixtures/speech.wav
-      - name: Start isolated application and execute actual browser audit
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=audit_mic
+          pactl load-module module-null-sink sink_name=audit_output
+          pactl set-default-source audit_mic.monitor
+          pactl set-default-sink audit_output
+          pactl list short sources > audit-results/pulse-sources.txt
+          speech-dispatcher --spawn || true
+      - name: Original app focused diagnostics with actual MediaPipe and OS audio
         run: |
           node node_modules/next/dist/bin/next start apps/vehicle-app -p 3000 > audit-results/frontend.log 2>&1 &
           python -m uvicorn main:app --app-dir services/core-api --host 127.0.0.1 --port 8000 > audit-results/backend.log 2>&1 &
@@ -59,8 +70,8 @@ jobs:
             if curl -fsS http://localhost:3000/ >/dev/null && curl -fsS http://localhost:8000/api/health >/dev/null; then break; fi
             sleep 1
           done
-          xvfb-run -a python -u tests/e2e/runner_v2.py 2>&1 | tee audit-results/browser.log
-      - name: Upload screenshots traces raw results and logs
+          xvfb-run -a python -u tests/e2e/media_diagnostics.py 2>&1 | tee audit-results/focused.log
+      - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
