@@ -15,11 +15,14 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       OPENAI_API_KEY: ''
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
       - uses: actions/setup-python@v5
         with:
@@ -32,7 +35,7 @@ jobs:
           python -m pip install -r services/core-api/requirements.txt
           python -m playwright install --with-deps chromium
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg espeak-ng
+          sudo apt-get install -y -qq ffmpeg espeak-ng xvfb
       - name: TypeScript and existing tests
         run: |
           mkdir -p audit-results
@@ -45,9 +48,10 @@ jobs:
       - name: Controlled face and spoken Turkish media fixtures
         run: |
           mkdir -p audit-fixtures
-          ffmpeg -y -loop 1 -i apps/vehicle-app/public/images/demo-skin-face.jpg -vf 'scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2' -t 3 -r 15 -pix_fmt yuv420p audit-fixtures/face.y4m
-          espeak-ng -v tr -s 135 -w audit-fixtures/speech.wav 'Bugün yeni bir kitap okudum. Kendimi iyi hissediyorum.'
-      - name: Start isolated application and execute real browser audit
+          ffmpeg -y -loop 1 -i apps/vehicle-app/public/images/demo-skin-face.jpg -vf 'scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2,setsar=1' -t 3 -r 15 -pix_fmt yuv420p audit-fixtures/face.y4m
+          espeak-ng -v tr -s 135 -w audit-fixtures/speech-original.wav 'Bugün yeni bir kitap okudum. Kendimi iyi hissediyorum.'
+          ffmpeg -y -i audit-fixtures/speech-original.wav -ar 48000 -ac 1 -c:a pcm_s16le audit-fixtures/speech.wav
+      - name: Start isolated application and execute actual browser audit
         run: |
           node node_modules/next/dist/bin/next start apps/vehicle-app -p 3000 > audit-results/frontend.log 2>&1 &
           python -m uvicorn main:app --app-dir services/core-api --host 127.0.0.1 --port 8000 > audit-results/backend.log 2>&1 &
@@ -55,8 +59,7 @@ jobs:
             if curl -fsS http://localhost:3000/ >/dev/null && curl -fsS http://localhost:8000/api/health >/dev/null; then break; fi
             sleep 1
           done
-          set -o pipefail
-          python -u tests/e2e/audit_browser.py 2>&1 | tee audit-results/browser.log
+          xvfb-run -a python -u tests/e2e/runner_v2.py 2>&1 | tee audit-results/browser.log
       - name: Upload screenshots traces raw results and logs
         if: always()
         uses: actions/upload-artifact@v4
