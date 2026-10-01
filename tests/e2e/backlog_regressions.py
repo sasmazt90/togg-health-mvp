@@ -226,6 +226,33 @@ with sync_playwright() as pw:
             finally:
                 context.close()
         record('Fresh, recorded, outage and explicit demo mental-history truthfulness',evidence)
+    elif phase == 'hydration':
+        def hydration():
+            context = browser.new_context()
+            try:
+                context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
+                page = context.new_page()
+                errors=[]
+                page.on('pageerror',lambda error:errors.append(str(error)))
+                for route in ['/','/profile']:
+                    page.goto(BASE+route)
+                    expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_contain_text('PARK')
+                    assert not errors,errors
+                page.goto(BASE+'/mental')
+                enter_text(page,'Ailemle bugün güzel vakit geçirdik.')
+                expect(page.locator('[data-mental-history]')).to_contain_text('1 kayıtlı görüşme')
+                for route in ['/','/profile']:
+                    page.goto(BASE+route)
+                    expect(page.get_by_text('sosyal ilişkiler',exact=True).first).to_be_visible()
+                    assert not errors,errors
+                for route in ['/?demo=1','/profile?demo=1']:
+                    page.goto(BASE+route)
+                    expect(page.get_by_text('20/30 • 20/24',exact=True).first).to_be_visible()
+                    assert not errors,errors
+                return {'emptyAndStoredRoutesWithoutErrors':True,'demoAfterHydrationWithoutErrors':True,'pageerrors':errors}
+            finally:
+                context.close()
+        record('Dashboard and profile hydrate deterministically and then load real/demo data',hydration)
     else:
         raise ValueError('Unknown regression phase: ' + phase)
     browser.close()

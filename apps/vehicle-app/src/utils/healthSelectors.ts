@@ -50,17 +50,21 @@ export interface HealthTimelineItem {
   isDemo: boolean;
 }
 
+export const EMPTY_VISION_SUMMARY: VisionSummaryData = {
+  hasData: false, isDemo: false, dateTr: '', acuitySummary: 'Henüz değerlendirme yok',
+  contrastSummary: 'Ön değerlendirme bekleniyor', referralRecommended: false
+};
+export const EMPTY_SKIN_SUMMARY: SkinSummaryData = {
+  hasData: false, isDemo: false, dateTr: '', regionNameTr: 'Henüz değerlendirme yok',
+  changePct: 0, changeLabel: 'Ölçüm bekleniyor', recommendation: 'Henüz kayıtlı analiz yok', isBaseline: false
+};
+export const EMPTY_MENTAL_SUMMARY: MentalSummaryData = {
+  hasData: false, isDemo: false, dateTr: '', primaryTheme: 'Henüz görüşme yok',
+  sessionCount: 0, sessionCountLabel: '0 görüşme', recommendation: 'Asistanla görüşme bekleniyor'
+};
+
 export function getVisionSummary(demoMode: boolean = isDemoMode()): VisionSummaryData {
-  if (typeof window === 'undefined') {
-    return {
-      hasData: demoMode,
-      isDemo: demoMode,
-      dateTr: '18 Eylül 2026',
-      acuitySummary: demoMode ? '20/30 • 20/24' : 'Henüz değerlendirme yok',
-      contrastSummary: demoMode ? '1.55 LogCS (İzleniyor)' : 'Ön değerlendirme bekleniyor',
-      referralRecommended: false
-    };
-  }
+  if (typeof window === 'undefined' && !demoMode) return EMPTY_VISION_SUMMARY;
 
   if (demoMode) {
     return {
@@ -116,18 +120,7 @@ export function getVisionSummary(demoMode: boolean = isDemoMode()): VisionSummar
 }
 
 export function getSkinSummary(demoMode: boolean = isDemoMode()): SkinSummaryData {
-  if (typeof window === 'undefined') {
-    return {
-      hasData: demoMode,
-      isDemo: demoMode,
-      dateTr: '21 Eylül 2026',
-      regionNameTr: demoMode ? 'Sağ Yanak' : 'Henüz değerlendirme yok',
-      changePct: demoMode ? 22 : 0,
-      changeLabel: demoMode ? '+%22 Değişim' : 'Ölçüm bekleniyor',
-      recommendation: demoMode ? 'Uzman görüşü önerildi' : 'Kayıt bulunmuyor',
-      isBaseline: false
-    };
-  }
+  if (typeof window === 'undefined' && !demoMode) return EMPTY_SKIN_SUMMARY;
 
   if (demoMode) {
     return {
