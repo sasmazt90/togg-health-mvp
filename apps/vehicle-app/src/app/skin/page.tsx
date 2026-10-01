@@ -19,6 +19,7 @@ import {
   buildSkinRegionViewModel
 } from '../../data/skinDemoFixture';
 import { isDemoMode, STORAGE_KEYS, isCameraAllowed } from '../../utils/attuneMode';
+import { SkinInference } from '../../utils/skinInference';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
 import { SkinResultView } from '../../components/skin/SkinResultView';
@@ -43,6 +44,8 @@ export default function SkinPage() {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState<boolean>(false);
   const isMediaPipeLoadedRef = useRef<boolean>(false);
+  const inferenceRef = useRef<SkinInference | null>(null);
+  const initializationFailedRef = useRef(false);
   const demoTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLiveVideo, setIsLiveVideo] = useState<boolean>(false);
 
@@ -106,15 +109,32 @@ export default function SkinPage() {
 
   // MediaPipe FaceLandmarker'ı başlat
   useEffect(() => {
+    if (isDemoMode()) return;
     let isMounted = true;
-    SkinAnalyzer.getFaceLandmarker().then((landmarker) => {
-      if (isMounted && landmarker) {
+    let engine: SkinInference;
+    try {
+      engine = new SkinInference();
+      inferenceRef.current = engine;
+    } catch {
+      initializationFailedRef.current = true;
+      return;
+    }
+    engine.initialize().then(() => {
+      if (isMounted) {
         isMediaPipeLoadedRef.current = true;
         setIsMediaPipeLoaded(true);
+      }
+    }).catch(() => {
+      if (isMounted) {
+        initializationFailedRef.current = true;
+        setErrorMessage('Cilt analiz motoru başlatılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.');
+        setScanState('ERROR');
       }
     });
     return () => {
       isMounted = false;
+      engine.close();
+      inferenceRef.current = null;
     };
   }, []);
 
@@ -386,7 +406,7 @@ export default function SkinPage() {
 
     const isDemo = isDemoMode();
 
-    const loop = () => {
+    const loop = async () => {
       if (cancelled) return;
       if (!isCameraAllowed() || !parkedRef.current || mediaStream.getVideoTracks().every(t => t.readyState === 'ended')) {
         setErrorMessage('Kamera kapatıldı. İzinleri kontrol edip yeniden deneyin.');
@@ -423,7 +443,23 @@ export default function SkinPage() {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
           // Gerçek hizalama ve kalite değerlendirmesi
-          const curAlign = SkinAnalyzer.assessAlignment(ctx, canvas.width, canvas.height);
+          if (!isMediaPipeLoadedRef.current || !inferenceRef.current) {
+            setGuidanceText('Cilt analiz motoru hazırlanıyor...');
+            schedule();
+            return;
+          }
+          let curAlign: FaceAlignment;
+          try {
+            curAlign = await inferenceRef.current.assessAlignment(canvas);
+          } catch {
+            if (!cancelled) {
+              setErrorMessage('Cilt analiz motoru yanıt vermiyor. Lütfen yeniden deneyin.');
+              setScanState('ERROR');
+            }
+            return;
+          }
+          // Driving/privacy/unmount may cancel while a real frame is being inferred.
+          if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
           const curQual = SkinAnalyzer.checkQuality(ctx, canvas.width, canvas.height, curAlign.faceDetected);
 
           setAlignment(curAlign);
@@ -503,7 +539,7 @@ export default function SkinPage() {
     const isDemo = isDemoMode();
 
     // 2. Real Modda MediaPipe kontrolü
-    if (!isDemo && !isMediaPipeLoaded && SkinAnalyzer.hasInitializationFailed()) {
+    if (!isDemo && !isMediaPipeLoaded && initializationFailedRef.current) {
       setErrorMessage(
         'Cilt analiz motoru kullanılamıyor. Lütfen kamera iznini ve bağlantınızı kontrol edip tekrar deneyin.'
       );
@@ -513,6 +549,12 @@ export default function SkinPage() {
 
     setScanState('CAMERA_ACTIVE');
     setScanProgress(5);
+
+    if (isDemo) {
+      setIsLiveVideo(false);
+      startSyntheticDemoScan();
+      return;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
