@@ -40,7 +40,7 @@ def enter_text(page, text):
 
 
 with sync_playwright() as pw:
-    browser = pw.chromium.launch(headless=True)
+    browser = pw.chromium.launch(channel='chromium', headless=True)
     if phase == 'crisis':
         phrases = ['intihar', 'İNTİHAR', 'İntihar', 'iNtIhAr', 'INTIHAR', 'i\u0307ntihar',
                    'CANIMA KIYMAK', 'ÖLMEK İSTİYORUM', 'KeNdİmE ZaRaR',
@@ -64,7 +64,7 @@ with sync_playwright() as pw:
         for local_available, backend_available in [(True, True), (True, False), (False, True), (False, False)]:
             def deletion(local_available=local_available, backend_available=backend_available):
                 # Actual browser capability and an aborted network request: no fabricated responses.
-                test_browser = pw.chromium.launch(headless=True,
+                test_browser = pw.chromium.launch(channel='chromium', headless=True,
                     args=[] if local_available else ['--disable-local-storage'])
                 context = test_browser.new_context()
                 try:
@@ -101,6 +101,61 @@ with sync_playwright() as pw:
                     context.close()
                     test_browser.close()
             record(f'Deletion truthfulness local={local_available} backend={backend_available}', deletion)
+    elif phase == 'vehicle':
+        def transitions():
+            face = str(Path('audit-fixtures/face.y4m').resolve())
+            camera_browser = pw.chromium.launch(channel='chromium', headless=True, args=[
+                '--use-fake-device-for-media-stream', '--use-file-for-fake-video-capture=' + face,
+                '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
+            context = camera_browser.new_context(permissions=['camera'])
+            try:
+                assert context.request.post(API+'/api/vehicle/speed', data={'speedKmH':0}).ok
+                page = context.new_page()
+                page.add_init_script("""window.cameraStreams=[];const gum=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...args)=>{const stream=await gum(...args);window.cameraStreams.push(stream);return stream;};""")
+                page.goto(BASE+'/vision')
+                toggle = page.get_by_title('Sürüş ve Park modları arasında geçiş')
+                expect(toggle).to_contain_text('PARK')
+                page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click()
+                page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click()
+                page.wait_for_function('window.cameraStreams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
+                toggle.click()
+                expect(toggle).to_contain_text('SÜRÜŞ')
+                expect(page.get_by_role('heading',name='Görme Kontrolü Kullanılamıyor')).to_be_visible()
+                assert page.evaluate('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
+                driving = context.request.get(API+'/api/vehicle/state').json()
+                assert driving['vehicleMoving'] is True and driving['currentSpeed'] == 75
+                reply = context.request.post(API+'/api/mental/converse',data={'userMessage':'Bugün kitap okudum'}).json()
+                assert reply['isDriving'] is True
+                toggle.click()
+                expect(toggle).to_contain_text('PARK')
+                parked = context.request.get(API+'/api/vehicle/state').json()
+                assert parked['vehicleMoving'] is False and parked['currentSpeed'] == 0
+                expect(page.get_by_role('button',name='TESTİ HAZIRLA',exact=True)).to_be_visible()
+                page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click()
+                page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click()
+                page.wait_for_function('window.cameraStreams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
+                page.get_by_role('link',name='Gizlilik & İzinler',exact=True).click()
+                page.wait_for_function('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
+                return {'driving':driving,'parked':parked,'drivingReply':reply,'tracksEndedOnNavigation':True}
+            finally:
+                context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
+                context.close()
+                camera_browser.close()
+        record('Vision capture stops; frontend transitions govern backend safety decisions',transitions)
+        def outage():
+            context = browser.new_context()
+            try:
+                context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
+                page = context.new_page()
+                page.route('**/api/vehicle/state',lambda route:route.abort())
+                page.goto(BASE+'/vision')
+                notice = page.get_by_role('alert').filter(has_text='Araç durumu doğrulanamıyor')
+                expect(notice).to_be_visible()
+                assert page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).count() == 0
+                return {'actualSafetyNotice':notice.inner_text()}
+            finally:
+                context.close()
+        record('Unverified vehicle state keeps visual controls locked',outage)
     else:
         raise ValueError('Unknown regression phase: ' + phase)
     browser.close()

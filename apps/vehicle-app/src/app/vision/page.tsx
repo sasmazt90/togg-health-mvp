@@ -43,6 +43,10 @@ export default function VisionPage() {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const cameraAcquisitionRef = useRef(0);
+  const mountedRef = useRef(false);
+  const parkedRef = useRef(isParked);
+  parkedRef.current = isParked;
   const [verifiedDistanceCm, setVerifiedDistanceCm] = useState<number>(55);
 
   // Staircase kontrolcüsü ve test durumu
@@ -72,6 +76,22 @@ export default function VisionPage() {
       }
     };
   }, [mediaStream]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; cameraAcquisitionRef.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    if (!isParked) {
+      cameraAcquisitionRef.current += 1;
+      mediaStream?.getTracks().forEach(track => track.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setMediaStream(null);
+      setCameraActive(false);
+      setTestStep('IDLE');
+    }
+  }, [isParked, mediaStream]);
 
   // SÜRÜŞ MODU KİLİDİ (SCREEN 11) - Tam merkezli, sade, otomotiv güvenlik arayüzü
   if (!isParked) {
@@ -107,6 +127,8 @@ export default function VisionPage() {
 
   // Kamera açma
   const startCamera = async () => {
+    if (!parkedRef.current) return;
+    const acquisition = ++cameraAcquisitionRef.current;
     setCameraError(null);
     if (!isCameraAllowed()) {
       setCameraError('Kabin kamerası kullanım izni Gizlilik ayarlarında kapalıdır. Oturma pozisyonunuzu alarak doğrulamak istediğiniz mesafeyi manuel seçebilirsiniz.');
@@ -117,6 +139,10 @@ export default function VisionPage() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
       });
+      if (!mountedRef.current || !parkedRef.current || acquisition !== cameraAcquisitionRef.current || !isCameraAllowed()) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       setMediaStream(stream);
       setCameraActive(true);
       if (videoRef.current) {
@@ -124,6 +150,7 @@ export default function VisionPage() {
         videoRef.current.play();
       }
     } catch (err: any) {
+      if (!mountedRef.current || acquisition !== cameraAcquisitionRef.current) return;
       console.warn('Kamera erişimi sağlanamadı:', err);
       setCameraError('Kamera erişimi sağlanamadı. Lütfen oturma pozisyonunuzu alarak doğrulamak istediğiniz mesafeyi seçin.');
       setCameraActive(false);
