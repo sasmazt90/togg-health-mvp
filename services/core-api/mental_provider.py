@@ -115,8 +115,8 @@ class LocalFallbackMentalProvider(MentalConversationProvider):
 
         if "uyku düzensizliği" in detected_themes or "iş stresi" in detected_themes:
             reply = (
-                f"Paylaştığınız için teşekkür ederim {driver_name}. Son görüşmelerimizde de uyku düzeni ve iş temposu "
-                "konularının öne çıktığını görüyorum. Bu döngü sürekli tekrar ediyorsa, süreci bir uzman klinik psikologla "
+                f"Paylaştığınız için teşekkür ederim {driver_name}. Bu mesajda paylaştığınız konuları dinliyorum. "
+                "Bu durum sizi zorlamaya devam ediyorsa, süreci bir uzman klinik psikologla "
                 "değerlendirmek iyi gelebilir. İsterseniz uygun uzman seçeneklerini bulabilirim."
             )
             escalation = True
@@ -267,7 +267,7 @@ class LocalFallbackSessionAnalyzer(MentalSessionAnalyzer):
 
         support_suggested = len(themes) >= 2 and mood_trend in ["STRESSED", "TIRED"]
         support_reason = (
-            "Görüşmelerinizde süregelen stres veya yorgunluk temalarının tekrar ettiği gözlemlendi. Bir klinik psikologla görüşmek faydalı olabilir."
+            "Bu görüşmede stres veya yorgunluk konuları paylaşıldı. Bir klinik psikologla görüşmek faydalı olabilir."
             if support_suggested else None
         )
 

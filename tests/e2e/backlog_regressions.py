@@ -32,10 +32,10 @@ def record(name, fn):
 def enter_text(page, text):
     if page.locator('input').count() == 0:
         page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
-    old_reply = page.locator('[data-chat-author="AI"] p').last.inner_text()
+    old_position = page.locator('[data-chat-author="AI"]').last.get_attribute('data-chat-position')
     page.locator('input').fill(text)
     page.locator('input').press('Enter')
-    expect(page.locator('[data-chat-author="AI"] p').last).not_to_have_text(old_reply)
+    expect(page.locator('[data-chat-author="AI"]').last).not_to_have_attribute('data-chat-position', old_position)
     return page.locator('[data-chat-author="AI"] p').last.inner_text()
 
 
@@ -185,6 +185,47 @@ with sync_playwright() as pw:
             finally:
                 context.close()
         record('Rendered optotype geometry follows actual logMAR difficulty',geometry)
+    elif phase == 'mental':
+        def evidence():
+            context = browser.new_context()
+            try:
+                context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
+                page = context.new_page()
+                page.goto(BASE+'/mental')
+                panel = page.locator('[data-mental-history]')
+                expect(panel).to_contain_text('0 kayıtlı görüşme')
+                body = page.locator('body').inner_text()
+                for invented in ['son konuşmalarımızdaki','4 Seans Analiz Edildi','%75','%60','Sabah saatlerinde odaklanma']:
+                    assert invented not in body, body
+                enter_text(page,'Bugün çocukları okuldan aldım; ailece güzel zaman geçirdik.')
+                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                expect(panel).to_contain_text('sosyal ilişkiler')
+                first_history = page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))')
+                assert len(first_history)==1
+                enter_text(page,'Ailemle konuşmak iyi geldi.')
+                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                page.reload()
+                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                expect(panel).to_contain_text('sosyal ilişkiler')
+                saved = page.evaluate('localStorage.getItem("togg_health_mental_history")')
+                page.route('**/api/mental/converse',lambda route:route.abort())
+                reply=enter_text(page,'Bugün yeni bir kitap okudum.')
+                assert 'bağlantı' in reply.lower() and 'son konuşmalarımızda' not in reply.lower(),reply
+                assert page.evaluate('localStorage.getItem("togg_health_mental_history")')==saved
+                page.goto(BASE+'/mental?demo=1')
+                expect(page.get_by_text('Demo / Örnek içerik — gerçek görüşme geçmişiniz değildir.',exact=True)).to_be_visible()
+                assert page.locator('[data-mental-history]').count()==0
+                assert page.evaluate('localStorage.getItem("togg_health_mental_history")')==saved
+                fresh=context.browser.new_context()
+                try:
+                    another=fresh.new_page();another.goto(BASE+'/mental')
+                    expect(another.locator('[data-mental-history]')).to_contain_text('0 kayıtlı görüşme')
+                finally:
+                    fresh.close()
+                return {'storedRealSummaries':json.loads(saved),'outageReply':reply,'demoSeparated':True,'newBrowserHasNoHistory':True}
+            finally:
+                context.close()
+        record('Fresh, recorded, outage and explicit demo mental-history truthfulness',evidence)
     else:
         raise ValueError('Unknown regression phase: ' + phase)
     browser.close()

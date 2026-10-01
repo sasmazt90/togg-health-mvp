@@ -20,7 +20,8 @@ import {
   ChevronDown
 } from 'lucide-react';
 
-import { isMicrophoneAllowed, isMentalSummarySavingAllowed, STORAGE_KEYS } from '../../utils/attuneMode';
+import { isMicrophoneAllowed, isMentalSummarySavingAllowed, isDemoMode, STORAGE_KEYS } from '../../utils/attuneMode';
+import { readMentalHistory, saveMentalHistory, MentalHistoryItem } from '../../utils/mentalHistory';
 
 interface ChatMessage {
   sender: 'USER' | 'AI';
@@ -69,12 +70,19 @@ export default function MentalPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       sender: 'AI',
-      text: isParked
-        ? 'Merhaba Ahmet Bey, bugün kendinizi nasıl hissediyorsunuz? İsterseniz son konuşmalarımızdaki uyku ve dinlenme rutininizden devam edebiliriz.'
-        : 'Merhaba Ahmet Bey. Yolculuğunuz boyunca sesli asistanınız hazır. Sürüşünüze odaklanırken paylaşmak istediğiniz bir konu olursa dinliyorum.',
+      text: 'Merhaba, bugün kendinizi nasıl hissediyorsunuz? Paylaşmak istediğiniz bir konu varsa dinliyorum.',
       time: 'Şimdi'
     }
   ]);
+  const [isDemo, setIsDemo] = useState(false);
+  const [mentalHistory, setMentalHistory] = useState<MentalHistoryItem[]>([]);
+  const [historyNotice, setHistoryNotice] = useState<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    setIsDemo(isDemoMode());
+    setMentalHistory(readMentalHistory());
+    sessionIdRef.current = crypto.randomUUID();
+  }, []);
 
   const recognitionRef = useRef<any>(null);
   const intentionalRecognitionAbortRef = useRef(false);
@@ -301,7 +309,6 @@ export default function MentalPage() {
     setIsProcessing(true);
 
     // Kriz filtresi kontrolü
-    const lower = text.toLowerCase();
     const crisis = checkCrisisTrigger(text, !isParked);
 
     if (crisis.isCrisis) {
@@ -348,43 +355,50 @@ export default function MentalPage() {
         };
         setMessages((prev) => [...prev, aiMsg]);
         speakReply(data.reply);
+        if (!isDemo && isMentalSummarySavingAllowed()) {
+          try {
+            const analysisResponse = await fetch('http://localhost:8000/api/mental/analyze-session', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ messages: [...messages, userMsg].map(message => ({
+                role: message.sender === 'USER' ? 'user' : 'assistant', content: message.text
+              })) })
+            });
+            if (!analysisResponse.ok) throw new Error('Özet oluşturulamadı');
+            const analysis = await analysisResponse.json();
+            if (typeof analysis.summaryText !== 'string' || !Array.isArray(analysis.themes) ||
+                !analysis.themes.every((theme: unknown) => typeof theme === 'string')) throw new Error('Geçersiz özet');
+            // Re-check consent after asynchronous analysis; one record per actual conversation.
+            if (mountedRef.current) {
+              if (isMentalSummarySavingAllowed()) {
+              const history = saveMentalHistory({ id: sessionIdRef.current!, date: new Date().toISOString(),
+                summaryText: analysis.summaryText, themes: analysis.themes });
+              setMentalHistory(history);
+              setHistoryNotice(null);
+              }
+            }
+          } catch {
+            if (mountedRef.current) setHistoryNotice('Görüşme özeti kaydedilemedi; geçmişe yeni kayıt eklenmedi.');
+          }
+        }
       } else {
         throw new Error('API Hatası');
       }
     } catch (err) {
       const fallbackReply = isParked
-        ? 'Sizi dinliyorum. Son konuşmalarımızda da yorgunluk ve uyku temposu öne çıkmıştı. Kendinize bugün biraz dinlenme zamanı ayırmak iyi gelebilir.'
-        : 'Sizi dinliyorum. Sürüş sırasında yoldan dikkatinizi ayırmamanız önemli. Derin bir nefes alabilirsiniz; konuyu araç park edildiğinde de sürdürebiliriz.';
+        ? 'İyi oluş servisine bağlantı kurulamadı. Bu mesaj için bir değerlendirme oluşturulamadı. Lütfen daha sonra yeniden deneyin.'
+        : 'İyi oluş servisine ulaşılamıyor. Lütfen dikkatinizi yola verin; park ettiğinizde yeniden deneyin.';
 
       const aiMsg: ChatMessage = {
         sender: 'AI',
         text: fallbackReply,
         time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-        providerBadge: 'Yerel Motor'
+        providerBadge: 'Servis Bağlantısı Başarısız'
       };
       setMessages((prev) => [...prev, aiMsg]);
       speakReply(fallbackReply);
     } finally {
       setIsProcessing(false);
 
-      // Seans Hafızası Gizlilik Kontrolü:
-      // Eğer togg_privacy_mental_summary_allowed KAPALI ise, özet kalıcı olarak kaydedilmez!
-      if (isMentalSummarySavingAllowed()) {
-        try {
-          const theme = lower.includes('uyku')
-            ? 'Uyku Düzensizliği'
-            : lower.includes('iş') || lower.includes('stres')
-            ? 'İş Temposu & Stres'
-            : 'Odaklanma & Rahatlama';
-          const mentalRecord = {
-            dateTr: new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
-            primaryTheme: theme,
-            sessionCount: 1,
-            recommendation: 'Kabin içi rahatlatıcı ses önerildi'
-          };
-          localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, JSON.stringify(mentalRecord));
-        } catch {}
-      }
     }
   };
 
@@ -394,18 +408,19 @@ export default function MentalPage() {
     const referralContext = {
       sourceModule: 'MENTAL',
       specialty: 'Klinik Psikoloji',
-      reasonSummary: 'Son seanslarda öne çıkan uyku düzensizliği, yoğun iş temposu ve zihinsel yorgunluk temaları için psikolojik destek talebi.',
+      reasonSummary: 'Kullanıcının klinik psikolog seçeneklerini inceleme talebi.',
       timestamp: new Date().toISOString(),
       metricsSummary: {
-        recurringThemes: ['uyku düzensizliği', 'iş temposu']
+        recurringThemes: Array.from(new Set(mentalHistory.flatMap(item => item.themes)))
       }
     };
     try {
-      localStorage.setItem('togg_active_referral_context', JSON.stringify(referralContext));
+      localStorage.setItem(isDemo ? STORAGE_KEYS.DEMO_REFERRAL : STORAGE_KEYS.REFERRAL_CONTEXT,
+        JSON.stringify({ ...referralContext, isDemo }));
     } catch (e) {
       console.warn(e);
     }
-    router.push('/care?specialty=Klinik%20Psikoloji&from=mental');
+    router.push('/care?specialty=Klinik%20Psikoloji&from=mental' + (isDemo ? '&demo=1' : ''));
   };
 
   // Son 2 mesajı al (Sürücü ve Asistan)
@@ -538,6 +553,7 @@ export default function MentalPage() {
               <div
                 key={idx}
                 data-chat-author={m.sender}
+                data-chat-position={messages.length - recentMessages.length + idx}
                 className={`p-3.5 rounded-xl text-xs leading-relaxed text-left flex items-start gap-3 transition-all ${
                   m.isCrisis
                     ? 'bg-rose-950/80 border border-rose-700 text-rose-100'
@@ -563,8 +579,24 @@ export default function MentalPage() {
       </section>
 
       {/* 2. BELOW FOLD: SON GÖRÜŞMELERDEN İÇGÖRÜLER (SADECE PARK HALİNDE DETAYLI) */}
-      {isParked ? (
+      {isParked && !isDemo && (
+        <section data-mental-history className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-4">
+          <h2 className="text-sm font-bold">Kayıtlı Görüşme Özetleri</h2>
+          <p>{mentalHistory.length} kayıtlı görüşme</p>
+          {mentalHistory.length === 0 && <p>Henüz kayıtlı görüşme yok. Yalnızca gerçekleştirdiğiniz ve kaydedilmesine izin verdiğiniz görüşmeler burada gösterilir.</p>}
+          {mentalHistory.map(item => <article key={item.id} className="space-y-1 text-xs">
+            <time dateTime={item.date}>{new Date(item.date).toLocaleDateString('tr-TR')}</time>
+            <p>{item.summaryText}</p><p>{item.themes.join(' • ')}</p>
+          </article>)}
+          <p className="text-xs text-slate-400">Özetler paylaştığınız metinden oluşturulur; klinik tanı veya ölçülmüş duygu istatistiği değildir. Ham ses ve tam konuşma dökümü saklanmaz.</p>
+          {historyNotice && <p role="status" className="text-xs text-amber-200">{historyNotice}</p>}
+          <button onClick={handleNavigateToCare} className="text-sm font-bold text-togg-turquoise">PSİKOLOG SEÇENEKLERİNİ GÖR</button>
+          <p className="text-xs">Acil Kriz Destek: <strong>112 Acil Çağrı</strong></p>
+        </section>
+      )}
+      {isParked && isDemo ? (
         <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
+          <p className="text-sm font-bold text-amber-200">Demo / Örnek içerik — gerçek görüşme geçmişiniz değildir.</p>
           <div className="flex items-center justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2.5 text-sm font-bold text-white">
               <TrendingUp className="w-4 h-4 text-togg-turquoise" />
@@ -636,12 +668,12 @@ export default function MentalPage() {
             <span>Acil Kriz Destek: <strong className="text-rose-400 font-semibold">112 Acil Çağrı</strong></span>
           </div>
         </section>
-      ) : (
+      ) : !isParked ? (
         /* Sürüş Modunda Görsel Geçmiş Kilitlidir */
         <div className="bg-slate-950/60 border border-white/5 rounded-2xl p-4 text-center text-xs text-slate-400">
           Sürüş sırasında görsel sağlık geçmişi ve analiz grafikleri gizlenir. Yalnızca sesli asistan aktiftir.
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -14,6 +14,7 @@ export const STORAGE_KEYS = {
   SKIN_HISTORY: 'togg_health_skin_history',
   LATEST_VISION: 'togg_health_latest_vision',
   LATEST_MENTAL: 'togg_health_latest_mental',
+  MENTAL_HISTORY: 'togg_health_mental_history',
   REFERRAL_CONTEXT: 'togg_active_referral_context',
 
   // Demo Mode Keys

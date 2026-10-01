@@ -22,7 +22,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR = Path(os.getenv("ATTUNE_DATA_DIR", str(Path(__file__).resolve().parent / "data")))
 SESSIONS_FILE = DATA_DIR / "mental_sessions.json"
 
 DEFAULT_SESSIONS = [
@@ -55,16 +55,19 @@ class SessionMemoryManager:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         if not SESSIONS_FILE.exists():
             with open(SESSIONS_FILE, "w", encoding="utf-8") as f:
-                json.dump(DEFAULT_SESSIONS, f, ensure_ascii=False, indent=2)
+                json.dump([], f, ensure_ascii=False, indent=2)
 
     @classmethod
     def get_all_sessions(cls) -> List[Dict[str, Any]]:
         cls._ensure_storage()
         try:
             with open(SESSIONS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return DEFAULT_SESSIONS
+                sessions = json.load(f)
+                if not isinstance(sessions, list):
+                    raise ValueError("Invalid session store")
+                return sessions
+        except (OSError, ValueError) as error:
+            raise RuntimeError("Session storage could not be read; history is unverified") from error
 
     @classmethod
     def add_session(
