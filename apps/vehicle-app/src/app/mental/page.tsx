@@ -51,6 +51,9 @@ export default function MentalPage() {
   const [inputText, setInputText] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [micNotice, setMicNotice] = useState<string | null>(null);
+  const [recognitionState, setRecognitionState] = useState<'ready' | 'starting' | 'listening' | 'failed' | 'unavailable'>('ready');
+  const [voiceState, setVoiceState] = useState<'loading' | 'ready' | 'starting' | 'speaking' | 'failed' | 'unavailable'>('loading');
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 
   const [providerInfo, setProviderInfo] = useState<{
     providerName: string;
@@ -73,6 +76,12 @@ export default function MentalPage() {
   ]);
 
   const recognitionRef = useRef<any>(null);
+  const mountedRef = useRef(true);
+  const sendRef = useRef<(text: string) => void>(() => {});
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voiceEnabledRef = useRef(voiceSpeechEnabled);
+  voiceEnabledRef.current = voiceSpeechEnabled;
 
   // Sağlayıcı durumunu sorgula
   useEffect(() => {
@@ -96,6 +105,7 @@ export default function MentalPage() {
 
   // Web Speech API
   useEffect(() => {
+    mountedRef.current = true;
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
@@ -103,41 +113,132 @@ export default function MentalPage() {
         recognition.lang = 'tr-TR';
         recognition.continuous = false;
         recognition.interimResults = false;
+        recognition.onstart = () => {
+          if (!mountedRef.current) return;
+          if (!isMicrophoneAllowed()) { recognition.abort(); return; }
+          setRecognitionState('listening');
+          setIsListening(true);
+        };
 
         recognition.onresult = (event: any) => {
+          if (!mountedRef.current || !isMicrophoneAllowed()) return;
           const transcript = event.results[0][0].transcript;
           if (transcript) {
-            handleSendMessage(transcript);
+            sendRef.current(transcript);
           }
           setIsListening(false);
         };
 
         recognition.onerror = (event: any) => {
+          if (!mountedRef.current) return;
           console.warn('Speech recognition error:', event.error);
+          const labels: Record<string, string> = {
+            'not-allowed': 'Ses girişine izin verilmedi. Tarayıcı mikrofon iznini ve mikrofon cihazını kontrol edin.',
+            'service-not-allowed': 'Konuşma tanıma servisine izin verilmiyor.',
+            'audio-capture': 'Mikrofona erişilemiyor. Cihazı ve başka uygulamaların kullanımını kontrol edin.',
+            'network': 'Konuşma tanıma servisine ulaşılamadı.',
+            'no-speech': 'Konuşma algılanmadı. Yeniden deneyin.',
+            'language-not-supported': 'Türkçe konuşma tanıma bu ortamda desteklenmiyor.',
+            'aborted': 'Ses girişi iptal edildi.'
+          };
+          setMicNotice(labels[event.error] || 'Konuşma tanıma başarısız. Yazarak devam edebilirsiniz.');
+          setRecognitionState('failed');
+          setShowTextInput(true);
           setIsListening(false);
         };
 
         recognition.onend = () => {
+          if (!mountedRef.current) return;
           setIsListening(false);
+          setRecognitionState(previous => previous === 'failed' ? previous : 'ready');
         };
 
         recognitionRef.current = recognition;
       } else {
         setSpeechSupported(false);
+        setRecognitionState('unavailable');
+        setMicNotice('Bu tarayıcı konuşma tanımayı desteklemiyor. Yazarak devam edebilirsiniz.');
+        setShowTextInput(true);
       }
     }
+    const loadVoices = () => {
+      voicesRef.current = window.speechSynthesis?.getVoices() || [];
+      if (!mountedRef.current) return;
+      const available = voicesRef.current.some(voice => voice.lang.toLowerCase().startsWith('tr'));
+      setVoiceState(previous => ['starting', 'speaking', 'failed'].includes(previous) ? previous : available ? 'ready' : 'unavailable');
+      setVoiceNotice(available ? null : 'Türkçe ses bulunamadı. Yanıtı metin olarak okuyabilirsiniz.');
+    };
+    loadVoices();
+    window.speechSynthesis?.addEventListener('voiceschanged', loadVoices);
+    const revoke = () => {
+      if (!isMicrophoneAllowed()) {
+        recognitionRef.current?.abort();
+        setIsListening(false);
+        setRecognitionState('ready');
+      }
+    };
+    window.addEventListener('storage', revoke);
+    window.addEventListener('attune-privacy', revoke);
+    return () => {
+      mountedRef.current = false;
+      recognitionRef.current?.abort();
+      recognitionRef.current = null;
+      utteranceRef.current = null;
+      window.speechSynthesis?.cancel();
+      window.speechSynthesis?.removeEventListener('voiceschanged', loadVoices);
+      window.removeEventListener('storage', revoke);
+      window.removeEventListener('attune-privacy', revoke);
+    };
   }, []);
 
+  useEffect(() => {
+    if (!voiceSpeechEnabled) {
+      utteranceRef.current = null;
+      window.speechSynthesis?.cancel();
+      setVoiceState(voicesRef.current.some(voice => voice.lang.toLowerCase().startsWith('tr')) ? 'ready' : 'unavailable');
+    }
+  }, [voiceSpeechEnabled]);
+
   const speakReply = (text: string) => {
-    if (!voiceSpeechEnabled || typeof window === 'undefined') return;
+    if (!voiceEnabledRef.current || !mountedRef.current || typeof window === 'undefined') return;
+    const voice = (voicesRef.current.length ? voicesRef.current : window.speechSynthesis?.getVoices() || []).find(v => v.lang.toLowerCase().startsWith('tr'));
+    if (!window.speechSynthesis || !voice) {
+      setVoiceState('unavailable');
+      setVoiceNotice('Türkçe ses kullanılamıyor. Yanıt metni hazır.');
+      return;
+    }
     try {
+      recognitionRef.current?.abort();
+      setIsListening(false);
+      utteranceRef.current = null;
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
+      utteranceRef.current = utterance;
       utterance.lang = 'tr-TR';
+      utterance.voice = voice;
       utterance.rate = 0.95;
+      setVoiceState('starting');
+      setVoiceNotice(null);
+      utterance.onstart = () => {
+        if (mountedRef.current && utteranceRef.current === utterance) setVoiceState('speaking');
+      };
+      utterance.onend = () => {
+        if (mountedRef.current && utteranceRef.current === utterance) {
+          utteranceRef.current = null;
+          setVoiceState('ready');
+        }
+      };
+      utterance.onerror = event => {
+        if (!mountedRef.current || utteranceRef.current !== utterance) return;
+        utteranceRef.current = null;
+        setVoiceState('failed');
+        setVoiceNotice(`Sesli yanıt başarısız (${event.error}). Yanıtı metin olarak okuyabilirsiniz.`);
+      };
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('Speech synthesis error:', e);
+      setVoiceState('failed');
+      setVoiceNotice('Sesli yanıt başlatılamadı. Yanıtı metin olarak okuyabilirsiniz.');
     }
   };
 
@@ -152,21 +253,27 @@ export default function MentalPage() {
     setMicNotice(null);
 
     if (!recognitionRef.current) {
+      setMicNotice('Konuşma tanıma kullanılamıyor. Yazarak devam edebilirsiniz.');
       setShowTextInput(true);
       return;
     }
 
-    if (isListening) {
+    if (isListening || recognitionState === 'starting') {
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
       try {
+        utteranceRef.current = null;
         window.speechSynthesis?.cancel();
+        setVoiceState(voicesRef.current.some(voice => voice.lang.toLowerCase().startsWith('tr')) ? 'ready' : 'unavailable');
         recognitionRef.current.start();
-        setIsListening(true);
+        setRecognitionState('starting');
       } catch (e) {
         console.warn(e);
         setIsListening(false);
+        setRecognitionState('failed');
+        setMicNotice('Mikrofon başlatılamadı. Yeniden deneyin veya yazın.');
+        setShowTextInput(true);
       }
     }
   };
@@ -277,6 +384,8 @@ export default function MentalPage() {
     }
   };
 
+  sendRef.current = handleSendMessage;
+
   const handleNavigateToCare = () => {
     const referralContext = {
       sourceModule: 'MENTAL',
@@ -365,7 +474,7 @@ export default function MentalPage() {
             }`}
           >
             {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            <span>{isListening ? 'DİNLENİYOR... KONUŞUN' : 'MİKROFONU BAŞLAT'}</span>
+            <span>{isListening ? 'DİNLENİYOR... KONUŞUN' : recognitionState === 'starting' ? 'MİKROFON BAŞLATILIYOR...' : 'MİKROFONU BAŞLAT'}</span>
           </button>
 
           <div className="flex items-center justify-center gap-4 text-xs">
@@ -383,11 +492,12 @@ export default function MentalPage() {
               className="text-slate-400 hover:text-white transition-colors flex items-center gap-1"
             >
               {voiceSpeechEnabled ? <Volume2 className="w-3.5 h-3.5 text-togg-turquoise" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
-              <span>{voiceSpeechEnabled ? 'Sesli Yanıt Açık' : 'Sessiz'}</span>
+              <span>{!voiceSpeechEnabled ? 'Sessiz' : voiceState === 'speaking' ? 'Sesli Yanıt Oynatılıyor' : voiceState === 'starting' ? 'Sesli Yanıt Başlatılıyor' : voiceState === 'ready' ? 'Sesli Yanıt Hazır' : voiceState === 'failed' ? 'Sesli Yanıt Başarısız' : voiceState === 'loading' ? 'Sesler Yükleniyor' : 'Sesli Yanıt Kullanılamıyor'}</span>
             </button>
           </div>
 
           {/* Mikrofon İzin Uyarısı */}
+          {voiceSpeechEnabled && voiceNotice && <p role="status" className="text-xs text-amber-200">{voiceNotice}</p>}
           {micNotice && (
             <div className="p-3 bg-amber-950/70 border border-amber-700/80 rounded-xl text-amber-200 text-xs flex items-center gap-2 text-left animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />

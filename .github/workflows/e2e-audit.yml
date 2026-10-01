@@ -1,12 +1,12 @@
 name: Attune browser audit
 on:
   push:
-    branches: ['audit/e2e-2026-09-30']
+    branches: ['audit/e2e-2026-09-30', 'fix/attune-audit-remediation']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: attune-e2e-audit
+  group: attune-e2e-audit-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   browser-audit:
@@ -35,13 +35,15 @@ jobs:
           python -m pip install -r services/core-api/requirements.txt bandit
           python -m playwright install --with-deps chromium
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg espeak-ng xvfb pulseaudio pulseaudio-utils speech-dispatcher speech-dispatcher-espeak-ng
+          sudo apt-get install -y -qq ffmpeg espeak-ng xvfb pulseaudio pulseaudio-utils speech-dispatcher speech-dispatcher-espeak-ng libspeechd2
       - name: TypeScript and original tests
         run: |
           mkdir -p audit-results
           node node_modules/typescript/bin/tsc --project apps/vehicle-app/tsconfig.json --noEmit
           python -m pytest tests/unit -v --junitxml=audit-results/unit.xml | tee audit-results/unit.log
           python -m compileall -q services
+      - name: Lint
+        run: npm run lint 2>&1 | tee audit-results/lint.log
       - name: Fresh production build
         run: npm run build 2>&1 | tee audit-results/build.log
       - name: Security and environment reports
@@ -58,11 +60,20 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=audit_mic
           pactl load-module module-null-sink sink_name=audit_output
-          pactl set-default-source audit_mic.monitor
+          pactl load-module module-remap-source master=audit_mic.monitor source_name=audit_input source_properties=device.description=Attune_Audit_Microphone
+          pactl set-default-source audit_input
           pactl set-default-sink audit_output
           pactl list short sources > audit-results/pulse-sources.txt
-          speech-dispatcher --spawn || true
+          pactl list sources > audit-results/pulse-source-details.txt
+          pactl list short sinks > audit-results/pulse-sinks.txt
+          pactl info > audit-results/pulse-info.txt
+          speech-dispatcher --spawn > audit-results/speech-dispatcher.log 2>&1
+          python tests/e2e/native_audio_preflight.py
       - name: Original app focused diagnostics with actual MediaPipe and OS audio
+        env:
+          PULSE_SOURCE: audit_input
+          PULSE_SINK: audit_output
+          DEBUG: pw:browser
         run: |
           node node_modules/next/dist/bin/next start apps/vehicle-app -p 3000 > audit-results/frontend.log 2>&1 &
           python -m uvicorn main:app --app-dir services/core-api --host 127.0.0.1 --port 8000 > audit-results/backend.log 2>&1 &
@@ -70,7 +81,12 @@ jobs:
             if curl -fsS http://localhost:3000/ >/dev/null && curl -fsS http://localhost:8000/api/health >/dev/null; then break; fi
             sleep 1
           done
+          set +e
           xvfb-run -a python -u tests/e2e/media_diagnostics.py 2>&1 | tee audit-results/focused.log
+          focused_status=${PIPESTATUS[0]}
+          xvfb-run -a python -u tests/e2e/media_lifecycle_regression.py 2>&1 | tee audit-results/media-regressions.log
+          regression_status=${PIPESTATUS[0]}
+          test "$focused_status" -eq 0 && test "$regression_status" -eq 0
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
