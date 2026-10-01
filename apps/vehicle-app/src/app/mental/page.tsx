@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { checkCrisisTrigger } from '@packages/safety/crisisDetector';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useVehicle } from '../../context/VehicleContext';
@@ -301,15 +302,11 @@ export default function MentalPage() {
 
     // Kriz filtresi kontrolü
     const lower = text.toLowerCase();
-    const isCrisisKeyword = ['intihar', 'ölmek istiyorum', 'kendime zarar', 'yaşamak istemiyorum', 'canıma kıymak'].some((kw) =>
-      lower.includes(kw)
-    );
+    const crisis = checkCrisisTrigger(text, !isParked);
 
-    if (isCrisisKeyword) {
+    if (crisis.isCrisis) {
       setTimeout(() => {
-        const crisisText = isParked
-          ? 'Paylaştıklarınız benim için çok önemli. Ancak ben acil durum servisi değilim. Lütfen güvende kalmak için 112 Acil Çağrı Merkezini arayın. Yalnız değilsiniz.'
-          : 'Söyledikleriniz benim için çok önemli. Ancak acil durum servisi değilim. Lütfen ekrana bakmayın, aracınızı güvenli bir yerde durdurun ve 112 Acil Çağrı Merkezini arayın.';
+        const crisisText = crisis.emergencyResponseTr!;
 
         const crisisMsg: ChatMessage = {
           sender: 'AI',
@@ -540,6 +537,7 @@ export default function MentalPage() {
             return (
               <div
                 key={idx}
+                data-chat-author={m.sender}
                 className={`p-3.5 rounded-xl text-xs leading-relaxed text-left flex items-start gap-3 transition-all ${
                   m.isCrisis
                     ? 'bg-rose-950/80 border border-rose-700 text-rose-100'
