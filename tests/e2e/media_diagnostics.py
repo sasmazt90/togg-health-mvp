@@ -2,7 +2,7 @@
 The direct engine checks are integration tests, not a replacement for blocked UI E2E.
 """
 import json,pathlib,subprocess,time,traceback,math,os,platform,threading,array,sys
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 OUT=pathlib.Path('audit-results');OUT.mkdir(exist_ok=True)
 sys.stdout.reconfigure(encoding='utf-8')
 BASE=os.environ.get('ATTUNE_AUDIT_BASE','http://localhost:3000');results=[]
@@ -16,7 +16,7 @@ def record(name,fn):
  try:r={'name':name,'status':'PASS','capability':'SUPPORTED','detail':fn()}
  except Exception as e:r={'name':name,'status':'FAIL','capability':'UNSUPPORTED' if isinstance(e,UnsupportedCapability) else 'REAL_FAILURE','error':str(e),'traceback':traceback.format_exc(limit=3)}
  results.append(r);print('FOCUSED_RESULT '+json.dumps(r,ensure_ascii=False),flush=True)
-INIT=r'''(()=>{window.__audit={streams:[],raf:[],cancel:[],draw:0,speech:[],tts:[]};const g=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...a)=>{const s=await g(...a);window.__audit.streams.push(s);return s;};const raf=requestAnimationFrame;window.requestAnimationFrame=(f)=>{let id=raf(t=>{window.__audit.raf.push({id,event:'fired'});return f(t);});window.__audit.raf.push({id,event:'scheduled'});return id;};const cancel=cancelAnimationFrame;window.cancelAnimationFrame=(id)=>{window.__audit.cancel.push(id);return cancel(id);};const draw=CanvasRenderingContext2D.prototype.drawImage;CanvasRenderingContext2D.prototype.drawImage=function(...a){window.__audit.draw++;return draw.apply(this,a);};const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){const W=function(){const s=new SR();['start','audiostart','soundstart','speechstart','speechend','soundend','audioend','end','error','result'].forEach(k=>s.addEventListener(k,e=>window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})));return s;};window.SpeechRecognition=W;window.webkitSpeechRecognition=W;}const speak=speechSynthesis.speak.bind(speechSynthesis);speechSynthesis.speak=u=>{let item={text:u.text,lang:u.lang,events:[]};['start','end','error'].forEach(k=>u.addEventListener(k,e=>item.events.push({type:k,error:e.error||null})));window.__audit.tts.push(item);return speak(u);};})();'''
+INIT=r'''(()=>{window.__audit={streams:[],raf:[],cancel:[],draw:0,speech:[],tts:[]};const g=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...a)=>{const s=await g(...a);window.__audit.streams.push(s);return s;};const raf=requestAnimationFrame;window.requestAnimationFrame=(f)=>{let id=raf(t=>{window.__audit.raf.push({id,event:'fired'});return f(t);});window.__audit.raf.push({id,event:'scheduled'});return id;};const cancel=cancelAnimationFrame;window.cancelAnimationFrame=(id)=>{window.__audit.cancel.push(id);return cancel(id);};const draw=CanvasRenderingContext2D.prototype.drawImage;CanvasRenderingContext2D.prototype.drawImage=function(...a){window.__audit.draw++;return draw.apply(this,a);};const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){const W=function(){const s=new SR();['start','audiostart','soundstart','speechstart','speechend','soundend','audioend','end','nomatch','error','result'].forEach(k=>s.addEventListener(k,e=>window.__audit.speech.push({type:k,time:performance.now(),error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})));['start','stop','abort'].forEach(method=>{const native=s[method].bind(s);s[method]=(...args)=>{window.__audit.speech.push({type:'call-'+method,time:performance.now(),lang:s.lang,continuous:s.continuous});return native(...args);};});return s;};window.SpeechRecognition=W;window.webkitSpeechRecognition=W;}const speak=speechSynthesis.speak.bind(speechSynthesis);speechSynthesis.speak=u=>{let item={text:u.text,lang:u.lang,events:[]};['start','end','error'].forEach(k=>u.addEventListener(k,e=>item.events.push({type:k,error:e.error||null})));window.__audit.tts.push(item);return speak(u);};})();'''
 face=str(pathlib.Path('audit-fixtures/face.y4m').resolve())
 def play_fixture():
  log=open(OUT/'pulse-playback.log','ab')
@@ -74,20 +74,30 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
  record(names[0],audio_energy)
  def speech():
   require(amplitude is not None,'Native recognition not started: eligible microphone and PCM preflight did not pass')
-  player,log=play_fixture()
+  player=log=None
   try:
-   p.get_by_role('button',name='MİKROFONU BAŞLAT',exact=True).click();p.wait_for_timeout(18000);d=snap(p,'native-speech-'+str(headed))
+   # Feed a complete phrase only after the native capture device is listening.
+   # Starting paplay before asynchronous Chrome capture clipped the first phrase.
+   p.get_by_role('button',name='MİKROFONU BAŞLAT',exact=True).click()
+   p.wait_for_function('window.__audit.speech.some(e=>e.type==="audiostart") || window.__audit.speech.some(e=>e.type==="error")',timeout=10000)
+   if p.evaluate('window.__audit.speech.some(e=>e.type==="audiostart")'):player,log=play_fixture()
+   p.wait_for_timeout(18000);d=snap(p,'native-speech-'+str(headed))
    app_result=any(e['type']=='result' and e['transcript'] for e in d['speech'])
    if not app_result:
     # Independent native control on a separate page, without the product or API wrappers.
-    control_context=b.new_context(permissions=['microphone'],locale='tr-TR');control=control_context.new_page();control.route('**/native-speech-control',lambda route:route.fulfill(content_type='text/html',body='<button id="start">Start native recognition</button>'));control.goto(BASE+'/native-speech-control');control.evaluate('''()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;window.nativeEvents=[];if(!SR){window.nativeEvents.push({type:'unavailable'});return;}document.getElementById('start').onclick=()=>{const s=new SR();window.nativeRecognition=s;s.lang='tr-TR';for(const type of ['start','audiostart','soundstart','speechstart','result','error','end'])s.addEventListener(type,e=>window.nativeEvents.push({type,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null}));s.start();};}''');control.get_by_role('button',name='Start native recognition').click();control.wait_for_timeout(18000);control_events=control.evaluate('window.nativeEvents');control_context.close()
+    if player is not None:stop_fixture(player,log);player=log=None
+    control_context=b.new_context(permissions=['microphone'],locale='tr-TR');control=control_context.new_page();control.route('**/native-speech-control',lambda route:route.fulfill(content_type='text/html',body='<button id="start">Start native recognition</button>'));control.goto(BASE+'/native-speech-control');control.evaluate('''()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;window.nativeEvents=[];if(!SR){window.nativeEvents.push({type:'unavailable'});return;}document.getElementById('start').onclick=()=>{const s=new SR();window.nativeRecognition=s;s.lang='tr-TR';for(const type of ['start','audiostart','soundstart','speechstart','result','nomatch','error','end'])s.addEventListener(type,e=>window.nativeEvents.push({type,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null}));s.start();};}''');control.get_by_role('button',name='Start native recognition').click()
+    control.wait_for_function('window.nativeEvents.some(e=>e.type==="audiostart" || e.type==="error" || e.type==="unavailable")',timeout=10000)
+    if control.evaluate('window.nativeEvents.some(e=>e.type==="audiostart")'):player,log=play_fixture()
+    control.wait_for_timeout(18000);control_events=control.evaluate('window.nativeEvents');control_context.close()
     proof={'applicationEvents':d['speech'],'independentNativeEvents':control_events,'environment':env,'amplitude':amplitude};save('speech-runtime-control-'+str(headed),proof)
     control_result=any(e['type']=='result' and e.get('transcript') for e in control_events)
     native_errors={e.get('error') for e in control_events if e['type']=='error'}
     if not control_result and native_errors.intersection({'network','service-not-allowed','language-not-supported','not-allowed'}):
      raise UnsupportedCapability('Native recognition also fails without application code, despite visible eligible microphone and measured PCM: '+json.dumps(proof))
-   require(app_result,'Native recognition failed to transcribe: '+json.dumps(d['speech']));return d['speech']
-  finally:stop_fixture(player,log)
+   require(app_result,'Native recognition failed to transcribe: '+json.dumps(d['speech']));require(any(e.get('transcript') and e['transcript'] in d['body'] for e in d['speech'] if e['type']=='result'),'Native transcript did not reach the application conversation');require(not d['errors'],'Uncaught speech application error');return d['speech']
+  finally:
+   if player is not None:stop_fixture(player,log)
  record(names[1],speech)
  def tts():
   p.wait_for_function('speechSynthesis.getVoices().length>0',timeout=10000)
@@ -95,14 +105,17 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
   require(any(v['lang'].lower().startswith('tr') for v in voices),'No Turkish voice available in native speech synthesis')
   # A recognition error now exposes the text input. Do not toggle it closed.
   if not p.locator('input').is_visible():p.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
+  # Do not let a previous recognition reply satisfy the typed-reply assertion.
+  p.wait_for_function('!speechSynthesis.speaking && !speechSynthesis.pending',timeout=45000)
+  first=p.evaluate('window.__audit.tts.length')
   with PulseOutput() as output:
    p.locator('input').fill('Bugün yeni bir kitap okudum.');p.locator('input').press('Enter');p.wait_for_timeout(8000);d=snap(p,'native-tts-'+str(headed))
-   require(any(any(e['type']=='start' for e in t['events']) for t in d['tts']),'Speech synthesis called but no native start event')
-   p.wait_for_function('window.__audit.tts.some(t=>t.events.some(e=>e.type==="end"))',timeout=45000)
+   require(any(any(e['type']=='start' for e in t['events']) for t in d['tts'][first:]),'Speech synthesis called but no native start event')
+   p.wait_for_function('(first)=>window.__audit.tts.slice(first).some(t=>t.events.some(e=>e.type==="end"))',arg=first,timeout=45000)
    d=snap(p,'native-tts-completed-'+str(headed))
-  evidence={'tts':d['tts'],'voices':voices,'outputPeak':output.peak,'outputSamples':output.samples};save('native-tts-output-'+str(headed),evidence)
+  evidence={'tts':d['tts'][first:],'priorTtsCount':first,'voices':voices,'outputPeak':output.peak,'outputSamples':output.samples};save('native-tts-output-'+str(headed),evidence)
   require(output.peak>.001,'Native TTS events emitted but no PCM output reached PulseAudio')
-  require(not any(e['type']=='error' for t in d['tts'] for e in t['events']),'Native TTS error event emitted')
+  require(not any(e['type']=='error' for t in d['tts'][first:] for e in t['events']),'Native TTS error event emitted')
   return evidence
  record(names[2],tts)
  c.close();b.close()
@@ -129,7 +142,7 @@ with sync_playwright() as pw:
   go(p,'/skin');browser_environment(p,b,'camera-browser-environment');p.wait_for_timeout(5000);p.get_by_role('button',name='Analizi Başlat',exact=True).click();p.wait_for_timeout(10000);d=snap(p,'skin-live-loop-diagnostic');require(d['video'] and d['video'][0]['w']>0 and d['video'][0]['time']>5,'No actual decoded video');require(d['draw']>0,'Live camera has decoded frames, but analysis drew ZERO canvas frames. RAF trace: '+str(d['raf'])+' cancelled: '+str(d['cancel']));require(d['rafCounts']['fired']>1,'RAF did not repeatedly execute');require(d['engine']['mediapipeReady']=='true' and d['engine']['mediapipeActive']=='true' and d['engine']['faceDetected']=='true' and int(d['engine']['landmarkCount'])>=400,'Live UI did not reach actual MediaPipe detection');require(not d['errors'],'Uncaught live analysis error');p.wait_for_timeout(500);later=state(p);require(later['draw']>d['draw'],'Canvas stopped drawing while active');require('togg_health_latest_skin' not in d['storage'] if d['engine']['qualityStatus']=='BLURRY' else True,'Rejected blurry fixture generated a real result');return d
  record('original skin live preview actually reaches frame analysis',stalled_scan)
  def route_cleanup():
-  p.get_by_role('link',name='Gizlilik & İzinler',exact=True).click();p.wait_for_timeout(800);d=snap(p,'skin-route-cleanup');require(all(t['state']=='ended' for t in d['tracks']),'Video track survives route exit')
+  p.get_by_role('link',name='Gizlilik & İzinler',exact=True).click();expect(p).to_have_url(BASE+'/privacy');p.wait_for_timeout(800);d=snap(p,'skin-route-cleanup');require(all(t['state']=='ended' for t in d['tracks']),'Video track survives route exit')
  record('skin camera stops on navigation away',route_cleanup);c.close()
  c,p=new(granted=False)
  def genuine_denial():
