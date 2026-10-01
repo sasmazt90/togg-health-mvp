@@ -633,14 +633,17 @@ export default function VisionPage() {
               }}
             >
               <svg
-                width={Math.max(88, optotypeSizePx * 1.35)}
-                height={Math.max(88, optotypeSizePx * 1.35)}
+                width={optotypeSizePx}
+                height={optotypeSizePx}
+                data-logmar={currentLogMAR}
+                role="img"
+                aria-label="Görme testi simgesi"
                 viewBox="0 0 100 100"
                 style={{
                   transform: `rotate(${directionAngles[currentDirection]}deg)`,
                   transition: 'transform 0.15s ease-out'
                 }}
-                className="filter drop-shadow-[0_0_20px_rgba(0,194,231,0.3)]"
+                className="shrink-0"
               >
                 <circle
                   cx="50"

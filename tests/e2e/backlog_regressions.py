@@ -156,6 +156,35 @@ with sync_playwright() as pw:
             finally:
                 context.close()
         record('Unverified vehicle state keeps visual controls locked',outage)
+    elif phase == 'vision':
+        def geometry():
+            context = browser.new_context()
+            try:
+                context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
+                page = context.new_page()
+                page.goto(BASE+'/vision')
+                page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click()
+                page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click()
+                page.get_by_role('button',name='Doğrulandı, Testi Başlat',exact=True).click()
+                symbol = page.get_by_role('img',name='Görme testi simgesi',exact=True)
+                observations = []
+                for i in range(3):
+                    page.wait_for_function('document.querySelector("svg[data-logmar]").getAnimations().length === 0')
+                    observations.append(symbol.evaluate('(s)=>({width:s.getBoundingClientRect().width,logMAR:Number(s.dataset.logmar)})'))
+                    angle = symbol.evaluate("s=>parseFloat(s.style.transform.match(/rotate\(([-\\d.]+)deg\)/)[1])")
+                    title = {0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle]
+                    page.get_by_title(title,exact=True).click()
+                assert observations[-1]['width'] < observations[0]['width'], observations
+                ratio = observations[-1]['width']/observations[0]['width']
+                expected = 10 ** (observations[-1]['logMAR']-observations[0]['logMAR'])
+                assert abs(ratio-expected)<0.01, observations
+                # Touch controls retain their readable size independently of the measured stimulus.
+                assert page.get_by_title('Yukarı',exact=True).bounding_box()['height'] >= 90
+                page.screenshot(path=str(OUT/'vision-geometry.png'))
+                return observations
+            finally:
+                context.close()
+        record('Rendered optotype geometry follows actual logMAR difficulty',geometry)
     else:
         raise ValueError('Unknown regression phase: ' + phase)
     browser.close()
