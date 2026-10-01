@@ -6,6 +6,8 @@ Lisans: UNLICENSED
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -20,6 +22,14 @@ app = FastAPI(
     description="Togg araç içi önleyici sağlık, görme, cilt, sesli asistan ve randevu orkestrasyonu.",
     version="1.0.0"
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(_request, error: RequestValidationError):
+    # Do not echo private request values. Non-finite input also cannot be JSON-serialized.
+    return JSONResponse(status_code=422, content={"detail": [
+        {key: item[key] for key in ("loc", "type", "msg")} for item in error.errors()
+    ]})
 
 trusted_origins = [origin.strip() for origin in os.getenv(
     "ATTUNE_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
@@ -95,7 +105,7 @@ profile_state = {
 # ---------------------------------------------------------------------------
 
 class SpeedUpdatePayload(BaseModel):
-    speedKmH: float
+    speedKmH: float = Field(ge=0, allow_inf_nan=False)
 
 class ConversePayload(BaseModel):
     userMessage: str
