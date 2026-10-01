@@ -2,12 +2,12 @@
 Face/audio files are controlled virtual-device fixtures, not clinical validation.
 No real appointments, payments, API credentials or external writes are used.
 """
-import json, os, pathlib, re, time, traceback
+import json, math, os, pathlib, re, time, traceback
 import httpx
 from playwright.sync_api import sync_playwright
 
-OUT = pathlib.Path('audit-results'); OUT.mkdir(exist_ok=True)
-BASE='http://localhost:3000'; API='http://localhost:8000'
+OUT = pathlib.Path(os.environ.get('ATTUNE_BROADER_OUT','audit-results/broader')); OUT.mkdir(parents=True,exist_ok=True)
+BASE=os.environ.get('ATTUNE_AUDIT_BASE','http://localhost:3000'); API=os.environ.get('ATTUNE_API_BASE','http://localhost:8000')
 results=[]
 INIT=r'''(() => {
  window.__audit={streams:[],tts:[],speech:[]};
@@ -15,7 +15,7 @@ INIT=r'''(() => {
  navigator.mediaDevices.getUserMedia=async(...args)=>{const s=await gum(...args);window.__audit.streams.push(s);return s;};
  if(window.speechSynthesis){const speak=speechSynthesis.speak.bind(speechSynthesis);speechSynthesis.speak=(u)=>{window.__audit.tts.push({text:u.text,lang:u.lang});return speak(u);};}
  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
- if(SR){const Wrapped=function(){const s=new SR();['start','end','error','result'].forEach(k=>s.addEventListener(k,e=>window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})));return s;};window.SpeechRecognition=Wrapped;window.webkitSpeechRecognition=Wrapped;}
+ if(SR){const Wrapped=function(){const s=new SR();['start','audiostart','end','error','result'].forEach(k=>s.addEventListener(k,e=>window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})));return s;};window.SpeechRecognition=Wrapped;window.webkitSpeechRecognition=Wrapped;}
 })();'''
 
 def check(name, fn):
@@ -31,16 +31,18 @@ def require(condition, message):
     if not condition: raise AssertionError(message)
 
 def api(path, data=None):
-    with httpx.Client(timeout=45) as client:
+    with httpx.Client(timeout=45,trust_env=False) as client:
         r=client.get(API+path) if data is None else client.post(API+path,json=data)
         r.raise_for_status();return r.json()
 
 with sync_playwright() as pw:
-    args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(pathlib.Path('audit-fixtures/face.y4m').resolve()),'--use-file-for-fake-audio-capture='+str(pathlib.Path('audit-fixtures/speech.wav').resolve()),'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']
-    browser=pw.chromium.launch(headless=True,args=args)
+    args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(pathlib.Path('audit-fixtures/valid-face.y4m').resolve()),'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']
+    browser=pw.chromium.launch(channel='chromium',headless=True,args=args)
     def new(permissions=True, width=1600, height=1000):
+        api('/api/vehicle/speed',{'speedKmH':0})
         c=browser.new_context(viewport={'width':width,'height':height},permissions=['camera','microphone'] if permissions else [],locale='tr-TR')
-        c.add_init_script(INIT);c.tracing.start(screenshots=True,snapshots=True,sources=True)
+        c.add_init_script(INIT)
+        if os.environ.get('ATTUNE_TRACE')=='1':c.tracing.start(screenshots=True,snapshots=True,sources=True)
         page=c.new_page();page.set_default_timeout(7000)
         page._audit_errors=[];page._audit_console=[];page._audit_requests=[]
         page.on('pageerror',lambda e:page._audit_errors.append(str(e)))
@@ -54,8 +56,11 @@ with sync_playwright() as pw:
         page.screenshot(path=str(OUT/(name+'.png')),full_page=True)
         (OUT/(name+'.json')).write_text(json.dumps({'url':page.url,'body':page.locator('body').inner_text(),'buttons':page.get_by_role('button').all_text_contents(),'errors':page._audit_errors,'console':page._audit_console,'failedRequests':page._audit_requests,'storage':page.evaluate('Object.fromEntries(Object.entries(localStorage))'),'media':page.evaluate('({tracks:window.__audit.streams.flatMap(s=>s.getTracks().map(t=>({kind:t.kind,state:t.readyState}))),tts:window.__audit.tts,speech:window.__audit.speech})')},ensure_ascii=False,indent=2))
     def close(c,name):
-        c.tracing.stop(path=str(OUT/(name+'.trace.zip')));c.close()
-    def click_toggle(page):page.get_by_title('Sürüş ve Park modları arasında geçiş').click();page.wait_for_timeout(350)
+        if os.environ.get('ATTUNE_TRACE')=='1':c.tracing.stop(path=str(OUT/(name+'.trace.zip')))
+        c.close()
+    def click_toggle(page):
+        page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
+        page.wait_for_function("document.querySelector('button[title=\"Sürüş ve Park modları arasında geçiş\"]')?.innerText.includes('SÜRÜŞ')")
 
     c,page=new()
     for route in ['/','/vision','/skin','/mental','/care','/profile','/privacy']:
@@ -109,6 +114,8 @@ with sync_playwright() as pw:
         record=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
         require(record and record.get('usedMediaPipe') is True,'Real MediaPipe result not saved')
         require(record.get('isBaseline') is True,'First real scan not marked baseline');require(len(record.get('regions',{}))==6,'Missing six anatomical regions')
+        require(record['quality']['isValid'] and record['quality']['blurScore']>=4.0,'Fixture did not pass unchanged real quality threshold')
+        require(record['highestChangePct']==0 and record['referralSuggested'] is False,'First real baseline invented change or referral')
         return record
     check('skin real camera MediaPipe six-region baseline',skin_real)
     def skin_second():
@@ -117,7 +124,13 @@ with sync_playwright() as pw:
         go(page,'/skin');page.wait_for_timeout(4000);page.get_by_role('button',name='Analizi Başlat',exact=True).click()
         page.wait_for_function('(prev)=>localStorage.getItem("togg_health_latest_skin")!==prev',arg=previous,timeout=30000)
         record=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))');snap(page,'skin-repeat');require(record.get('isBaseline') is False,'Second scan still baseline')
-        require(len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_history"))'))==2,'Skin history not retained');return record
+        require(len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_history"))'))==2,'Skin history not retained')
+        baseline=page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_baseline"))')
+        for region,metrics in record['regions'].items():
+            original=baseline[region]['rednessScore']
+            delta=math.floor((metrics['rednessScore']-original)/original*100+.5) if original>0 else 0
+            require(metrics['changeFromBaselinePct']==delta,'Repeat region does not compare to actual UI-generated baseline: '+region)
+        return record
     check('skin second scan actual baseline comparison',skin_second)
     def skin_demo():
         before=page.evaluate('localStorage.getItem("togg_health_latest_skin")');go(page,'/skin?demo=1');page.get_by_role('button',name='Analizi Başlat',exact=True).click()
@@ -143,7 +156,13 @@ with sync_playwright() as pw:
 
     c,page=new(False)
     def camera_denied():
-        session=c.new_cdp_session(page);session.send('Browser.setPermission',{'permission':{'name':'videoCapture'},'setting':'denied','origin':BASE})
+        session=c.new_cdp_session(page)
+        info=session.send('Target.getTargetInfo')['targetInfo']
+        session.send('Browser.setPermission',{'permission':{'name':'camera'},'setting':'denied','origin':BASE,'browserContextId':info['browserContextId']})
+        go(page,'/privacy')
+        require(page.evaluate('navigator.permissions.query({name:"camera"}).then(p=>p.state)')=='denied','Native camera permission was not denied')
+        rejection=page.evaluate('async()=>{try{const s=await navigator.mediaDevices.getUserMedia({video:true});s.getTracks().forEach(t=>t.stop());return "unexpected acquisition";}catch(e){return e.name;}}')
+        require(rejection=='NotAllowedError','Genuine browser denial missing: '+rejection)
         go(page,'/skin');page.wait_for_timeout(3000);page.get_by_role('button',name='Analizi Başlat',exact=True).click();page.wait_for_timeout(1000);snap(page,'camera-browser-denied');require(not page.evaluate('localStorage.getItem("togg_health_latest_skin")'),'Result fabricated after denied camera')
         require('erişimi sağlanamadı' in page.locator('body').inner_text().lower() or 'motoru kullanılamıyor' in page.locator('body').inner_text().lower(),'No clear permission/model error')
     check('browser camera denial safe failure',camera_denied);close(c,'browser-denial')
@@ -163,8 +182,8 @@ with sync_playwright() as pw:
         text_input('kendime zarar vermek istiyorum');snap(page,'mental-crisis');body=page.locator('body').inner_text();require('112' in body and '182' not in body,'Unsafe crisis escalation')
     check('mental crisis response 112 not appointment hotline',mental_crisis)
     def mental_mic():
-        page.get_by_role('button',name='MİKROFONU BAŞLAT',exact=True).click();page.wait_for_timeout(12000);snap(page,'mental-speech');events=page.evaluate('window.__audit.speech')
-        require(any(e['type']=='result' and e['transcript'] for e in events),'Actual SpeechRecognition produced no transcript: '+json.dumps(events));return events
+        from broader_native_audio import native_speech
+        return native_speech(pw,BASE,OUT,INIT,snap,require)
     check('mental real SpeechRecognition from Turkish audio fixture',mental_mic)
     close(c,'mental-flow')
 
@@ -203,7 +222,7 @@ with sync_playwright() as pw:
 
 # API checks do not send health data to external services.
 def negative_speed():
-    with httpx.Client() as c:
+    with httpx.Client(trust_env=False) as c:
         r=c.post(API+'/api/vehicle/speed',json={'speedKmH':-20});require(r.status_code==422,'Negative speed accepted: '+r.text)
 check('API rejects negative vehicle speed',negative_speed)
 api('/api/vehicle/speed',{'speedKmH':0})

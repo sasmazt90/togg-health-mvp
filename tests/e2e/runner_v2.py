@@ -4,17 +4,17 @@ Virtual camera frames are not a clinical or physical-device validation.
 """
 import pathlib,json,time,traceback,os
 from playwright.sync_api import sync_playwright
-OUT=pathlib.Path('audit-results'); OUT.mkdir(exist_ok=True)
-face=str(pathlib.Path('audit-fixtures/face.y4m').resolve())
+OUT=pathlib.Path(os.environ.get('ATTUNE_BROADER_OUT','audit-results/broader')); OUT.mkdir(parents=True,exist_ok=True)
+face=str(pathlib.Path('audit-fixtures/valid-face.y4m').resolve())
 audio=str(pathlib.Path('audit-fixtures/speech.wav').resolve())
-baseargs=['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--use-file-for-fake-video-capture='+face,'--use-file-for-fake-audio-capture='+audio,'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']
+baseargs=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+face,'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']
 preflight=[]; chosen=None
 with sync_playwright() as pw:
  for channel,headless in [('chromium',True),('chrome',True),('chromium',False)]:
   b=None
   try:
    b=pw.chromium.launch(channel=channel,headless=headless,args=baseargs)
-   c=b.new_context(permissions=['camera','microphone']); p=c.new_page();p.goto('http://localhost:3000/privacy')
+   c=b.new_context(permissions=['camera','microphone']); p=c.new_page();p.goto(os.environ.get('ATTUNE_AUDIT_BASE','http://localhost:3000')+'/privacy')
    d=p.evaluate('''async()=>{const timeout=(f)=>Promise.race([f,new Promise((_,r)=>setTimeout(()=>r(Error('media timeout')),8000))]); const out={ua:navigator.userAgent,devices:await navigator.mediaDevices.enumerateDevices().then(ds=>ds.map(d=>({kind:d.kind,label:d.label}))),supported:navigator.mediaDevices.getSupportedConstraints()};for(const kind of ['video','audio']){try{const s=await timeout(navigator.mediaDevices.getUserMedia({[kind]:true}));out[kind]={tracks:s.getTracks().map(t=>({kind:t.kind,state:t.readyState,settings:t.getSettings()}))};if(kind==='video'){const v=document.createElement('video');v.muted=true;v.srcObject=s;document.body.append(v);await timeout(v.play());out.video.width=v.videoWidth;out.video.height=v.videoHeight;}s.getTracks().forEach(t=>t.stop());}catch(e){out[kind]={error:e.name+': '+e.message};}}return out;}''')
    d.update(channel=channel,headless=headless,version=b.version);preflight.append(d);print('MEDIA_PREFLIGHT '+json.dumps(d),flush=True)
    if d.get('video',{}).get('width',0)>0 and chosen is None:chosen={'channel':channel,'headless':headless}
@@ -26,7 +26,7 @@ source=pathlib.Path('tests/e2e/audit_browser.py').read_text()
 if chosen is None:
  chosen={'channel':'chromium','headless':True}
  print('MEDIA_NOT_VERIFIED: continue negative tests; do not claim camera E2E passed',flush=True)
-source=source.replace("browser=pw.chromium.launch(headless=True,args=args)","browser=pw.chromium.launch(channel="+repr(chosen['channel'])+",headless="+repr(chosen['headless'])+",args=args+['--use-fake-ui-for-media-stream'])")
+source=source.replace("browser=pw.chromium.launch(headless=True,args=args)","browser=pw.chromium.launch(channel="+repr(chosen['channel'])+",headless="+repr(chosen['headless'])+",args=args)")
 source=source.replace("{'name':'videoCapture'}","{'name':'camera'}")
 source=source.replace("page.wait_for_timeout(900);click_toggle(page);snap(page,'vision-driving')", "page.wait_for_timeout(900);require(page.evaluate('window.__audit.streams.some(s=>s.getVideoTracks().some(t=>t.readyState===\"live\"))'),'PRECONDITION: no active camera before driving');click_toggle(page);snap(page,'vision-driving')")
 source=source.replace("window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})", "window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})")
