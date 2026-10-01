@@ -2,9 +2,9 @@
 Face/audio files are controlled virtual-device fixtures, not clinical validation.
 No real appointments, payments, API credentials or external writes are used.
 """
-import json, math, os, pathlib, re, time, traceback
+import json, math, os, pathlib, platform, re, time, traceback
 import httpx
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 
 OUT = pathlib.Path(os.environ.get('ATTUNE_BROADER_OUT','audit-results/broader')); OUT.mkdir(parents=True,exist_ok=True)
 BASE=os.environ.get('ATTUNE_AUDIT_BASE','http://localhost:3000'); API=os.environ.get('ATTUNE_API_BASE','http://localhost:8000')
@@ -37,7 +37,8 @@ def api(path, data=None):
 
 with sync_playwright() as pw:
     args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(pathlib.Path('audit-fixtures/valid-face.y4m').resolve()),'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']
-    browser=pw.chromium.launch(channel='chromium',headless=True,args=args)
+    channel=os.environ.get('ATTUNE_BROWSER_CHANNEL','chrome' if platform.system()=='Linux' else 'chromium')
+    browser=pw.chromium.launch(channel=channel,headless=True,args=args+['--enable-speech-dispatcher'])
     def new(permissions=True, width=1600, height=1000):
         api('/api/vehicle/speed',{'speedKmH':0})
         c=browser.new_context(viewport={'width':width,'height':height},permissions=['camera','microphone'] if permissions else [],locale='tr-TR')
@@ -173,7 +174,10 @@ with sync_playwright() as pw:
     check('mental first visit does not invent history',mental_greeting)
     def text_input(message):
         if page.locator('input').count()==0:page.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
-        page.locator('input').fill(message);page.locator('input').press('Enter');page.wait_for_timeout(1000)
+        old_position=page.locator('[data-chat-author="AI"]').last.get_attribute('data-chat-position')
+        page.locator('input').fill(message);page.locator('input').press('Enter')
+        expect(page.locator('[data-chat-author="AI"]').last).not_to_have_attribute('data-chat-position',old_position)
+        page.wait_for_timeout(1000)
     def mental_chat():
         text_input('Bugün yeni bir kitap okudum.');snap(page,'mental-text');require('Bugün yeni bir kitap okudum.' in page.locator('body').inner_text(),'Message missing')
         return {'body':page.locator('body').inner_text(),'tts':page.evaluate('window.__audit.tts')}

@@ -95,10 +95,17 @@ jobs:
         run: |
           xvfb-run -a python -u tests/e2e/runner_v2.py 2>&1 | tee audit-results/broader.log
       - name: Behavior regressions for remediated product defects
+        if: ${{ !cancelled() }}
         run: |
-          for phase in crisis privacy vehicle vision mental hydration; do
+          set +e
+          status=0
+          for phase in crisis privacy vehicle vision mental hydration care; do
             python -u tests/e2e/backlog_regressions.py --phase "$phase" 2>&1 | tee "audit-results/backlog-$phase.log"
+            if [ "${PIPESTATUS[0]}" -ne 0 ]; then status=1; fi
           done
+          test "$status" -eq 0
+      - name: Controlled skin timing with tracing enabled and disabled
+        run: python -u tests/e2e/skin_timing.py 2>&1 | tee audit-results/skin-timing.log
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

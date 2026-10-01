@@ -2,15 +2,16 @@
 Only test instrumentation is changed; application source remains original.
 Virtual camera frames are not a clinical or physical-device validation.
 """
-import pathlib,json,time,traceback,os
+import pathlib,json,time,traceback,os,platform
 from playwright.sync_api import sync_playwright
 OUT=pathlib.Path(os.environ.get('ATTUNE_BROADER_OUT','audit-results/broader')); OUT.mkdir(parents=True,exist_ok=True)
 face=str(pathlib.Path('audit-fixtures/valid-face.y4m').resolve())
 audio=str(pathlib.Path('audit-fixtures/speech.wav').resolve())
-baseargs=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+face,'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']
+baseargs=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+face,'--autoplay-policy=no-user-gesture-required','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--enable-speech-dispatcher']
 preflight=[]; chosen=None
 with sync_playwright() as pw:
- for channel,headless in [('chromium',True),('chrome',True),('chromium',False)]:
+ preferred='chrome' if platform.system()=='Linux' else 'chromium'
+ for channel,headless in [(preferred,True),('chromium' if preferred=='chrome' else 'chrome',True),('chromium',False)]:
   b=None
   try:
    b=pw.chromium.launch(channel=channel,headless=headless,args=baseargs)
@@ -26,7 +27,7 @@ source=pathlib.Path('tests/e2e/audit_browser.py').read_text()
 if chosen is None:
  chosen={'channel':'chromium','headless':True}
  print('MEDIA_NOT_VERIFIED: continue negative tests; do not claim camera E2E passed',flush=True)
-source=source.replace("browser=pw.chromium.launch(headless=True,args=args)","browser=pw.chromium.launch(channel="+repr(chosen['channel'])+",headless="+repr(chosen['headless'])+",args=args)")
+os.environ['ATTUNE_BROWSER_CHANNEL']=chosen['channel']
 source=source.replace("{'name':'videoCapture'}","{'name':'camera'}")
 source=source.replace("page.wait_for_timeout(900);click_toggle(page);snap(page,'vision-driving')", "page.wait_for_timeout(900);require(page.evaluate('window.__audit.streams.some(s=>s.getVideoTracks().some(t=>t.readyState===\"live\"))'),'PRECONDITION: no active camera before driving');click_toggle(page);snap(page,'vision-driving')")
 source=source.replace("window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})", "window.__audit.speech.push({type:k,error:e.error||null,transcript:e.results?.[0]?.[0]?.transcript||null})")
@@ -56,7 +57,12 @@ extra=r'''
 
     c,page=new()
     def mental_upper_crisis():
-        go(page,'/mental');text_input('İNTİHAR ETMEK İSTİYORUM');snap(page,'mental-uppercase-crisis')
+        go(page,'/mental')
+        page.wait_for_function('speechSynthesis.getVoices().some(v=>v.lang.toLowerCase().startsWith("tr"))',timeout=10000)
+        prior_tts=page.evaluate('window.__audit.tts.length')
+        text_input('İNTİHAR ETMEK İSTİYORUM')
+        page.wait_for_function('(prior)=>window.__audit.tts.length>prior',arg=prior_tts)
+        snap(page,'mental-uppercase-crisis')
         tts=page.evaluate('window.__audit.tts');require(tts and '112' in tts[-1]['text'],'Uppercase Turkish crisis not escalated in actual reply')
     check('mental Turkish uppercase crisis escalation',mental_upper_crisis);close(c,'mental-upper')
 
