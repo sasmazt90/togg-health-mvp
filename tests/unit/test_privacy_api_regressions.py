@@ -63,3 +63,16 @@ def test_backend_wipe_removes_actual_persisted_summaries():
     assert len(client.get('/api/mental/sessions').json()) == 1
     assert client.post('/api/privacy/wipe').status_code == 200
     assert client.get('/api/mental/sessions').json() == []
+
+
+def test_untrusted_simple_post_cannot_delete_actual_summaries():
+    client.post('/api/mental/sessions', json={
+        'summaryText': 'Synthetic origin-enforcement record', 'recurringThemes': [], 'saveMentalSummaries': True})
+    before = client.get('/api/mental/sessions').json()
+    assert len(before) == 1
+    # A simple cross-origin POST does not need a preflight. Header omission alone
+    # must not allow this destructive side effect to run.
+    response = client.post('/api/privacy/wipe', headers={'Origin': 'https://untrusted.example'})
+    assert response.status_code == 403
+    assert 'access-control-allow-origin' not in response.headers
+    assert client.get('/api/mental/sessions').json() == before

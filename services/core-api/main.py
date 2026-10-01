@@ -4,7 +4,7 @@ Yerel önleyici sağlık ve araç bağlamı orkestrasyon servisi.
 Lisans: UNLICENSED
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -44,6 +44,16 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+
+
+@app.middleware("http")
+async def enforce_browser_origin(request: Request, call_next):
+    origin = request.headers.get("origin")
+    # CORS handles preflight. Reject actual untrusted browser requests before
+    # they can mutate local health data, including simple POSTs without preflight.
+    if request.method != "OPTIONS" and origin is not None and origin not in trusted_origins:
+        return JSONResponse(status_code=403, content={"detail": "Untrusted browser origin"})
+    return await call_next(request)
 
 # ---------------------------------------------------------------------------
 # In-Memory State & Mock Data (Local-First)
