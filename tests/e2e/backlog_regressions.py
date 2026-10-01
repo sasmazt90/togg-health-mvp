@@ -253,6 +253,33 @@ with sync_playwright() as pw:
             finally:
                 context.close()
         record('Dashboard and profile hydrate deterministically and then load real/demo data',hydration)
+    elif phase == 'skin':
+        def model_retry():
+            camera_browser=pw.chromium.launch(channel='chromium',headless=True,args=[
+                '--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(Path('audit-fixtures/face.y4m').resolve()),
+                '--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
+            context=camera_browser.new_context(permissions=['camera'])
+            try:
+                assert context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0}).ok
+                page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+                page.route('**/face_landmarker.task',lambda route:route.abort())
+                page.route('**/wasm/**',lambda route:route.abort())
+                page.goto(BASE+'/skin')
+                expect(page.locator('[role="alert"]').filter(has_text='başlatılamadı')).to_be_visible(timeout=20000)
+                page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+                expect(page.get_by_text('Cilt Kontrolü Başlatılamadı',exact=True)).to_be_visible()
+                assert not page.evaluate('localStorage.getItem("togg_health_latest_skin")')
+                page.unroute('**/face_landmarker.task');page.unroute('**/wasm/**')
+                page.get_by_role('button',name='Tekrar Dene',exact=True).click()
+                page.wait_for_function('document.querySelector("canvas")?.dataset.mediapipeReady==="true"',timeout=30000)
+                page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+                page.wait_for_function('document.querySelector("canvas")?.dataset.mediapipeActive==="true" && Number(document.querySelector("canvas")?.dataset.landmarkCount)>=400',timeout=30000)
+                assert not page.evaluate('localStorage.getItem("togg_health_latest_skin")'), 'Original blurry negative fixture should remain rejected'
+                assert not errors,errors
+                return {'failedModelDidNotPersist':True,'retryLoadedActualModel':True,'engine':page.locator('canvas').evaluate('(c)=>c.dataset')}
+            finally:
+                context.close();camera_browser.close()
+        record('Model outage is truthful and retry loads actual MediaPipe after network restoration',model_retry)
     elif phase == 'care':
         def care_safety():
             context=browser.new_context()

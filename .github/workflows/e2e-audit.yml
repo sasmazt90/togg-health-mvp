@@ -99,7 +99,7 @@ jobs:
         run: |
           set +e
           status=0
-          for phase in crisis privacy vehicle vision mental hydration care; do
+          for phase in crisis privacy vehicle vision mental hydration care skin; do
             python -u tests/e2e/backlog_regressions.py --phase "$phase" 2>&1 | tee "audit-results/backlog-$phase.log"
             if [ "${PIPESTATUS[0]}" -ne 0 ]; then status=1; fi
           done

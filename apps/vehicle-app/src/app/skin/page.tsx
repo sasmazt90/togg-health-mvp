@@ -46,6 +46,7 @@ export default function SkinPage() {
   const isMediaPipeLoadedRef = useRef<boolean>(false);
   const inferenceRef = useRef<SkinInference | null>(null);
   const initializationFailedRef = useRef(false);
+  const [initializationEpoch, setInitializationEpoch] = useState(0);
   const demoTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLiveVideo, setIsLiveVideo] = useState<boolean>(false);
 
@@ -110,6 +111,9 @@ export default function SkinPage() {
   // MediaPipe FaceLandmarker'ı başlat
   useEffect(() => {
     if (isDemoMode()) return;
+    initializationFailedRef.current = false;
+    isMediaPipeLoadedRef.current = false;
+    setIsMediaPipeLoaded(false);
     let isMounted = true;
     let engine: SkinInference;
     try {
@@ -128,7 +132,7 @@ export default function SkinPage() {
       if (isMounted) {
         initializationFailedRef.current = true;
         setErrorMessage('Cilt analiz motoru başlatılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.');
-        setScanState('ERROR');
+        setScanState(previous => previous === 'CAMERA_ACTIVE' ? 'ERROR' : previous);
       }
     });
     return () => {
@@ -136,7 +140,7 @@ export default function SkinPage() {
       engine.close();
       inferenceRef.current = null;
     };
-  }, []);
+  }, [initializationEpoch]);
 
   // Invalidate late camera acquisition on exit. The scan effect owns live RAF/stream cleanup.
   useEffect(() => {
@@ -652,6 +656,7 @@ export default function SkinPage() {
     <div className="space-y-4 max-w-5xl mx-auto select-none">
       {/* Gizli kanvas (MediaPipe piksel analizi) */}
       <canvas ref={canvasRef} className="hidden" data-mediapipe-ready={isMediaPipeLoaded} data-mediapipe-active={alignment.isMediaPipeActive} data-face-detected={alignment.faceDetected} data-landmark-count={alignment.landmarks?.length || 0} data-quality-status={quality.status} />
+      {scanState === 'READY' && errorMessage && <p role="alert" className="text-amber-200">{errorMessage}</p>}
 
       {/* ============================================================ */}
       {/* HATA DURUMU: MediaPipe / Kamera / İzin Eksikliği             */}
@@ -674,6 +679,7 @@ export default function SkinPage() {
             <button
               onClick={() => {
                 setErrorMessage(null);
+                if (initializationFailedRef.current) setInitializationEpoch(epoch => epoch + 1);
                 setScanState('READY');
               }}
               className="px-6 py-2.5 rounded-xl bg-togg-turquoise text-togg-darkBlue font-bold text-xs hover:bg-[#33D0EE] transition-all shadow-md"
