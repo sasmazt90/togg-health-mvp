@@ -204,7 +204,10 @@ with sync_playwright() as pw:
         return 'Internal handoff only; external booking link not clicked'
     check('care real API results consent gate safe handoff',care_consent)
     def care_driving():
-        go(page,'/care');click_toggle(page);page.wait_for_timeout(500);snap(page,'care-driving')
+        go(page,'/care')
+        page.get_by_role('button',name='RANDEVUYU İNCELE',exact=True).wait_for(timeout=45000)
+        require(page.get_by_role('button',name='RANDEVUYU İNCELE',exact=True).is_visible(),'Care driving prerequisite: appointment controls were never loaded')
+        click_toggle(page);page.wait_for_timeout(500);snap(page,'care-driving')
         require(not page.get_by_role('button',name='RANDEVUYU İNCELE',exact=True).is_visible(),'Interactive appointment selection still available while driving')
     check('care detailed appointment UI locked while driving',care_driving);close(c,'care-flow')
 

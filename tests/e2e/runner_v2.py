@@ -1,5 +1,5 @@
 """Repeat baseline audit with an independently verified media-capable browser.
-Only test instrumentation is changed; application source remains original.
+The application version under audit is never changed by this harness.
 Virtual camera frames are not a clinical or physical-device validation.
 """
 import pathlib,json,time,traceback,os,platform
