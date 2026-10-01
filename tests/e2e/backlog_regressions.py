@@ -253,6 +253,34 @@ with sync_playwright() as pw:
             finally:
                 context.close()
         record('Dashboard and profile hydrate deterministically and then load real/demo data',hydration)
+    elif phase == 'care':
+        def care_safety():
+            context=browser.new_context()
+            try:
+                assert context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0}).ok
+                page=context.new_page();page.goto(BASE+'/care')
+                examine=page.get_by_role('button',name='RANDEVUYU İNCELE',exact=True)
+                examine.wait_for(timeout=45000);examine.click()
+                page.get_by_role('checkbox').check()
+                expect(page.get_by_role('button',name='Onayla ve Devam Et',exact=True)).to_be_enabled()
+                assert context.request.post(API+'/api/vehicle/speed',data={'speedKmH':75}).json()['vehicleMoving'] is True
+                expect(page.get_by_text('Randevu İşlemleri Kilitlendi',exact=True)).to_be_visible()
+                assert page.get_by_role('button',name='Onayla ve Devam Et',exact=True).count()==0
+                assert examine.count()==0
+                assert context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0}).ok
+                expect(examine).to_be_visible()
+                examine.click()
+                assert not page.get_by_role('checkbox').is_checked()
+                assert page.get_by_role('button',name='Onayla ve Devam Et',exact=True).is_disabled()
+                page.route('**/api/vehicle/state',lambda route:route.abort())
+                page.reload()
+                expect(page.get_by_text('Randevu İşlemleri Kilitlendi',exact=True)).to_be_visible()
+                assert examine.count()==0
+                return {'parkedSelection':True,'drivingRemovesControls':True,'consentNotReused':True,'unknownStateLocked':True}
+            finally:
+                context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
+                context.close()
+        record('Care driving and unknown-state guard clears pending consent',care_safety)
     else:
         raise ValueError('Unknown regression phase: ' + phase)
     browser.close()
