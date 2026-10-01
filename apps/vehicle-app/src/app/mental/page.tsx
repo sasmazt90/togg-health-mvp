@@ -76,6 +76,7 @@ export default function MentalPage() {
   ]);
 
   const recognitionRef = useRef<any>(null);
+  const intentionalRecognitionAbortRef = useRef(false);
   const mountedRef = useRef(true);
   const sendRef = useRef<(text: string) => void>(() => {});
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
@@ -115,7 +116,7 @@ export default function MentalPage() {
         recognition.interimResults = false;
         recognition.onstart = () => {
           if (!mountedRef.current) return;
-          if (!isMicrophoneAllowed()) { recognition.abort(); return; }
+          if (!isMicrophoneAllowed()) { intentionalRecognitionAbortRef.current = true; recognition.abort(); return; }
           setRecognitionState('listening');
           setIsListening(true);
         };
@@ -131,6 +132,8 @@ export default function MentalPage() {
 
         recognition.onerror = (event: any) => {
           if (!mountedRef.current) return;
+          // Ending capture before our own spoken reply is a normal transition.
+          if (event.error === 'aborted' && intentionalRecognitionAbortRef.current) return;
           console.warn('Speech recognition error:', event.error);
           const labels: Record<string, string> = {
             'not-allowed': 'Ses girişine izin verilmedi. Tarayıcı mikrofon iznini ve mikrofon cihazını kontrol edin.',
@@ -149,6 +152,7 @@ export default function MentalPage() {
 
         recognition.onend = () => {
           if (!mountedRef.current) return;
+          intentionalRecognitionAbortRef.current = false;
           setIsListening(false);
           setRecognitionState(previous => previous === 'failed' ? previous : 'ready');
         };
@@ -172,6 +176,7 @@ export default function MentalPage() {
     window.speechSynthesis?.addEventListener('voiceschanged', loadVoices);
     const revoke = () => {
       if (!isMicrophoneAllowed()) {
+        intentionalRecognitionAbortRef.current = true;
         recognitionRef.current?.abort();
         setIsListening(false);
         setRecognitionState('ready');
@@ -208,6 +213,7 @@ export default function MentalPage() {
       return;
     }
     try {
+      intentionalRecognitionAbortRef.current = true;
       recognitionRef.current?.abort();
       setIsListening(false);
       utteranceRef.current = null;
@@ -266,6 +272,7 @@ export default function MentalPage() {
         utteranceRef.current = null;
         window.speechSynthesis?.cancel();
         setVoiceState(voicesRef.current.some(voice => voice.lang.toLowerCase().startsWith('tr')) ? 'ready' : 'unavailable');
+        intentionalRecognitionAbortRef.current = false;
         recognitionRef.current.start();
         setRecognitionState('starting');
       } catch (e) {

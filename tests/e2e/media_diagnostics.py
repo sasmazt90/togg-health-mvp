@@ -95,7 +95,7 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
     native_errors={e.get('error') for e in control_events if e['type']=='error'}
     if not control_result and native_errors.intersection({'network','service-not-allowed','language-not-supported','not-allowed'}):
      raise UnsupportedCapability('Native recognition also fails without application code, despite visible eligible microphone and measured PCM: '+json.dumps(proof))
-   require(app_result,'Native recognition failed to transcribe: '+json.dumps(d['speech']));require(any(e.get('transcript') and e['transcript'] in d['body'] for e in d['speech'] if e['type']=='result'),'Native transcript did not reach the application conversation');require(not d['errors'],'Uncaught speech application error');return d['speech']
+   require(app_result,'Native recognition failed to transcribe: '+json.dumps(d['speech']));require(any(e.get('transcript') and e['transcript'] in d['body'] for e in d['speech'] if e['type']=='result'),'Native transcript did not reach the application conversation');require('Ses girişi iptal edildi.' not in d['body'],'Successful recognition followed by intentional TTS cancellation displayed a failure');require(not d['errors'],'Uncaught speech application error');return d['speech']
   finally:
    if player is not None:stop_fixture(player,log)
  record(names[1],speech)
