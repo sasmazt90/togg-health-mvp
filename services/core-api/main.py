@@ -6,7 +6,7 @@ Lisans: UNLICENSED
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
@@ -21,12 +21,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+trusted_origins = [origin.strip() for origin in os.getenv(
+    "ATTUNE_TRUSTED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+).split(",") if origin.strip()]
+if not trusted_origins or "*" in trusted_origins:
+    raise ValueError("ATTUNE_TRUSTED_ORIGINS must list explicit trusted origins")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=trusted_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 # ---------------------------------------------------------------------------
@@ -107,7 +113,7 @@ class CreateSessionPayload(BaseModel):
     moodAfter: Optional[str] = "RELAXED"
     escalationSuggested: Optional[bool] = False
     suggestedAction: Optional[str] = None
-    saveMentalSummaries: Optional[bool] = True
+    saveMentalSummaries: StrictBool = False
 
 class AppointmentMatchPayload(BaseModel):
     specialty: str
@@ -247,7 +253,7 @@ def record_mental_session(payload: CreateSessionPayload):
         mood_after=payload.moodAfter or "RELAXED",
         escalation_suggested=payload.escalationSuggested or False,
         suggested_action=payload.suggestedAction,
-        save_mental_summaries=payload.saveMentalSummaries if payload.saveMentalSummaries is not None else True
+        save_mental_summaries=payload.saveMentalSummaries
     )
 
 # ---------------------------------------------------------------------------

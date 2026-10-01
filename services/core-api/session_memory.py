@@ -76,7 +76,7 @@ class SessionMemoryManager:
         mood_after: str = "RELAXED",
         escalation_suggested: bool = False,
         suggested_action: Optional[str] = None,
-        save_mental_summaries: bool = True
+        save_mental_summaries: bool = False
     ) -> Dict[str, Any]:
         """
         Oturum özetini kaydeder.

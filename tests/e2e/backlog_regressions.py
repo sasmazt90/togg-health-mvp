@@ -60,6 +60,47 @@ with sync_playwright() as pw:
                 finally:
                     context.close()
             record('Actual frontend crisis reply: ' + text, check)
+    elif phase == 'privacy':
+        for local_available, backend_available in [(True, True), (True, False), (False, True), (False, False)]:
+            def deletion(local_available=local_available, backend_available=backend_available):
+                # Actual browser capability and an aborted network request: no fabricated responses.
+                test_browser = pw.chromium.launch(headless=True,
+                    args=[] if local_available else ['--disable-local-storage'])
+                context = test_browser.new_context()
+                try:
+                    created = context.request.post(API + '/api/mental/sessions', data={
+                        'summaryText': 'Synthetic deletion capability check',
+                        'recurringThemes': [], 'saveMentalSummaries': True})
+                    assert created.ok and created.json()['persisted'] is True
+                    page = context.new_page()
+                    page.goto(BASE + '/privacy')
+                    if not local_available:
+                        assert page.evaluate('window.localStorage') is None
+                    if not backend_available:
+                        page.route('**/api/privacy/wipe', lambda route: route.abort())
+                    page.get_by_role('button', name='TÜM YEREL VERİLERİ SİL', exact=True).click()
+                    page.get_by_role('button', name='Evet, Tüm Verileri Sil', exact=True).click()
+                    status = page.locator('[role="status"]').filter(has_text='Tarayıcıdaki sağlık kayıt')
+                    expect(status).to_be_visible()
+                    text = status.inner_text()
+                    assert ('Tarayıcıdaki sağlık kayıtları silindi.' in text) is local_available
+                    assert ('Yerel sunucudaki seans özetlerinin silindiği doğrulandı.' in text) is backend_available
+                    body = page.locator('body').inner_text()
+                    assert ('Tüm yerel veriler başarıyla temizlendi.' in body) is (local_available and backend_available)
+                    if not local_available and not backend_available:
+                        assert 'Silme işlemi tamamlanamadı.' in text
+                    elif local_available != backend_available:
+                        assert 'Silme işlemi kısmen tamamlandı.' in text
+                    remaining = context.request.get(API + '/api/mental/sessions').json()
+                    assert bool(remaining) is (not backend_available)
+                    page.screenshot(path=str(OUT / f'privacy-{local_available}-{backend_available}.png'))
+                    return {'localAvailable': local_available, 'backendAvailable': backend_available,
+                            'actualStatus': text, 'remainingServerRecords': len(remaining)}
+                finally:
+                    context.request.post(API + '/api/privacy/wipe')
+                    context.close()
+                    test_browser.close()
+            record(f'Deletion truthfulness local={local_available} backend={backend_available}', deletion)
     else:
         raise ValueError('Unknown regression phase: ' + phase)
     browser.close()

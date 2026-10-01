@@ -31,7 +31,9 @@ export default function PrivacyPage() {
     mentalCount: number;
   }>({ visionCount: 0, skinCount: 0, mentalCount: 0 });
 
-  const [wipeStatus, setWipeStatus] = useState<'IDLE' | 'CONFIRM' | 'SUCCESS'>('IDLE');
+  const [wipeStatus, setWipeStatus] = useState<'IDLE' | 'CONFIRM' | 'WIPING' | 'SUCCESS' | 'PARTIAL' | 'FAILED'>('IDLE');
+  const [wipeResult, setWipeResult] = useState<{ local: boolean; backend: boolean } | null>(null);
+  const [storageUnavailable, setStorageUnavailable] = useState(false);
 
   const deriveEffectiveStatus = (
     appAllowed: boolean,
@@ -50,6 +52,7 @@ export default function PrivacyPage() {
   };
 
   const checkStatus = () => {
+    try {
     if (typeof window !== 'undefined') {
       // 1. Uygulama içi izin tercihi (App preference)
       const camPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED);
@@ -114,6 +117,9 @@ export default function PrivacyPage() {
         setDataStats({ visionCount: vCount, skinCount: sCount, mentalCount: mCount });
       }
     }
+    } catch {
+      setStorageUnavailable(true);
+    }
   };
 
   useEffect(() => {
@@ -140,28 +146,42 @@ export default function PrivacyPage() {
   };
 
   const handleWipeAllData = async () => {
-    try {
-      localStorage.removeItem(STORAGE_KEYS.LATEST_VISION);
-      localStorage.removeItem(STORAGE_KEYS.LATEST_SKIN);
-      localStorage.removeItem(STORAGE_KEYS.SKIN_BASELINE);
-      localStorage.removeItem(STORAGE_KEYS.SKIN_HISTORY);
-      localStorage.removeItem(STORAGE_KEYS.LATEST_MENTAL);
-      localStorage.removeItem(STORAGE_KEYS.REFERRAL_CONTEXT);
-      localStorage.removeItem(STORAGE_KEYS.DEMO_SKIN_RESULT);
-      localStorage.removeItem(STORAGE_KEYS.DEMO_REFERRAL);
-
-      await fetch('http://localhost:8000/api/privacy/wipe', { method: 'POST' }).catch(() => {});
-
-      setDataStats({ visionCount: 0, skinCount: 0, mentalCount: 0 });
-      setWipeStatus('SUCCESS');
-      setTimeout(() => setWipeStatus('IDLE'), 3500);
-    } catch (e) {
-      console.warn(e);
+    setWipeStatus('WIPING');
+    let local = true;
+    const healthKeys = [STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
+      STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL,
+      STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
+    for (const key of healthKeys) {
+      try {
+        localStorage.removeItem(key);
+        if (localStorage.getItem(key) !== null) local = false;
+      } catch {
+        local = false;
+      }
     }
+    let backend = false;
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch('http://localhost:8000/api/privacy/wipe', { method: 'POST', signal: controller.signal });
+      if (!response.ok) throw new Error('Silme isteği başarısız');
+      const verification = await fetch('http://localhost:8000/api/mental/sessions', { cache: 'no-store', signal: controller.signal });
+      if (!verification.ok) throw new Error('Silme doğrulanamadı');
+      const remaining = await verification.json();
+      backend = Array.isArray(remaining) && remaining.length === 0;
+    } catch {
+      backend = false;
+    } finally {
+      clearTimeout(deadline);
+    }
+    if (local) setDataStats({ visionCount: 0, skinCount: 0, mentalCount: 0 });
+    setWipeResult({ local, backend });
+    setWipeStatus(local && backend ? 'SUCCESS' : local || backend ? 'PARTIAL' : 'FAILED');
   };
 
   return (
     <div className="space-y-6">
+      {storageUnavailable && <p role="alert" className="text-sm text-amber-200">Tarayıcı depolamasına erişilemiyor; kayıtların durumu doğrulanamıyor.</p>}
       {/* 1. SCREEN 10: ÜST BAŞLIK VE AÇIKLAMA (FIRST VIEWPORT) */}
       <section className="bg-gradient-to-br from-cockpit-surface via-[#071322] to-cockpit-bg border border-white/10 rounded-2xl p-6 md:p-7 shadow-2xl space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -322,15 +342,15 @@ export default function PrivacyPage() {
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl">
             <div className="text-xs text-slate-400">Görme Kayıtları</div>
-            <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{dataStats.visionCount}</div>
+            <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.visionCount}</div>
           </div>
           <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl">
             <div className="text-xs text-slate-400">Cilt Taramaları</div>
-            <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{dataStats.skinCount}</div>
+            <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.skinCount}</div>
           </div>
           <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl">
             <div className="text-xs text-slate-400">Mental Seanslar</div>
-            <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{dataStats.mentalCount}</div>
+            <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.mentalCount}</div>
           </div>
         </div>
 
@@ -372,6 +392,15 @@ export default function PrivacyPage() {
             </div>
           )}
 
+          {wipeStatus === 'WIPING' && <p role="status" className="text-xs text-slate-300">Veriler siliniyor ve doğrulanıyor…</p>}
+          {wipeResult && ['SUCCESS', 'PARTIAL', 'FAILED'].includes(wipeStatus) && (
+            <div role="status" className="p-4 rounded-xl border border-slate-700 space-y-2 text-xs text-slate-200">
+              <p>{wipeResult.local ? 'Tarayıcıdaki sağlık kayıtları silindi.' : 'Tarayıcıdaki sağlık kayıtlarının tamamı silinemedi.'}</p>
+              <p>{wipeResult.backend ? 'Yerel sunucudaki seans özetlerinin silindiği doğrulandı.' : 'Yerel sunucudaki seans özetlerinin silindiği doğrulanamadı; kayıtlar hâlâ mevcut olabilir.'}</p>
+              {wipeStatus !== 'SUCCESS' && <p className="text-amber-200">{wipeStatus === 'PARTIAL' ? 'Silme işlemi kısmen tamamlandı.' : 'Silme işlemi tamamlanamadı.'}</p>}
+              <button onClick={handleWipeAllData} className="underline">Yeniden Dene</button>
+            </div>
+          )}
           {wipeStatus === 'SUCCESS' && (
             <div className="bg-emerald-950/40 border border-emerald-700/80 rounded-xl p-4 text-emerald-300 text-xs flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
