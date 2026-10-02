@@ -112,6 +112,10 @@ jobs:
           test "$status" -eq 0
       - name: Controlled skin timing with tracing enabled and disabled
         run: python -u tests/e2e/skin_timing.py 2>&1 | tee audit-results/skin-timing.log
+      - name: Live-test geometry anatomy reminder and selected print regressions
+        run: |
+          python -u tests/e2e/live_followup.py 2>&1 | tee audit-results/live-followup-geometry.log
+          python -u tests/e2e/skin_followup.py 2>&1 | tee audit-results/live-followup-skin.log
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
