@@ -39,16 +39,20 @@ jobs:
       - name: TypeScript and original tests
         run: |
           mkdir -p audit-results
-          node node_modules/typescript/bin/tsc --project apps/vehicle-app/tsconfig.json --noEmit
+          npm run typecheck
           python -m pytest tests/unit -v --junitxml=audit-results/unit.xml | tee audit-results/unit.log
           python -m compileall -q services
+          python -m pytest tests/unit/test_crisis_unicode.py tests/unit/test_privacy_api_regressions.py tests/unit/test_vehicle_safety_api.py -v --junitxml=audit-results/focused-safety.xml | tee audit-results/focused-safety.log
       - name: Lint
         run: npm run lint 2>&1 | tee audit-results/lint.log
       - name: Fresh production build
         run: npm run build 2>&1 | tee audit-results/build.log
       - name: Security and environment reports
         run: |
-          npm audit --json > audit-results/npm-audit.json || true
+          npm ls --all --json > audit-results/npm-ls.json
+          npm ls next react react-dom postcss glob eslint-config-next --all > audit-results/dependency-versions.txt
+          npm audit --json > audit-results/npm-audit.json
+          npm audit --omit=dev --json > audit-results/npm-audit-production.json
           python -m bandit -r services -f json -o audit-results/bandit.json || true
           python -m pip freeze > audit-results/python-freeze.txt
       - name: Controlled image and spoken Turkish fixtures plus OS microphone
@@ -76,7 +80,7 @@ jobs:
           PULSE_SINK: audit_output
           DEBUG: pw:browser
         run: |
-          node node_modules/next/dist/bin/next start apps/vehicle-app -p 3000 > audit-results/frontend.log 2>&1 &
+          node node_modules/next/dist/bin/next start apps/vehicle-app --hostname 127.0.0.1 -p 3000 > audit-results/frontend.log 2>&1 &
           python -m uvicorn main:app --app-dir services/core-api --host 127.0.0.1 --port 8000 > audit-results/backend.log 2>&1 &
           for i in $(seq 1 45); do
             if curl -fsS http://localhost:3000/ >/dev/null && curl -fsS http://localhost:8000/api/health >/dev/null; then break; fi
@@ -88,6 +92,8 @@ jobs:
           xvfb-run -a python -u tests/e2e/media_lifecycle_regression.py 2>&1 | tee audit-results/media-regressions.log
           regression_status=${PIPESTATUS[0]}
           test "$focused_status" -eq 0 && test "$regression_status" -eq 0
+      - name: Bounded dependency security regressions
+        run: node tests/security/dependency-regressions.cjs 2>&1 | tee audit-results/dependency-security.log
       - name: Broader E2E with valid real skin flow and native spoken PCM
         env:
           PULSE_SOURCE: audit_input
