@@ -612,7 +612,8 @@ export default function VisionPage() {
             </div>
           </div>
 
-          {/* Merkez: Büyük Landolt C Görseli */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-center" data-vision-panels>
+          {/* Kalibre edilmiş sembol ve bağımsız dokunmatik cevap paneli */}
           <div className="py-8 flex flex-col items-center justify-center min-h-[260px] bg-slate-950/70 rounded-2xl border border-slate-900 shadow-inner">
             <div className="text-xs text-slate-300 mb-6 font-medium">
               {testStep === 'TESTING_CONTRAST'
@@ -636,15 +637,22 @@ export default function VisionPage() {
                 width={optotypeSizePx}
                 height={optotypeSizePx}
                 data-logmar={currentLogMAR}
+                data-trial={trialIndex}
                 role="img"
                 aria-label="Görme testi simgesi"
                 viewBox="0 0 100 100"
                 style={{
                   transform: `rotate(${directionAngles[currentDirection]}deg)`,
-                  transition: 'transform 0.15s ease-out'
+                  transition: 'none'
                 }}
                 className="shrink-0"
               >
+                <defs>
+                  <mask id="landolt-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                    <rect width="100" height="100" fill="white" />
+                    <rect x="50" y="40" width="50" height="20" fill="black" />
+                  </mask>
+                </defs>
                 <circle
                   cx="50"
                   cy="50"
@@ -652,15 +660,14 @@ export default function VisionPage() {
                   fill="none"
                   stroke={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#00E5FF'}
                   strokeWidth="20"
-                  strokeDasharray="231.32 20"
-                  strokeDashoffset="10"
+                  mask="url(#landolt-gap)"
                 />
               </svg>
             </div>
           </div>
 
           {/* Alt: 4 Büyük Dokunmatik Yön Butonu (100-120px Touch Targets) */}
-          <div className="max-w-xs mx-auto grid grid-cols-3 gap-3 pt-2">
+          <div className="w-full max-w-xs mx-auto grid grid-cols-3 gap-3 pt-2">
             <div />
             <button
               onClick={() => handleAnswer('UP')}
@@ -705,6 +712,7 @@ export default function VisionPage() {
               <span className="text-[11px] tracking-wider font-semibold">AŞAĞI</span>
             </button>
             <div />
+          </div>
           </div>
         </div>
       )}
