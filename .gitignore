@@ -114,3 +114,7 @@ docs/screenshots/
 *.tsbuildinfo
 scripts/capture_*.py
 
+# Controlled browser audit artifacts and generated fixtures
+audit-results/
+audit-fixtures/
+

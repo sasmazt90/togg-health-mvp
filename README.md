@@ -159,7 +159,7 @@ Detaylı klinik protokol ve kriz kuralları için [SAFETY.md](SAFETY.md) belgesi
    pip install -r requirements.txt
    python -m playwright install chromium
 
-   python -m uvicorn main:app --reload --port 8000
+   python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
    ```
    API `http://localhost:8000` adresinde açılacaktır.
 

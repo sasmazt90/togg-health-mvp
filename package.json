@@ -12,6 +12,7 @@
     "build": "npm --workspace=apps/vehicle-app run build",
     "start": "npm --workspace=apps/vehicle-app run start",
     "lint": "npm --workspace=apps/vehicle-app run lint",
+    "typecheck": "npm --workspace=apps/vehicle-app run typecheck",
     "test:backend": "pytest tests/unit -v"
   },
   "keywords": [
@@ -25,5 +26,10 @@
     "care-agent"
   ],
   "author": "Togg Health MVP Team",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "overrides": {
+    "next@15.5.27": {
+      "postcss": "8.5.28"
+    }
+  }
 }

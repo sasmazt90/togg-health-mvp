@@ -86,7 +86,7 @@ export class SkinAnalyzer {
    * MediaPipe FaceLandmarker modelini asenkron olarak başlatır.
    */
   public static async getFaceLandmarker(): Promise<FaceLandmarker | null> {
-    if (typeof window === 'undefined') return null;
+    if (typeof self === 'undefined') return null;
     if (this.landmarkerInstance) return this.landmarkerInstance;
     if (this.initializationFailed) return null;
     if (this.isInitializing) return null;
@@ -103,6 +103,7 @@ export class SkinAnalyzer {
           delegate: 'GPU'
         },
         runningMode: 'IMAGE',
+        ...(typeof document === 'undefined' ? { canvas: new OffscreenCanvas(1, 1) } : {}),
         numFaces: 1
       });
       return this.landmarkerInstance;

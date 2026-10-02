@@ -20,6 +20,7 @@ Oturum Özeti Analizcisi:
 """
 
 import os
+import unicodedata
 import re
 import json
 from abc import ABC, abstractmethod
@@ -114,8 +115,8 @@ class LocalFallbackMentalProvider(MentalConversationProvider):
 
         if "uyku düzensizliği" in detected_themes or "iş stresi" in detected_themes:
             reply = (
-                f"Paylaştığınız için teşekkür ederim {driver_name}. Son görüşmelerimizde de uyku düzeni ve iş temposu "
-                "konularının öne çıktığını görüyorum. Bu döngü sürekli tekrar ediyorsa, süreci bir uzman klinik psikologla "
+                f"Paylaştığınız için teşekkür ederim {driver_name}. Bu mesajda paylaştığınız konuları dinliyorum. "
+                "Bu durum sizi zorlamaya devam ediyorsa, süreci bir uzman klinik psikologla "
                 "değerlendirmek iyi gelebilir. İsterseniz uygun uzman seçeneklerini bulabilirim."
             )
             escalation = True
@@ -266,7 +267,7 @@ class LocalFallbackSessionAnalyzer(MentalSessionAnalyzer):
 
         support_suggested = len(themes) >= 2 and mood_trend in ["STRESSED", "TIRED"]
         support_reason = (
-            "Görüşmelerinizde süregelen stres veya yorgunluk temalarının tekrar ettiği gözlemlendi. Bir klinik psikologla görüşmek faydalı olabilir."
+            "Bu görüşmede stres veya yorgunluk konuları paylaşıldı. Bir klinik psikologla görüşmek faydalı olabilir."
             if support_suggested else None
         )
 
@@ -334,17 +335,25 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
 # İki Katmanlı Kriz Güvenlik Filtresi
 # ---------------------------------------------------------------------------
 
+def normalize_crisis_text(text: str, turkish: bool = True) -> str:
+    """Canonical comparison form; preserve accents and never alter the stored message."""
+    composed = unicodedata.normalize("NFC", text)
+    if turkish:
+        composed = composed.replace("I", "ı").replace("İ", "i")
+    return unicodedata.normalize("NFC", composed.lower().replace("i\u0307", "i"))
+
+
 def check_mental_crisis(text: str, is_driving: bool, live_client: Optional[Any] = None) -> Dict[str, Any]:
     """
     İki Katmanlı Kriz Denetimi:
     Katman 1: Öncelikli, anlık deterministik anahtar kelime taraması (pre-LLM).
     Katman 2: Yapılandırılmış güvenlik seviyesi.
     """
-    lower = text.lower()
+    candidates = (normalize_crisis_text(text), normalize_crisis_text(text, turkish=False))
     
     # 1. Katman: Deterministik Anahtar Kelime Koruması
     for kw in CRISIS_KEYWORDS:
-        if kw in lower:
+        if any(normalize_crisis_text(kw) in candidate for candidate in candidates):
             if is_driving:
                 reply = (
                     "Söyledikleriniz benim için çok önemli ve zor bir andan geçtiğinizi anlıyorum. "

@@ -23,6 +23,9 @@ import {
 import { isDemoMode } from '../../utils/attuneMode';
 import {
   getVisionSummary,
+  EMPTY_VISION_SUMMARY,
+  EMPTY_SKIN_SUMMARY,
+  EMPTY_MENTAL_SUMMARY,
   getSkinSummary,
   getMentalSummary,
   getHealthTimeline,
@@ -38,10 +41,10 @@ export default function ProfilePage() {
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
   const [isDemo, setIsDemo] = useState<boolean>(false);
-  const [vision, setVision] = useState<VisionSummaryData>(() => getVisionSummary(false));
-  const [skin, setSkin] = useState<SkinSummaryData>(() => getSkinSummary(false));
-  const [mental, setMental] = useState<MentalSummaryData>(() => getMentalSummary(false));
-  const [timeline, setTimeline] = useState<HealthTimelineItem[]>(() => getHealthTimeline(false));
+  const [vision, setVision] = useState<VisionSummaryData>(EMPTY_VISION_SUMMARY);
+  const [skin, setSkin] = useState<SkinSummaryData>(EMPTY_SKIN_SUMMARY);
+  const [mental, setMental] = useState<MentalSummaryData>(EMPTY_MENTAL_SUMMARY);
+  const [timeline, setTimeline] = useState<HealthTimelineItem[]>([]);
 
   useEffect(() => {
     const demo = isDemoMode();

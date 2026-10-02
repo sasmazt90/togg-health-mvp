@@ -21,7 +21,7 @@ import {
 
 export const CockpitHeader: React.FC = () => {
   const pathname = usePathname();
-  const { state, toggleDrivingMode, isParked } = useVehicle();
+  const { state, toggleDrivingMode, isParked, syncStatus, syncError } = useVehicle();
 
   const navItems = [
     { href: '/', label: 'Kokpit', icon: Activity },
@@ -79,6 +79,7 @@ export const CockpitHeader: React.FC = () => {
           {/* Sürüş / Park Durumu */}
           <button
             onClick={toggleDrivingMode}
+            disabled={syncStatus === 'loading' || syncStatus === 'updating'}
             className={`flex items-center gap-2 px-3 py-1 rounded-full font-bold text-xs transition-all border shadow-sm ${
               isParked
                 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/70 hover:bg-emerald-900/60'
@@ -88,7 +89,7 @@ export const CockpitHeader: React.FC = () => {
           >
             <Car className="w-3.5 h-3.5" />
             <span>
-              {isParked ? (
+              {syncStatus !== 'synced' ? <strong>{syncStatus === 'failed' ? 'ARAÇ DURUMU BELİRSİZ' : 'ARAÇ DURUMU DOĞRULANIYOR'}</strong> : isParked ? (
                 <>
                   <strong>PARK</strong> • 0 km/s
                 </>
@@ -129,13 +130,14 @@ export const CockpitHeader: React.FC = () => {
         </div>
 
         {/* Sürüş Modu Kısıt Bildirimi */}
-        {!isParked && (
+        {syncStatus === 'synced' && !isParked && (
           <div className="hidden xl:flex items-center gap-2 text-xs text-amber-400 bg-amber-950/40 border border-amber-800/60 px-3 py-1 rounded-lg">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>Sürüş modu devrede: Görsel testler kilitlendi.</span>
           </div>
         )}
       </nav>
+      {syncError && <p role="alert" className="px-6 py-2 text-xs text-amber-200">{syncError}</p>}
     </header>
   );
 };

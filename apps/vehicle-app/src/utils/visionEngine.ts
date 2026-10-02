@@ -203,14 +203,14 @@ export class VisionStaircaseController {
     const marRadians = (marArcmin / 60.0) * (Math.PI / 180.0);
     // 5 * MAR formülü
     const sizeMm = 5.0 * (viewingDistanceCm * 10.0) * Math.tan(marRadians);
-    return Math.max(1.0, Math.round(sizeMm * 100) / 100);
+    return sizeMm;
   }
 
   /**
    * mm'yi ekran kalibrasyonuna göre piksele çevirir.
    */
   public static mmToPixels(sizeMm: number, pixelsPerMm: number): number {
-    return Math.max(12, Math.round(sizeMm * pixelsPerMm));
+    return sizeMm * pixelsPerMm;
   }
 
   public static logMARToSnellen(logMAR: number): string {

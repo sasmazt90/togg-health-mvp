@@ -11,7 +11,7 @@ interface SkinResultViewProps {
   onNext: () => void;
   onOpenModal: (modal: 'trend' | 'observation' | 'actions') => void;
   onNavigateToCare: () => void;
-  videoRef?: React.RefObject<HTMLVideoElement>;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
   isLiveVideo?: boolean;
 }
 

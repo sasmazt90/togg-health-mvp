@@ -41,7 +41,7 @@ interface CareSlot {
 }
 
 function CareContent() {
-  const { state } = useVehicle();
+  const { state, isParked } = useVehicle();
   const searchParams = useSearchParams();
   const paramSpecialty = searchParams.get('specialty');
   const paramFrom = searchParams.get('from');
@@ -58,6 +58,14 @@ function CareContent() {
   const [selectedSlot, setSelectedSlot] = useState<CareSlot | null>(null);
   const [confirmationStep, setConfirmationStep] = useState<'SELECTING' | 'CONFIRM_MODAL' | 'BOOKED'>('SELECTING');
   const [consentApproved, setConsentApproved] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isParked) {
+      setSelectedSlot(null);
+      setConsentApproved(false);
+      setConfirmationStep('SELECTING');
+    }
+  }, [isParked]);
 
   useEffect(() => {
     try {
@@ -230,15 +238,26 @@ function CareContent() {
   const secondarySlots = filteredSlots.slice(1);
 
   const handleSelectSlot = (slot: CareSlot) => {
+    if (!isParked) return;
     setSelectedSlot(slot);
     setConsentApproved(false);
     setConfirmationStep('CONFIRM_MODAL');
   };
 
   const handleConfirmBooking = () => {
-    if (!consentApproved || !selectedSlot) return;
+    if (!isParked || !consentApproved || !selectedSlot) return;
     setConfirmationStep('BOOKED');
   };
+
+  if (!isParked) {
+    return (
+      <div className="max-w-4xl mx-auto py-12 text-center space-y-4">
+        <ShieldCheck className="w-14 h-14 text-amber-400 mx-auto" />
+        <h1 className="text-2xl font-bold">Randevu İşlemleri Kilitlendi</h1>
+        <p className="text-slate-300">Ayrıntılı uzman seçimi ve randevu onayı için aracın park halinde olduğu doğrulanmalıdır.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

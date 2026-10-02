@@ -1,0 +1,122 @@
+name: Attune browser audit
+on:
+  push:
+    branches: ['audit/e2e-2026-09-30', 'fix/attune-audit-remediation']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: attune-e2e-audit-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      OPENAI_API_KEY: ''
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/core-api/requirements.txt
+      - name: Install application browsers native audio and diagnostics
+        run: |
+          npm ci
+          python -m pip install -r services/core-api/requirements.txt bandit
+          python -m playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg espeak-ng xvfb pulseaudio pulseaudio-utils speech-dispatcher speech-dispatcher-espeak-ng libspeechd2
+      - name: TypeScript and original tests
+        run: |
+          mkdir -p audit-results
+          npm run typecheck
+          python -m pytest tests/unit -v --junitxml=audit-results/unit.xml | tee audit-results/unit.log
+          python -m compileall -q services
+          python -m pytest tests/unit/test_crisis_unicode.py tests/unit/test_privacy_api_regressions.py tests/unit/test_vehicle_safety_api.py -v --junitxml=audit-results/focused-safety.xml | tee audit-results/focused-safety.log
+      - name: Lint
+        run: npm run lint 2>&1 | tee audit-results/lint.log
+      - name: Fresh production build
+        run: npm run build 2>&1 | tee audit-results/build.log
+      - name: Security and environment reports
+        run: |
+          npm ls --all --json > audit-results/npm-ls.json
+          npm ls next react react-dom postcss glob eslint-config-next --all > audit-results/dependency-versions.txt
+          npm audit --json > audit-results/npm-audit.json
+          npm audit --omit=dev --json > audit-results/npm-audit-production.json
+          python -m bandit -r services -f json -o audit-results/bandit.json || true
+          python -m pip freeze > audit-results/python-freeze.txt
+      - name: Controlled image and spoken Turkish fixtures plus OS microphone
+        run: |
+          mkdir -p audit-fixtures
+          ffmpeg -y -loop 1 -i apps/vehicle-app/public/images/demo-skin-face.jpg -vf 'scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2,setsar=1' -t 3 -r 15 -pix_fmt yuv420p audit-fixtures/face.y4m
+          python tests/e2e/prepare_skin_fixture.py
+          espeak-ng -v tr -s 135 -w audit-fixtures/speech-original.wav 'Bugün yeni bir kitap okudum. Kendimi iyi hissediyorum.'
+          ffmpeg -y -i audit-fixtures/speech-original.wav -ar 48000 -ac 1 -c:a pcm_s16le audit-fixtures/speech.wav
+          pulseaudio --start --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=audit_mic
+          pactl load-module module-null-sink sink_name=audit_output
+          pactl load-module module-remap-source master=audit_mic.monitor source_name=audit_input source_properties=device.description=Attune_Audit_Microphone
+          pactl set-default-source audit_input
+          pactl set-default-sink audit_output
+          pactl list short sources > audit-results/pulse-sources.txt
+          pactl list sources > audit-results/pulse-source-details.txt
+          pactl list short sinks > audit-results/pulse-sinks.txt
+          pactl info > audit-results/pulse-info.txt
+          speech-dispatcher --spawn > audit-results/speech-dispatcher.log 2>&1
+          python tests/e2e/native_audio_preflight.py
+      - name: Original app focused diagnostics with actual MediaPipe and OS audio
+        env:
+          PULSE_SOURCE: audit_input
+          PULSE_SINK: audit_output
+          DEBUG: pw:browser
+        run: |
+          node node_modules/next/dist/bin/next start apps/vehicle-app --hostname 127.0.0.1 -p 3000 > audit-results/frontend.log 2>&1 &
+          python -m uvicorn main:app --app-dir services/core-api --host 127.0.0.1 --port 8000 > audit-results/backend.log 2>&1 &
+          for i in $(seq 1 45); do
+            if curl -fsS http://localhost:3000/ >/dev/null && curl -fsS http://localhost:8000/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          set +e
+          xvfb-run -a python -u tests/e2e/media_diagnostics.py 2>&1 | tee audit-results/focused.log
+          focused_status=${PIPESTATUS[0]}
+          xvfb-run -a python -u tests/e2e/media_lifecycle_regression.py 2>&1 | tee audit-results/media-regressions.log
+          regression_status=${PIPESTATUS[0]}
+          test "$focused_status" -eq 0 && test "$regression_status" -eq 0
+      - name: Bounded dependency security regressions
+        run: node tests/security/dependency-regressions.cjs 2>&1 | tee audit-results/dependency-security.log
+      - name: Broader E2E with valid real skin flow and native spoken PCM
+        env:
+          PULSE_SOURCE: audit_input
+          PULSE_SINK: audit_output
+        run: |
+          xvfb-run -a python -u tests/e2e/runner_v2.py 2>&1 | tee audit-results/broader.log
+      - name: Behavior regressions for remediated product defects
+        if: ${{ !cancelled() }}
+        run: |
+          set +e
+          status=0
+          for phase in crisis privacy vehicle vision mental hydration care skin; do
+            python -u tests/e2e/backlog_regressions.py --phase "$phase" 2>&1 | tee "audit-results/backlog-$phase.log"
+            if [ "${PIPESTATUS[0]}" -ne 0 ]; then status=1; fi
+          done
+          test "$status" -eq 0
+      - name: Controlled skin timing with tracing enabled and disabled
+        run: python -u tests/e2e/skin_timing.py 2>&1 | tee audit-results/skin-timing.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attune-browser-audit-${{ github.run_number }}
+          path: audit-results/
+          retention-days: 14
+          if-no-files-found: warn

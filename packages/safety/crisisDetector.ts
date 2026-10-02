@@ -19,10 +19,19 @@ export interface CrisisCheckResult {
   emergencyResponseTr?: string;
 }
 
+/** Normalize only comparison text. Keep Turkish accents and the original message intact. */
+export function normalizeCrisisText(text: string, turkish = true): string {
+  const composed = text.normalize('NFC');
+  const lower = turkish ? composed.toLocaleLowerCase('tr-TR') : composed.toLowerCase();
+  // Some inputs already contain the decomposed dotted lowercase i.
+  return lower.replace(/i\u0307/g, 'i').normalize('NFC');
+}
+
 export function checkCrisisTrigger(text: string, isMoving: boolean = false): CrisisCheckResult {
-  const lower = text.toLowerCase();
+  // Also accept ordinary ASCII casing (INTIHAR), without conflating Turkish ı/i.
+  const candidates = [normalizeCrisisText(text), normalizeCrisisText(text, false)];
   for (const keyword of CRISIS_KEYWORDS) {
-    if (lower.includes(keyword)) {
+    if (candidates.some(candidate => candidate.includes(normalizeCrisisText(keyword)))) {
       if (isMoving) {
         return {
           isCrisis: true,

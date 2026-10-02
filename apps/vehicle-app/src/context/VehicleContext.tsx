@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import { mockVehicleInstance } from '@packages/vehicle-context/MockVehicleProvider';
 import { VehicleState } from '@packages/vehicle-context/types';
 
@@ -11,29 +11,100 @@ interface VehicleContextType {
   isParked: boolean;
   isMoving: boolean;
   canAccessVisualModules: boolean;
+  syncStatus: 'loading' | 'synced' | 'updating' | 'failed';
+  syncError: string | null;
 }
 
 const VehicleContext = createContext<VehicleContextType | undefined>(undefined);
 
 export const VehicleContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [vehicleState, setVehicleState] = useState<VehicleState>(mockVehicleInstance.getState());
+  const [syncStatus, setSyncStatus] = useState<VehicleContextType['syncStatus']>('loading');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const mutationPending = useRef(false);
+  const requestId = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = mockVehicleInstance.subscribe((newState) => {
-      setVehicleState(newState);
-    });
-    return () => unsubscribe();
+  const applyState = useCallback((state: VehicleState) => {
+    if (!Number.isFinite(state.currentSpeed) || state.currentSpeed < 0 ||
+        state.vehicleMoving !== (state.currentSpeed > 0) || state.vehicleParked === state.vehicleMoving) {
+      throw new Error('Geçersiz araç durumu');
+    }
+    setVehicleState(previous => previous.lastUpdated === state.lastUpdated ? previous : state);
+    setSyncStatus('synced');
+    setSyncError(null);
   }, []);
 
-  const toggleDrivingMode = () => {
-    mockVehicleInstance.toggleDrivingMode();
-  };
+  useEffect(() => {
+    mounted.current = true;
+    let reading = false;
+    const refresh = async () => {
+      if (mutationPending.current || reading) return;
+      reading = true;
+      const id = ++requestId.current;
+      const controller = new AbortController();
+      activeRequest.current = controller;
+      const deadline = setTimeout(() => controller.abort(), 5000);
+      try {
+        const response = await fetch('http://localhost:8000/api/vehicle/state', { cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error('Araç durumu alınamadı');
+        const state = await response.json();
+        if (mounted.current && id === requestId.current) applyState(state);
+      } catch {
+        if (mounted.current && id === requestId.current) {
+          setSyncStatus('failed');
+          setSyncError('Araç durumu doğrulanamıyor. Görsel kontroller güvenlik için kilitlendi.');
+        }
+      } finally {
+        reading = false;
+        clearTimeout(deadline);
+      }
+    };
+    void refresh();
+    const timer = setInterval(refresh, 1000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      mounted.current = false;
+      requestId.current += 1;
+      activeRequest.current?.abort();
+      clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [applyState]);
 
-  const setSpeed = (speed: number) => {
-    mockVehicleInstance.setSpeed(speed);
+  const setSpeed = async (speed: number) => {
+    if (mutationPending.current || !Number.isFinite(speed) || speed < 0) return;
+    mutationPending.current = true;
+    const id = ++requestId.current;
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const deadline = setTimeout(() => controller.abort(), 5000);
+    // Lock immediately; parked features wait for backend acknowledgement.
+    setSyncStatus('updating');
+    setSyncError(null);
+    try {
+      const response = await fetch('http://localhost:8000/api/vehicle/speed', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speedKmH: speed }), signal: controller.signal
+      });
+      if (!response.ok) throw new Error('Araç durumu güncellenemedi');
+      const state = await response.json();
+      if (mounted.current && id === requestId.current) applyState(state);
+    } catch {
+      if (mounted.current && id === requestId.current) {
+        setSyncStatus('failed');
+        setSyncError('Araç durumu güncellenemedi. Görsel kontroller güvenlik için kilitlendi.');
+      }
+    } finally {
+      mutationPending.current = false;
+      clearTimeout(deadline);
+    }
   };
+  const toggleDrivingMode = () => { void setSpeed(vehicleState.vehicleParked ? 75 : 0); };
 
-  const isParked = vehicleState.vehicleParked;
+  const isParked = vehicleState.vehicleParked && syncStatus === 'synced';
   const isMoving = vehicleState.vehicleMoving;
   const canAccessVisualModules = isParked;
 
@@ -46,6 +117,8 @@ export const VehicleContextProvider: React.FC<{ children: React.ReactNode }> = (
         isParked,
         isMoving,
         canAccessVisualModules,
+        syncStatus,
+        syncError,
       }}
     >
       {children}

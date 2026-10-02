@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useVehicle } from '../../context/VehicleContext';
 import {
@@ -19,6 +19,7 @@ import {
   buildSkinRegionViewModel
 } from '../../data/skinDemoFixture';
 import { isDemoMode, STORAGE_KEYS, isCameraAllowed } from '../../utils/attuneMode';
+import { SkinInference } from '../../utils/skinInference';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
 import { SkinResultView } from '../../components/skin/SkinResultView';
@@ -43,6 +44,9 @@ export default function SkinPage() {
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState<boolean>(false);
   const isMediaPipeLoadedRef = useRef<boolean>(false);
+  const inferenceRef = useRef<SkinInference | null>(null);
+  const initializationFailedRef = useRef(false);
+  const [initializationEpoch, setInitializationEpoch] = useState(0);
   const demoTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLiveVideo, setIsLiveVideo] = useState<boolean>(false);
 
@@ -68,8 +72,11 @@ export default function SkinPage() {
   const [analysisResult, setAnalysisResult] = useState<SkinAnalysisResult | null>(null);
 
   // Real-time döngü referansları
-  const animFrameIdRef = useRef<number | null>(null);
   const consecutiveValidFramesRef = useRef<number>(0);
+  const mountedRef = useRef(true);
+  const acquisitionRef = useRef(0);
+  const parkedRef = useRef(isParked);
+  parkedRef.current = isParked;
 
   // URL parametresi ile durum ve test yönetimi
   useEffect(() => {
@@ -103,44 +110,69 @@ export default function SkinPage() {
 
   // MediaPipe FaceLandmarker'ı başlat
   useEffect(() => {
+    if (isDemoMode()) return;
+    initializationFailedRef.current = false;
+    isMediaPipeLoadedRef.current = false;
+    setIsMediaPipeLoaded(false);
     let isMounted = true;
-    SkinAnalyzer.getFaceLandmarker().then((landmarker) => {
-      if (isMounted && landmarker) {
+    let engine: SkinInference;
+    try {
+      engine = new SkinInference();
+      inferenceRef.current = engine;
+    } catch {
+      initializationFailedRef.current = true;
+      return;
+    }
+    engine.initialize().then(() => {
+      if (isMounted) {
         isMediaPipeLoadedRef.current = true;
         setIsMediaPipeLoaded(true);
+      }
+    }).catch(() => {
+      if (isMounted) {
+        initializationFailedRef.current = true;
+        setErrorMessage('Cilt analiz motoru başlatılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.');
+        setScanState(previous => previous === 'CAMERA_ACTIVE' ? 'ERROR' : previous);
       }
     });
     return () => {
       isMounted = false;
+      engine.close();
+      inferenceRef.current = null;
     };
-  }, []);
+  }, [initializationEpoch]);
 
-  // Temizlik: Kamera akışını, zamanlayıcıyı ve animasyon karesini durdur
+  // Invalidate late camera acquisition on exit. The scan effect owns live RAF/stream cleanup.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-      }
+      mountedRef.current = false;
+      acquisitionRef.current += 1;
       if (demoTimerRef.current) {
         clearInterval(demoTimerRef.current);
       }
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  // Cancel pending acquisition/demo work when driving or privacy permission is revoked.
+  useEffect(() => {
+    const revoke = () => {
+      if (!parkedRef.current || !isCameraAllowed()) {
+        acquisitionRef.current += 1;
+        if (demoTimerRef.current) clearInterval(demoTimerRef.current);
+        setScanState('READY');
+        setMediaStream(null);
+        setIsLiveVideo(false);
       }
     };
-  }, [mediaStream]);
-
-  // Deterministik video akışı bağlama: mediaStream, videoRef ve CAMERA_ACTIVE yarışını çözer
-  useEffect(() => {
-    if (mediaStream && videoRef.current && scanState === 'CAMERA_ACTIVE') {
-      if (videoRef.current.srcObject !== mediaStream) {
-        videoRef.current.srcObject = mediaStream;
-      }
-      videoRef.current.play().catch((err) => {
-        console.warn('Video oynatma başlatılamadı:', err);
-      });
-    }
-  }, [mediaStream, scanState]);
+    revoke();
+    window.addEventListener('storage', revoke);
+    window.addEventListener('attune-privacy', revoke);
+    return () => {
+      window.removeEventListener('storage', revoke);
+      window.removeEventListener('attune-privacy', revoke);
+    };
+  }, [isParked]);
 
   // Real modda COMPLETED durumu doğrulaması: Kayıtlı gerçek analiz yoksa COMPLETED state'e izin verilmez
   useEffect(() => {
@@ -194,36 +226,8 @@ export default function SkinPage() {
     setSelectedRegionId(REGION_ORDER[nextIdx]);
   };
 
-  // Sürüş emniyeti kilidi
-  if (!isParked) {
-    return (
-      <div className="bg-gradient-to-b from-slate-900/90 to-[#0B1526]/90 border border-amber-500/50 rounded-3xl p-10 text-center max-w-xl mx-auto my-12 space-y-6 shadow-[0_0_50px_rgba(245,158,11,0.15)] backdrop-blur-xl">
-        <div className="w-20 h-20 bg-amber-500/15 border border-amber-500/40 text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-          <AlertTriangle className="w-10 h-10 animate-pulse" />
-        </div>
-        <div className="space-y-2">
-          <span className="text-[11px] font-mono uppercase tracking-widest text-amber-400 font-bold px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
-            Sürüş Emniyeti Devrede • {state.currentSpeed} km/s
-          </span>
-          <h1 className="text-2xl font-extrabold text-white">Cilt Kontrolü Kilitlendi</h1>
-          <p className="text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
-            Cilt analizi kamera odaklanması ve yüz hizalaması gerektirdiğinden, sürüş güvenliğiniz için araç hareket halindeyken kullanılamaz.
-          </p>
-        </div>
-        <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span>Lütfen aracı güvenli bir alanda <strong>Park (P)</strong> moduna alın.</span>
-        </div>
-      </div>
-    );
-  }
-
   // Demo modda kamera olmadan sentetik portreyle doğrudan deterministik tarama
   const startSyntheticDemoScan = () => {
-    if (animFrameIdRef.current) {
-      cancelAnimationFrame(animFrameIdRef.current);
-      animFrameIdRef.current = null;
-    }
     if (demoTimerRef.current) {
       clearInterval(demoTimerRef.current);
       demoTimerRef.current = null;
@@ -255,10 +259,6 @@ export default function SkinPage() {
     if (demoTimerRef.current) {
       clearInterval(demoTimerRef.current);
       demoTimerRef.current = null;
-    }
-    if (animFrameIdRef.current) {
-      cancelAnimationFrame(animFrameIdRef.current);
-      animFrameIdRef.current = null;
     }
 
     if (isDemo) {
@@ -386,13 +386,37 @@ export default function SkinPage() {
   };
 
   // Real-time video işleme döngüsü (requestAnimationFrame)
-  const startRealtimeLoop = useCallback(() => {
+  const finishRef = useRef(finishScan);
+  finishRef.current = finishScan;
+  useEffect(() => {
+    if (!(mediaStream && videoRef.current && scanState === 'CAMERA_ACTIVE') || !isParked) return;
+    const video = videoRef.current;
+    videoRef.current.srcObject = mediaStream;
+    let cancelled = false;
+    let frameId: number | null = null;
+    let lastVideoTime = -1;
+    const finishScan = (...args: Parameters<typeof finishRef.current>) => finishRef.current(...args);
+    void video.play().catch(() => {
+      if (!cancelled) {
+        setErrorMessage('Video oynatma başlatılamadı. Lütfen tekrar deneyin.');
+        setScanState('ERROR');
+      }
+    });
+    const schedule = () => {
+      frameId = requestAnimationFrame(loop);
+    };
     consecutiveValidFramesRef.current = 0;
     setScanProgress(0);
 
     const isDemo = isDemoMode();
 
-    const loop = () => {
+    const loop = async () => {
+      if (cancelled) return;
+      if (!isCameraAllowed() || !parkedRef.current || mediaStream.getVideoTracks().every(t => t.readyState === 'ended')) {
+        setErrorMessage('Kamera kapatıldı. İzinleri kontrol edip yeniden deneyin.');
+        setScanState('ERROR');
+        return;
+      }
       if (!videoRef.current || !canvasRef.current) {
         if (isDemo) {
           // Demo modda video elementi hazır değilse de deterministic ilerleme sağlanır
@@ -404,14 +428,15 @@ export default function SkinPage() {
             return;
           }
         }
-        animFrameIdRef.current = requestAnimationFrame(loop);
+        schedule();
         return;
       }
 
       const video = videoRef.current;
       const canvas = canvasRef.current;
 
-      if (video.readyState >= 2 && video.videoWidth > 0) {
+      if (video.readyState >= 2 && video.videoWidth > 0 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
         if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
@@ -422,7 +447,23 @@ export default function SkinPage() {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
           // Gerçek hizalama ve kalite değerlendirmesi
-          const curAlign = SkinAnalyzer.assessAlignment(ctx, canvas.width, canvas.height);
+          if (!isMediaPipeLoadedRef.current || !inferenceRef.current) {
+            setGuidanceText('Cilt analiz motoru hazırlanıyor...');
+            schedule();
+            return;
+          }
+          let curAlign: FaceAlignment;
+          try {
+            curAlign = await inferenceRef.current.assessAlignment(canvas);
+          } catch {
+            if (!cancelled) {
+              setErrorMessage('Cilt analiz motoru yanıt vermiyor. Lütfen yeniden deneyin.');
+              setScanState('ERROR');
+            }
+            return;
+          }
+          // Driving/privacy/unmount may cancel while a real frame is being inferred.
+          if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
           const curQual = SkinAnalyzer.checkQuality(ctx, canvas.width, canvas.height, curAlign.faceDetected);
 
           setAlignment(curAlign);
@@ -439,7 +480,7 @@ export default function SkinPage() {
             }
           } else {
             // REAL MOD: Gerçek MediaPipe + Yüz Tespiti + Hizalama + Kalite Doğrulaması
-            const isMPLoaded = isMediaPipeLoadedRef.current || isMediaPipeLoaded;
+            const isMPLoaded = isMediaPipeLoadedRef.current;
             const isValid =
               isMPLoaded &&
               curAlign.faceDetected &&
@@ -472,14 +513,22 @@ export default function SkinPage() {
         }
       }
 
-      animFrameIdRef.current = requestAnimationFrame(loop);
+      schedule();
     };
 
-    animFrameIdRef.current = requestAnimationFrame(loop);
-  }, [isMediaPipeLoaded, alignment]);
+    schedule();
+    return () => {
+      cancelled = true;
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      video.srcObject = null;
+      mediaStream.getTracks().forEach(track => track.stop());
+    };
+  }, [mediaStream, scanState, isParked]);
 
   // Kamerayı başlat ve taramaya geç
   const startCamera = async () => {
+    if (!isParked || scanState === 'CAMERA_ACTIVE') return;
+    const acquisition = ++acquisitionRef.current;
     setErrorMessage(null);
 
     // 1. Gizlilik Tercihi Kontrolü
@@ -494,7 +543,7 @@ export default function SkinPage() {
     const isDemo = isDemoMode();
 
     // 2. Real Modda MediaPipe kontrolü
-    if (!isDemo && !isMediaPipeLoaded && SkinAnalyzer.hasInitializationFailed()) {
+    if (!isDemo && !isMediaPipeLoaded && initializationFailedRef.current) {
       setErrorMessage(
         'Cilt analiz motoru kullanılamıyor. Lütfen kamera iznini ve bağlantınızı kontrol edip tekrar deneyin.'
       );
@@ -505,18 +554,24 @@ export default function SkinPage() {
     setScanState('CAMERA_ACTIVE');
     setScanProgress(5);
 
+    if (isDemo) {
+      setIsLiveVideo(false);
+      startSyntheticDemoScan();
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
       });
+      if (!mountedRef.current || acquisition !== acquisitionRef.current || !parkedRef.current || !isCameraAllowed()) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       setMediaStream(stream);
       setIsLiveVideo(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-      startRealtimeLoop();
     } catch (err: any) {
+      if (!mountedRef.current || acquisition !== acquisitionRef.current) return;
       console.warn('Kamera erişimi sağlanamadı:', err);
       if (isDemo) {
         // Demo modda kamera erişilemezse videoRef beklemeksizin sentetik taramayı tamamlar
@@ -567,6 +622,30 @@ export default function SkinPage() {
     router.push('/care?specialty=Dermatoloji&from=skin');
   };
 
+  // Sürüş emniyeti kilidi
+  if (!isParked) {
+    return (
+      <div className="bg-gradient-to-b from-slate-900/90 to-[#0B1526]/90 border border-amber-500/50 rounded-3xl p-10 text-center max-w-xl mx-auto my-12 space-y-6 shadow-[0_0_50px_rgba(245,158,11,0.15)] backdrop-blur-xl">
+        <div className="w-20 h-20 bg-amber-500/15 border border-amber-500/40 text-amber-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+          <AlertTriangle className="w-10 h-10 animate-pulse" />
+        </div>
+        <div className="space-y-2">
+          <span className="text-[11px] font-mono uppercase tracking-widest text-amber-400 font-bold px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
+            Sürüş Emniyeti Devrede • {state.currentSpeed} km/s
+          </span>
+          <h1 className="text-2xl font-extrabold text-white">Cilt Kontrolü Kilitlendi</h1>
+          <p className="text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
+            Cilt analizi kamera odaklanması ve yüz hizalaması gerektirdiğinden, sürüş güvenliğiniz için araç hareket halindeyken kullanılamaz.
+          </p>
+        </div>
+        <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 text-xs text-slate-300 flex items-center justify-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span>Lütfen aracı güvenli bir alanda <strong>Park (P)</strong> moduna alın.</span>
+        </div>
+      </div>
+    );
+  }
+
   const currentRegionData: SkinRegionData = buildSkinRegionViewModel(
     selectedRegionId,
     analysisResult,
@@ -576,7 +655,8 @@ export default function SkinPage() {
   return (
     <div className="space-y-4 max-w-5xl mx-auto select-none">
       {/* Gizli kanvas (MediaPipe piksel analizi) */}
-      <canvas ref={canvasRef} className="hidden" />
+      <canvas ref={canvasRef} className="hidden" data-mediapipe-ready={isMediaPipeLoaded} data-mediapipe-active={alignment.isMediaPipeActive} data-face-detected={alignment.faceDetected} data-landmark-count={alignment.landmarks?.length || 0} data-quality-status={quality.status} />
+      {scanState === 'READY' && errorMessage && <p role="alert" className="text-amber-200">{errorMessage}</p>}
 
       {/* ============================================================ */}
       {/* HATA DURUMU: MediaPipe / Kamera / İzin Eksikliği             */}
@@ -599,6 +679,7 @@ export default function SkinPage() {
             <button
               onClick={() => {
                 setErrorMessage(null);
+                if (initializationFailedRef.current) setInitializationEpoch(epoch => epoch + 1);
                 setScanState('READY');
               }}
               className="px-6 py-2.5 rounded-xl bg-togg-turquoise text-togg-darkBlue font-bold text-xs hover:bg-[#33D0EE] transition-all shadow-md"
