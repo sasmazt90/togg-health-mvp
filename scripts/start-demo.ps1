@@ -16,7 +16,7 @@ Write-Host "Proje Konumu: $ProjectRoot" -ForegroundColor Gray
 
 # 1. Backend Penceresini Başlat
 $BackendDir = Join-Path $ProjectRoot "services\core-api"
-$BackendCmd = "Set-Location '$BackendDir'; if (Test-Path '.venv\Scripts\activate.ps1') { & '.\.venv\Scripts\activate.ps1' }; Write-Host '>>> Core API Başlatılıyor (Port 8000)...' -ForegroundColor Green; python -m uvicorn main:app --reload --port 8000"
+$BackendCmd = "Set-Location '$BackendDir'; if (Test-Path '.venv\Scripts\activate.ps1') { & '.\.venv\Scripts\activate.ps1' }; Write-Host '>>> Core API Başlatılıyor (Port 8000)...' -ForegroundColor Green; python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000"
 
 Write-Host "[1/2] Backend (Core API) ayrı pencerede başlatılıyor..." -ForegroundColor Yellow
 Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $BackendCmd
