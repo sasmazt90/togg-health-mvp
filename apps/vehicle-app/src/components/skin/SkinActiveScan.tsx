@@ -9,7 +9,7 @@ import { FaceAlignment, ImageQuality } from '../../utils/skinAnalyzer';
 
 interface SkinActiveScanProps {
   scanProgress: number;
-  videoRef?: React.RefObject<HTMLVideoElement>;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
   isLiveVideo?: boolean;
   alignment?: FaceAlignment;
   quality?: ImageQuality;

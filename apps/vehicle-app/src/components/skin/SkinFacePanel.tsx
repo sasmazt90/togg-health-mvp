@@ -11,7 +11,7 @@ interface SkinFacePanelProps {
   scanProgress?: number;
   onPrev?: () => void;
   onNext?: () => void;
-  videoRef?: React.RefObject<HTMLVideoElement>;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
   isLiveVideo?: boolean;
 }
 
