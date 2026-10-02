@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
-import { Lightbulb, X, Calendar, ShieldCheck, UserCheck, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { isDemoMode } from '../../utils/attuneMode';
+import { SkinReminderForm } from './SkinReminderForm';
+import { Lightbulb, X, Bell, ShieldCheck, UserCheck, ChevronRight } from 'lucide-react';
 import { SkinRegionData } from '../../data/skinDemoFixture';
 
 interface SkinActionsModalProps {
@@ -15,6 +17,7 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
   onClose,
   onNavigateToCare
 }) => {
+  const [showReminder, setShowReminder] = useState(false);
   return (
     <div
       onClick={onClose}
@@ -76,13 +79,13 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
               );
             }
 
-            const IconComponent = act.icon === 'calendar' ? Calendar : ShieldCheck;
+            const IconComponent = act.icon === 'calendar' ? Bell : ShieldCheck;
             const iconBg = act.icon === 'calendar' ? 'bg-sky-500/10 border-sky-500/20 text-sky-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
 
             return (
               <div
                 key={idx}
-                className="flex items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition-colors"
+                className="flex items-center justify-between p-4 rounded-xl bg-slate-950/60 border border-slate-800/80"
               >
                 <div className="flex items-center gap-3.5">
                   <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 ${iconBg}`}>
@@ -93,12 +96,13 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
                     <p className="text-xs text-slate-400 mt-0.5">{act.description}</p>
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-slate-500" />
+                {act.icon === 'calendar' && <button aria-expanded={showReminder} onClick={() => setShowReminder(previous => !previous)} className="text-togg-turquoise text-xs"><Bell className="w-4 h-4 inline mr-1" />Hatırlat</button>}
               </div>
             );
           })}
         </div>
 
+        {showReminder && (isDemoMode() ? <p className="text-xs text-amber-200">Demo içeriği için gerçek takip planı oluşturulmaz. Kendi taramanızın ardından hatırlatma oluşturabilirsiniz.</p> : <SkinReminderForm />)}
         {/* Footer */}
         <div className="text-right">
           <button

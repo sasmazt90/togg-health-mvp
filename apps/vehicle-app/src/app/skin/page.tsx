@@ -8,7 +8,7 @@ import {
   FaceAlignment,
   ImageQuality,
   RegionMetrics,
-  SkinAnalysisResult
+  SkinAnalysisResult, SkinReferenceMetadata, canCompareSkinReference
 } from '../../utils/skinAnalyzer';
 import {
   SkinRegionId,
@@ -62,10 +62,10 @@ export default function SkinPage() {
     guidanceTextTr: 'Kamera hazırlanıyor...'
   });
   const [quality, setQuality] = useState<ImageQuality>({
-    isValid: true,
-    avgLuminance: 120,
-    blurScore: 10,
-    status: 'OPTIMAL'
+    isValid: false,
+    avgLuminance: 0,
+    blurScore: 0,
+    status: 'NO_FACE'
   });
   const [guidanceText, setGuidanceText] = useState<string>('Lütfen başınızı sabit tutun.');
 
@@ -301,6 +301,12 @@ export default function SkinPage() {
       return;
     }
 
+    if (!qualToUse.isValid || !alignToUse.isAligned || !alignToUse.faceDetected) {
+      setErrorMessage('Yüz, poz veya görüntü kalitesi geçerli değil; tarama kaydedilmedi.');
+      setScanState('ERROR');
+      return;
+    }
+
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
       setErrorMessage('Tuval grafik bağlamı başlatılamadı. Lütfen sayfayı yenileyip tekrar deneyin.');
@@ -324,13 +330,27 @@ export default function SkinPage() {
     let baselineData: Record<string, RegionMetrics> | null = null;
     try {
       const storedBaseline = localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE);
-      if (storedBaseline) {
-        baselineData = JSON.parse(storedBaseline);
+      if (storedBaseline !== null) {
+        const parsed = JSON.parse(storedBaseline);
+        if (!parsed || REGION_ORDER.some(id => !parsed[id] ||
+          ![parsed[id].rednessScore, parsed[id].luminanceScore, parsed[id].textureVariance]
+            .every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100))) {
+          throw new Error('Invalid reference');
+        }
+        baselineData = parsed;
       }
-    } catch {}
+    } catch {
+      setErrorMessage('Mevcut referans okunamadı. Referansınız değiştirilmedi; bu tarama kaydedilmedi.');
+      setScanState('ERROR');
+      return;
+    }
 
     const isFirstScan = !baselineData;
-    const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, baselineData, 20.0);
+    const capturePose = { yaw: alignToUse.yaw, pitch: alignToUse.pitch, roll: alignToUse.roll, scaleRatio: alignToUse.scaleRatio };
+    let baselineMeta: SkinReferenceMetadata | null = null;
+    try { baselineMeta = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE_META) || 'null'); } catch {}
+    const comparisonUnavailable = !isFirstScan && !canCompareSkinReference(baselineMeta, qualToUse, capturePose);
+    const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, comparisonUnavailable ? null : baselineData, 20.0);
 
     const finalResult: SkinAnalysisResult = {
       id: `skin-${Date.now()}`,
@@ -341,7 +361,11 @@ export default function SkinPage() {
       highestChangePct: isFirstScan ? 0 : comparison.highestChangePct,
       referralSuggested: isFirstScan ? false : comparison.referralSuggested,
       isBaseline: isFirstScan,
-      clinicalNoteTr: comparison.clinicalNoteTr,
+      clinicalNoteTr: comparisonUnavailable ? 'Önceki referans korunuyor; ışık/netlik/poz koşulları uyumlu değil veya eski referansın kalite bilgisi yok. Değişim hesaplanmadı.' : comparison.clinicalNoteTr,
+      baselineId: isFirstScan ? undefined : baselineMeta?.id,
+      baselineTimestamp: isFirstScan ? undefined : baselineMeta?.timestamp,
+      comparisonUnavailable,
+      comparisonScope: 'single-front-v1', capturePose,
       usedMediaPipe: true
     };
 
@@ -350,6 +374,10 @@ export default function SkinPage() {
       try {
         if (isFirstScan) {
           localStorage.setItem(STORAGE_KEYS.SKIN_BASELINE, JSON.stringify(regionMetrics));
+          localStorage.setItem(STORAGE_KEYS.SKIN_BASELINE_META, JSON.stringify({
+            id: finalResult.id, timestamp: finalResult.timestamp, schemaVersion: 1,
+            scope: 'single-front-v1', quality: qualToUse, pose: capturePose
+          }));
         }
         localStorage.setItem(STORAGE_KEYS.LATEST_SKIN, JSON.stringify(finalResult));
 
@@ -364,11 +392,13 @@ export default function SkinPage() {
           highestChangePct: finalResult.highestChangePct,
           referralSuggested: finalResult.referralSuggested,
           isBaseline: finalResult.isBaseline,
-          usedMediaPipe: true
+          usedMediaPipe: true, comparisonUnavailable, baselineId: finalResult.baselineId
         });
         localStorage.setItem(STORAGE_KEYS.SKIN_HISTORY, JSON.stringify(historyList.slice(0, 10)));
       } catch (e) {
-        console.warn('LocalStorage persistence error:', e);
+        setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Referans veya geçmiş kaydı oluşturulduğu doğrulanamadı.');
+        setScanState('ERROR');
+        return;
       }
     } else {
       setErrorMessage('MediaPipe doğrulaması olmadan sağlık telemetrisi kaydedilemez.');
@@ -464,7 +494,7 @@ export default function SkinPage() {
           }
           // Driving/privacy/unmount may cancel while a real frame is being inferred.
           if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
-          const curQual = SkinAnalyzer.checkQuality(ctx, canvas.width, canvas.height, curAlign.faceDetected);
+          const curQual = SkinAnalyzer.checkQuality(ctx, canvas.width, canvas.height, curAlign.faceDetected, curAlign.box);
 
           setAlignment(curAlign);
           setQuality(curQual);
@@ -603,12 +633,12 @@ export default function SkinPage() {
     const referralContext = {
       sourceModule: 'SKIN',
       specialty: 'Dermatoloji',
-      reasonSummary: `Önceki ölçümünüze göre ${currentRegion.nameTr} bölgesinde belirgin bir görsel değişim (%${currentRegion.changePct > 0 ? '+' : ''}${currentRegion.changePct}) gözlendi. Bir dermatologla görüşmek faydalı olabilir.`,
+      reasonSummary: currentRegion.observation.details,
       timestamp: new Date().toISOString(),
       metricsSummary: {
         region: currentRegion.nameTr,
         changePct: currentRegion.changePct,
-        usedMediaPipe: isLiveVideo && isMediaPipeLoaded
+        usedMediaPipe: analysisResult?.usedMediaPipe === true
       },
       isDemo
     };
@@ -728,7 +758,11 @@ export default function SkinPage() {
           onOpenModal={(modal) => setActiveModal(modal)}
           onNavigateToCare={handleNavigateToCare}
           videoRef={videoRef}
-          isLiveVideo={isLiveVideo}
+          isLiveVideo={false}
+          isBaseline={analysisResult?.isBaseline}
+          comparisonUnavailable={analysisResult?.comparisonUnavailable}
+          baselineTimestamp={analysisResult?.baselineTimestamp}
+          baselineId={analysisResult?.baselineId}
         />
       )}
 

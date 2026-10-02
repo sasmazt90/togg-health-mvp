@@ -11,6 +11,8 @@ export const STORAGE_KEYS = {
   // Real Mode Keys
   LATEST_SKIN: 'togg_health_latest_skin',
   SKIN_BASELINE: 'togg_health_skin_baseline',
+  SKIN_BASELINE_META: 'togg_health_skin_baseline_meta',
+  SKIN_REMINDER: 'togg_health_skin_reminder',
   SKIN_HISTORY: 'togg_health_skin_history',
   LATEST_VISION: 'togg_health_latest_vision',
   LATEST_MENTAL: 'togg_health_latest_mental',

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { VehicleContextProvider } from '../context/VehicleContext';
+import { ReminderNotice } from '../components/ReminderNotice';
 import { CockpitHeader } from '../components/CockpitHeader';
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default function RootLayout({
         <VehicleContextProvider>
           <CockpitHeader />
           <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
+            <ReminderNotice />
             {children}
           </main>
           <footer className="border-t border-cockpit-border/40 py-3 px-6 text-center text-xs text-slate-500 bg-cockpit-surface/50">

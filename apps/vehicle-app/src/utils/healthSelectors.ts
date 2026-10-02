@@ -156,9 +156,9 @@ export function getSkinSummary(demoMode: boolean = isDemoMode()): SkinSummaryDat
     const isBaseline = !!parsed.isBaseline;
     const regionNameTr = parsed.highestChangeRegion || (isBaseline ? 'Referans Tarama' : 'Tüm Bölgeler');
     const changePct = Number(parsed.highestChangePct || 0);
-    const changeLabel = isBaseline
+    const changeLabel = parsed.comparisonUnavailable ? 'Karşılaştırılamadı' : isBaseline
       ? 'Referans Kaydedildi'
-      : `${changePct > 0 ? '+' : ''}%${changePct} Değişim`;
+      : `Kızarıklık piksel göstergesi: ${changePct > 0 ? '+' : ''}${changePct}%`;
 
     return {
       hasData: true,
@@ -167,7 +167,7 @@ export function getSkinSummary(demoMode: boolean = isDemoMode()): SkinSummaryDat
       regionNameTr,
       changePct,
       changeLabel,
-      recommendation: parsed.referralSuggested ? 'Uzman görüşü önerildi' : 'Referans bandında',
+      recommendation: parsed.comparisonUnavailable ? 'Uyumlu ışık/netlik/poz koşullarında yeniden deneyin' : isBaseline ? 'Sonraki uygun taramayla karşılaştırılacak' : parsed.referralSuggested ? 'Uzman görüşü önerildi' : 'Referans bandında',
       isBaseline,
       rawRecord: parsed
     };

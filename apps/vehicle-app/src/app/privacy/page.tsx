@@ -149,7 +149,7 @@ export default function PrivacyPage() {
     setWipeStatus('WIPING');
     let local = true;
     const healthKeys = [STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
-      STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
+      STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
       STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
     for (const key of healthKeys) {
       try {
@@ -159,6 +159,7 @@ export default function PrivacyPage() {
         local = false;
       }
     }
+    window.dispatchEvent(new Event('attune-reminder'));
     let backend = false;
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), 8000);

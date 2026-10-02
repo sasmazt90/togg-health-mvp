@@ -37,6 +37,25 @@ export interface ImageQuality {
   warningMessageTr?: string;
 }
 
+export type SkinCapturePose = Pick<FaceAlignment, 'yaw' | 'pitch' | 'roll' | 'scaleRatio'>;
+export interface SkinReferenceMetadata {
+  id: string; timestamp: string; schemaVersion: 1; scope: 'single-front-v1';
+  quality: ImageQuality; pose: SkinCapturePose;
+}
+
+// Conservative comparability checks, not clinically calibrated diagnostic cutoffs.
+export function canCompareSkinReference(metadata: SkinReferenceMetadata | null, quality: ImageQuality, pose: SkinCapturePose): boolean {
+  if (!metadata || metadata.schemaVersion !== 1 || metadata.scope !== 'single-front-v1' || !metadata.quality || !metadata.pose) return false;
+  const prior = metadata.quality;
+  const values = [quality.avgLuminance, quality.blurScore, prior.avgLuminance, prior.blurScore,
+    ...Object.values(pose), ...Object.values(metadata.pose)];
+  if (!values.every(Number.isFinite) || !quality.isValid || !prior.isValid || prior.avgLuminance < 40 || prior.avgLuminance > 220 || prior.blurScore < 4) return false;
+  return Math.abs(quality.avgLuminance - prior.avgLuminance) <= 15 &&
+    Math.max(quality.blurScore, prior.blurScore) / Math.min(quality.blurScore, prior.blurScore) <= 2 &&
+    Math.abs(pose.yaw - metadata.pose.yaw) <= .12 && Math.abs(pose.pitch - metadata.pose.pitch) <= .12 &&
+    Math.abs(pose.roll - metadata.pose.roll) <= .15 && Math.abs(pose.scaleRatio - metadata.pose.scaleRatio) <= .08;
+}
+
 export interface RegionMetrics {
   id: 'forehead' | 'rightCheek' | 'leftCheek' | 'nose' | 'chin' | 'periorbital';
   nameTr: string;
@@ -57,6 +76,11 @@ export interface SkinAnalysisResult {
   isBaseline: boolean;
   clinicalNoteTr: string;
   usedMediaPipe: boolean;
+  baselineId?: string;
+  baselineTimestamp?: string;
+  comparisonUnavailable?: boolean;
+  comparisonScope?: string;
+  capturePose?: SkinCapturePose;
 }
 
 // Landmark indeksleri (MediaPipe Face Mesh Standardı)
@@ -212,10 +236,10 @@ export class SkinAnalyzer {
       guidance = 'Lütfen biraz geriye çekilin';
       isAligned = false;
     } else if (yaw > 0.20) {
-      guidance = 'Lütfen biraz sola dönün';
+      guidance = 'Kameraya dönün; başınızı karşıya hizalayın';
       isAligned = false;
     } else if (yaw < -0.20) {
-      guidance = 'Lütfen biraz sağa dönün';
+      guidance = 'Kameraya dönün; başınızı karşıya hizalayın';
       isAligned = false;
     } else if (pitch > 0.22) {
       guidance = 'Lütfen başınızı hafifçe yukarı kaldırın';
@@ -328,9 +352,10 @@ export class SkinAnalyzer {
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    faceDetected: boolean = true
+    faceDetected: boolean = true,
+    faceBox?: FaceAlignment['box']
   ): ImageQuality {
-    if (!faceDetected) {
+    if (!faceDetected || (faceBox && ![faceBox.x, faceBox.y, faceBox.width, faceBox.height].every(Number.isFinite))) {
       return {
         isValid: false,
         avgLuminance: 0,
@@ -340,7 +365,14 @@ export class SkinAnalyzer {
       };
     }
 
-    const imgData = ctx.getImageData(0, 0, width, height);
+    // Crop to the detected face; background detail/light must not admit a poor face frame.
+    const x0 = faceBox ? Math.max(0, Math.min(width - 1, Math.ceil(faceBox.x))) : 0;
+    const y0 = faceBox ? Math.max(0, Math.min(height - 1, Math.ceil(faceBox.y))) : 0;
+    const x1 = faceBox ? Math.min(width, Math.floor(faceBox.x + faceBox.width)) : width;
+    const y1 = faceBox ? Math.min(height, Math.floor(faceBox.y + faceBox.height)) : height;
+    if (x1 - x0 < 4 || y1 - y0 < 4) return { isValid: false, avgLuminance: 0, blurScore: 0, status: 'NO_FACE', warningMessageTr: 'Yüz bölgesi ölçülemiyor.' };
+    const imgData = ctx.getImageData(x0, y0, x1 - x0, y1 - y0);
+    width = imgData.width; height = imgData.height;
     const data = imgData.data;
 
     let totalLum = 0;
@@ -458,10 +490,13 @@ export class SkinAnalyzer {
     const results: Record<string, RegionMetrics> = {};
 
     for (const roi of roiDefinitions) {
-      const rx = Math.max(0, Math.min(width - 4, Math.round(roi.x)));
-      const ry = Math.max(0, Math.min(height - 4, Math.round(roi.y)));
-      const rw = Math.max(4, Math.min(width - rx, Math.round(roi.w)));
-      const rh = Math.max(4, Math.min(height - ry, Math.round(roi.h)));
+      const rx = Math.max(0, Math.ceil(roi.x));
+      const ry = Math.max(0, Math.ceil(roi.y));
+      const rw = Math.min(width, Math.floor(roi.x + roi.w)) - rx;
+      const rh = Math.min(height, Math.floor(roi.y + roi.h)) - ry;
+      if (![rx, ry, rw, rh].every(Number.isFinite) || rw < 4 || rh < 4) {
+        throw new Error(`INVALID_ROI: ${roi.nameTr} kamera alanında güvenilir ölçülemiyor.`);
+      }
 
       const imgData = ctx.getImageData(rx, ry, rw, rh);
       const data = imgData.data;
@@ -499,8 +534,9 @@ export class SkinAnalyzer {
         }
       }
 
-      const avgRedness = pixelCount > 0 ? sumRedness / pixelCount : 20;
-      const avgLum = pixelCount > 0 ? (sumLum / pixelCount / 255.0) * 100 : 50;
+      if (pixelCount === 0) throw new Error(`INVALID_ROI: ${roi.nameTr} için ölçülebilir piksel yok.`);
+      const avgRedness = sumRedness / pixelCount;
+      const avgLum = (sumLum / pixelCount / 255.0) * 100;
 
       // Doku varyansı (standart sapma proxy'si)
       let varianceSum = 0;
@@ -508,7 +544,7 @@ export class SkinAnalyzer {
       for (const val of lumValues) {
         varianceSum += (val - meanLum) * (val - meanLum);
       }
-      const variance = pixelCount > 0 ? Math.sqrt(varianceSum / pixelCount) : 10;
+      const variance = Math.sqrt(varianceSum / pixelCount);
       const normalizedTexture = Math.min(100, Math.round(variance * 2.5));
 
       results[roi.id] = {
