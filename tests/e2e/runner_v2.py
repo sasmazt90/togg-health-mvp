@@ -36,10 +36,10 @@ extra=r'''
     c,page=new()
     def vision_geometry():
         go(page,'/vision');page.get_by_role('button',name='TESTİ HAZIRLA').click();page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç').click();page.get_by_role('button',name='Doğrulandı, Testi Başlat').click()
-        circle=page.locator('circle[stroke-dasharray]');svg=circle.locator('..');widths=[]
+        svg=page.locator('svg[data-logmar]');widths=[]
         for i in range(3):
             widths.append(svg.evaluate('(s)=>({width:s.getBoundingClientRect().width,attr:s.getAttribute("width"),style:s.getAttribute("style")})'))
-            deg=svg.evaluate('(s)=>parseFloat(s.style.transform.match(/rotate\(([-\d.]+)deg\)/)[1])')
+            deg=svg.evaluate('(s)=>parseFloat(s.parentElement.style.transform.match(/rotate\(([-\d.]+)deg\)/)[1])')
             title={0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[deg]
             page.get_by_title(title,exact=True).click();page.wait_for_timeout(450)
         snap(page,'vision-geometry');(OUT/'vision-geometry-values.json').write_text(json.dumps(widths,indent=2));require(widths[-1]['width']<widths[0]['width'],'Correct responses change reported difficulty but actual symbol width remains '+str(widths))

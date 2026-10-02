@@ -171,7 +171,7 @@ with sync_playwright() as pw:
                 for i in range(3):
                     page.wait_for_function('document.querySelector("svg[data-logmar]").getAnimations().length === 0')
                     observations.append(symbol.evaluate('(s)=>({width:s.getBoundingClientRect().width,logMAR:Number(s.dataset.logmar)})'))
-                    angle = symbol.evaluate("s=>parseFloat(s.style.transform.match(/rotate\(([-\\d.]+)deg\)/)[1])")
+                    angle = symbol.evaluate("s=>parseFloat(s.parentElement.style.transform.match(/rotate\(([-\\d.]+)deg\)/)[1])")
                     title = {0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle]
                     page.get_by_title(title,exact=True).click()
                 assert observations[-1]['width'] < observations[0]['width'], observations

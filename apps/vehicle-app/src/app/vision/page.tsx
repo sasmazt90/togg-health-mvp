@@ -282,6 +282,8 @@ export default function VisionPage() {
   const optotypeSizeMm = VisionStaircaseController.calculateOptotypeSizeMm(verifiedDistanceCm, currentLogMAR);
   const optotypeSizePx = VisionStaircaseController.mmToPixels(optotypeSizeMm, pixelsPerMm);
 
+  const optotypeViewportPx = Math.ceil(optotypeSizePx) + 2;
+
   const directionAngles: Record<OptotypeDirection, number> = {
     RIGHT: 0,
     DOWN: 90,
@@ -633,35 +635,22 @@ export default function VisionPage() {
                 opacity: testStep === 'TESTING_CONTRAST' ? contrastLevelPct / 100 : 1.0
               }}
             >
-              <svg
-                width={optotypeSizePx}
-                height={optotypeSizePx}
-                data-logmar={currentLogMAR}
-                data-trial={trialIndex}
-                role="img"
-                aria-label="Görme testi simgesi"
-                viewBox="0 0 100 100"
-                style={{
-                  transform: `rotate(${directionAngles[currentDirection]}deg)`,
-                  transition: 'none'
-                }}
-                className="shrink-0"
-              >
-                <defs>
-                  <mask id="landolt-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-                    <rect width="100" height="100" fill="white" />
-                    <rect x="50" y="40" width="50" height="20" fill="black" />
-                  </mask>
-                </defs>
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  fill="none"
-                  stroke={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#00E5FF'}
-                  strokeWidth="20"
-                  mask="url(#landolt-gap)"
-                />
+              {/* Integer outer viewport avoids Blink snapping the measured glyph non-uniformly.
+                  The nested measured symbol keeps the exact mm-to-px size. */}
+              <svg width={optotypeViewportPx} height={optotypeViewportPx}
+                viewBox={`0 0 ${optotypeViewportPx} ${optotypeViewportPx}`}
+                style={{ transform: `rotate(${directionAngles[currentDirection]}deg)`, transition: 'none' }}
+                className="shrink-0" role="presentation">
+                <svg x={(optotypeViewportPx - optotypeSizePx) / 2} y={(optotypeViewportPx - optotypeSizePx) / 2}
+                  width={optotypeSizePx} height={optotypeSizePx} viewBox="0 0 100 100"
+                  data-logmar={currentLogMAR} data-trial={trialIndex}
+                  role="img" aria-label="Görme testi simgesi">
+                  {/* Outer diameter 100, inner diameter 60, rectangular gap 20. */}
+                  <path
+                    d="M 98.9897948566 40 A 50 50 0 1 0 98.9897948566 60 L 78.2842712475 60 A 30 30 0 1 1 78.2842712475 40 Z"
+                    fill={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#00E5FF'}
+                  />
+                </svg>
               </svg>
             </div>
           </div>
