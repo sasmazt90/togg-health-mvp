@@ -31,6 +31,7 @@ for mode in ['success','failure']:
     assert backend['transportFamily'] in ['httpx','httpx2'] and backend['blockedSocketConnections']==0
     assert backend['realHTTPDispatchCalls']==0 and backend['sdkMaxRetries'] and set(backend['sdkMaxRetries'])=={0}
     assert cleanup['ownedProcessesExited'] and cleanup['temporaryStorageRemoved']
+    assert ui['localSavingExplicitUIToggle'] is True
     assert ui['physicalMicrophone']=='denied' and ui['captureAttempts']==0
     if mode=='success':
         expected=['conversation','tts']*3+['summary']

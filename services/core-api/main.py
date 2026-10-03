@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
+from time import perf_counter
+from openai_client import get_openai_client, close_openai_client
 from pathlib import Path
 
 # Backend-only local configuration. CI has no local file and remains keyless.
@@ -53,6 +55,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    expose_headers=["Server-Timing"],
 )
 
 
@@ -63,7 +66,15 @@ async def enforce_browser_origin(request: Request, call_next):
     # they can mutate local health data, including simple POSTs without preflight.
     if request.method != "OPTIONS" and origin is not None and origin not in trusted_origins:
         return JSONResponse(status_code=403, content={"detail": "Untrusted browser origin"})
-    return await call_next(request)
+    started = perf_counter()
+    response = await call_next(request)
+    if request.url.path.startswith("/api/mental/"):
+        existing = response.headers.get("Server-Timing")
+        timing = f"app;dur={(perf_counter() - started) * 1000:.1f}"
+        response.headers["Server-Timing"] = f"{existing}, {timing}" if existing else timing
+    return response
+
+app.add_event_handler("shutdown", close_openai_client)
 
 # ---------------------------------------------------------------------------
 # In-Memory State & Mock Data (Local-First)
@@ -287,14 +298,21 @@ def mental_speech(payload: SpeechPayload):
     if not api_key:
         raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key, timeout=25, max_retries=0)
-        speech = client.audio.speech.create(
+        started = perf_counter()
+        client = get_openai_client(api_key)
+        connected = perf_counter()
+        with client.audio.speech.with_streaming_response.create(
             model=os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'), voice='coral',
             input=payload.text, response_format='mp3',
             instructions='Türkçe konuş. Sakin, sıcak ve doğal bir sohbet tonu kullan. Abartılı vurgu yapma.'
-        )
-        return Response(content=speech.content, media_type='audio/mpeg', headers={'Cache-Control': 'no-store'})
+        ) as speech:
+            headers_ready = perf_counter()
+            audio = speech.read()
+        finished = perf_counter()
+        # Provider generation overlaps transfer; these are measured boundaries, not a claim
+        # that generation and network time can be separated without provider telemetry.
+        timing = f'sdk;dur={(connected-started)*1000:.1f}, tts_headers;dur={(headers_ready-connected)*1000:.1f}, tts_body;dur={(finished-headers_ready)*1000:.1f}'
+        return Response(content=audio, media_type='audio/mpeg', headers={'Cache-Control': 'no-store', 'Server-Timing': timing})
     except Exception as error:
         raise HTTPException(status_code=503, detail=provider_error_category(error)) from None
 

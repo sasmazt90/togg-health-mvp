@@ -83,8 +83,10 @@ def send(self, request, *send_args, **kwargs):
         dispatch_started = True
         original_send_calls += 1
         response = original_send(self, request, *send_args, **kwargs)  # Original SDK send; fixture transport is enabled only by explicit keyless preparation.
+        headers_ready = time.monotonic()
         response.read()
-        event = {'kind': kind, 'httpStatus': response.status_code, 'durationMs': round((time.monotonic()-start)*1000, 1), 'requestId': response.headers.get('x-request-id'), 'markerBeforeDispatch': CONSUMED.exists(), 'admissionCompletedBeforeBackendReturn':False}
+        body_ready = time.monotonic()
+        event = {'kind': kind, 'httpStatus': response.status_code, 'durationMs': round((body_ready-start)*1000, 1), 'headersMs': round((headers_ready-start)*1000, 1), 'bodyReadMs': round((body_ready-headers_ready)*1000, 1), 'streamedResponse': kwargs.get('stream') is True, 'requestId': response.headers.get('x-request-id'), 'markerBeforeDispatch': CONSUMED.exists(), 'admissionCompletedBeforeBackendReturn':False}
         events.append(event)
         if kind == 'conversation' and response.is_success:
             reply = response.json()['choices'][0]['message']['content']

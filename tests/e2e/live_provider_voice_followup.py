@@ -11,9 +11,9 @@ OUT=live_run_output(Path.cwd(),args.run_id);OUT.mkdir(parents=True,exist_ok=True
 INIT=r'''(()=>{window.audioProof=[];window.captureAttempts=0;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prototype.start=function(){window.captureAttempts++;throw new DOMException('Capture forbidden in text-only audit','NotAllowedError');};}
 const gum=navigator.mediaDevices?.getUserMedia;if(gum)navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;return Promise.reject(new DOMException('Capture forbidden in text-only audit','NotAllowedError'));};
-const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...a){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null}));}return play.apply(this,a);};})();'''
+const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...a){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null,duration:Number.isFinite(this.duration)?this.duration:null,currentTime:this.currentTime}));}return play.apply(this,a);};})();'''
 proof={'mode':'KEYLESS_FIXTURE_PREPARATION' if args.fixture else 'LIVE_ATTEMPT','liveAcceptance':False,'runId':args.run_id or 'controlled-text','status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
-gate=LiveAdmission(False);starts=[];speech_starts=[]
+gate=LiveAdmission(False);starts=[];speech_starts=[];tts_ready=[]
 with sync_playwright() as pw:
  browser=pw.chromium.launch(channel='chrome',headless=True,args=['--autoplay-policy=no-user-gesture-required'])
  context=browser.new_context(viewport={'width':1600,'height':1000},locale='tr-TR');context.add_init_script(INIT)
@@ -39,6 +39,8 @@ with sync_playwright() as pw:
    def record(kind,data,response):
     assert gate.pending is None
     proof.setdefault('admissionCompletedBeforeUI',[]).append(kind)
+    proof.setdefault('backendTimings',[]).append({'kind':kind,'serverTiming':response.headers.get('server-timing'),'responseReceivedAtMs':round(page.evaluate('performance.now()'),1)})
+    if kind=='tts':tts_ready.append(page.evaluate('performance.now()'))
     if data is not None:
      proof['responses'].append({'kind':kind,'providerType':data.get('providerType'),'responseMs':round(page.evaluate('performance.now()')-starts[-1],1) if kind=='conversation' else None})
    if not forward_admitted_response(route,gate,kind,record):proof['status']='PROVIDER_FAILURE_NO_RETRY'
@@ -47,6 +49,12 @@ with sync_playwright() as pw:
  page.route('**/api/mental/**',route_guard)
  try:
   context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
+  page.goto('http://localhost:3000/privacy')
+  page.get_by_role('button',name='Devre Dışı Bırak',exact=True).click()
+  assert page.evaluate('localStorage.getItem("togg_privacy_mental_summary_allowed")')=='false'
+  page.get_by_role('button',name='Etkinleştir',exact=True).click()
+  assert page.evaluate('localStorage.getItem("togg_privacy_mental_summary_allowed")')=='true'
+  proof['localSavingExplicitUIToggle']=True
   page.goto('http://localhost:3000/mental')
   permission=page.evaluate('navigator.permissions.query({name:"microphone"}).then(p=>p.state)');assert permission=='denied'
   assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
@@ -76,6 +84,7 @@ with sync_playwright() as pw:
   assert page.evaluate('window.captureAttempts')==0;proof['captureAttempts']=0
   proof['playbackFromUserSendMs']=[round(e['time']-starts[i],1) for i,e in enumerate(playing)]
   proof['playbackFromTTSRequestMs']=[round(e['time']-speech_starts[i],1) for i,e in enumerate(playing)]
+  proof['bufferedTTSBackendToPlayingMs']=[round(e['time']-tts_ready[i],1) for i,e in enumerate(playing)]
   proof['records']=1;proof['status']='PASS';proof['liveAcceptance']=not bool(args.fixture);page.screenshot(path=str(OUT/'completed.png'),full_page=True)
  except Exception as error:
   proof['status']='FAIL';proof['failureCategory']=type(error).__name__

@@ -20,6 +20,7 @@ Oturum Özeti Analizcisi:
 """
 
 import os
+from openai_client import get_openai_client
 import unicodedata
 import re
 import json
@@ -168,8 +169,7 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
         driver_name: str = "Ahmet Bey"
     ) -> Dict[str, Any]:
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=25, max_retries=0)
+            client = get_openai_client(self.api_key, self.base_url)
 
             system_prompt = (
                 "Sen Togg araç içi Ruhsal İyi Oluş Asistanısın. Kullanıcı ile Türkçe, sıcak ve empatik konuşursun.\n"
@@ -300,8 +300,7 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
 
     def analyze_session(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=25, max_retries=0)
+            client = get_openai_client(self.api_key, self.base_url)
 
             prompt = (
                 "Aşağıdaki kullanıcı-asistan araç içi konuşmasını analiz et ve kesinlikle geçerli tek bir JSON nesnesi üret.\n"
