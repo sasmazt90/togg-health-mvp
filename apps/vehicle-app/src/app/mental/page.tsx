@@ -66,7 +66,7 @@ export default function MentalPage() {
       {!c.active && conversationTranscript}
       <p className="text-xs">Acil Kriz Destek: <strong>112 Acil Çağrı</strong></p>
     </section>
-    {c.active && isParked && <section data-live-transcript className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5"><h2 className="font-bold">Görüşme Akışı</h2>{conversationTranscript}</section>}
+    {c.active && isParked && <section data-live-transcript className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5"><h2 className="font-bold">Görüşme Akışı</h2>{conversationTranscript}<button onClick={referral} className="text-togg-turquoise font-bold text-sm">PSİKOLOG SEÇENEKLERİNİ GÖR</button></section>}
     {!c.active && isParked && !demo && <section data-mental-history className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5">
       <h2 className="font-bold">Stres Ağırlıkları Özeti</h2>
       <p className="text-xs text-slate-400">Bu grafik tanı veya ölçülmüş stres düzeyi değildir; tamamlanmış ve saklama izinli görüşmelerdeki tema paylarını gösterir.</p>
@@ -80,7 +80,7 @@ export default function MentalPage() {
       {c.active && <p className="text-xs text-slate-400">Bu görüşme bitmeden yeni özet veya geçmiş kaydı oluşturulmaz.</p>}
       {c.summary && <div data-current-summary><h3 className="text-sm font-bold">Tamamlanan görüşmenin özeti</h3><p className="text-sm">{translateMood(c.summary.summaryText)}</p><p data-summary-provider className="text-xs text-togg-turquoise">{c.summary.providerType === 'LIVE_OPENAI' ? 'LIVE_OPENAI — OpenAI özeti' : c.summary.providerType === 'LOCAL_DEMO_FALLBACK' ? 'LOCAL_DEMO_FALLBACK — sağlayıcıya ulaşılamadı, yerel özet' : c.summary.providerType === 'LOCAL_DEMO' ? 'LOCAL_DEMO — yerel özet' : 'Özet sağlayıcı bilgisi yok'}</p></div>}
       {!c.history.length && <p>Henüz kayıtlı görüşme yok. Yalnızca gerçekleştirdiğiniz ve kaydedilmesine izin verdiğiniz görüşmeler burada gösterilir.</p>}
-      {[...c.history].reverse().map(h => <article key={h.id} data-history-id={h.id} className="border-t border-white/10 pt-3 text-sm"><time dateTime={h.date}>{new Date(h.date).toLocaleString('tr-TR')}</time><p>{translateMood(h.summaryText)}</p><p className="text-xs text-slate-400">{h.themes.join(' • ')}{h.moodTrend ? ` · ${translateMood(h.moodTrend)}` : ''}</p>{h.schemaVersion !== 2 && <p className="text-xs text-slate-400">Eski kayıt; tamamlanma ve izin bilgisi doğrulanamadı.</p>}</article>)}
+      {[...c.history].reverse().map(h => <article key={h.id} data-history-id={h.id} className="border-t border-white/10 pt-3 text-sm grid grid-cols-[8rem_minmax(0,1fr)] gap-3"><time dateTime={h.date}>{new Date(h.date).toLocaleString('tr-TR')}</time><div className="space-y-1"><p>{translateMood(h.summaryText)}</p><p className="text-xs text-slate-400">{h.themes.join(' • ')}{h.moodTrend ? ` · ${translateMood(h.moodTrend)}` : ''}</p>{h.schemaVersion !== 2 && <p className="text-xs text-slate-400">Eski kayıt; tamamlanma ve izin bilgisi doğrulanamadı.</p>}</div></article>)}
       <p className="text-xs text-slate-400">Özet oluşturma ve kalıcı saklama ayrı işlemlerdir. Saklama izni Gizlilik & İzinler menüsünden yönetilir. Ham ses ve tam görüşme dökümü saklanmaz.</p>
       <button onClick={referral} className="text-togg-turquoise font-bold text-sm">PSİKOLOG SEÇENEKLERİNİ GÖR</button>
     </section>}

@@ -320,6 +320,7 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
             resp = client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=400,
                 temperature=0.2,
                 response_format={"type": "json_object"}
             )

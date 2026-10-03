@@ -205,7 +205,7 @@ with sync_playwright() as pw:
                 for invented in ['son konuşmalarımızdaki','4 Seans Analiz Edildi','%75','%60','Sabah saatlerinde odaklanma']:
                     assert invented not in body, body
                 enter_text(page,'Bugün çocukları okuldan aldım; ailece güzel zaman geçirdik.')
-                expect(panel).to_contain_text('0 kayıtlı görüşme')
+                expect(panel).to_have_count(0)  # Active right column shows the full transcript.
                 assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
                 finish_conversation(page)
                 expect(panel).to_contain_text('1 kayıtlı görüşme')
@@ -213,7 +213,8 @@ with sync_playwright() as pw:
                 first_history = page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))')
                 assert len(first_history)==1
                 enter_text(page,'Ailemle konuşmak iyi geldi.')
-                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                expect(panel).to_have_count(0)
+                assert len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))'))==1
                 finish_conversation(page)
                 expect(panel).to_contain_text('2 kayıtlı görüşme')
                 page.reload()

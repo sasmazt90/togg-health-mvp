@@ -132,3 +132,14 @@ and captures actual native event diagnostics on failure. No transcript event or 
 result is substituted. Acceptance remains pending until that real check succeeds.
 Multi-angle tests additionally verify cancellation and corrupt-reference preservation.
 Reminder and selected-preview screenshots are captured alongside existing behavior checks.
+
+
+Active-panel regression expectation follows the supplied before/during layout:
+no history panel during active conversation, storage count unchanged, then the
+same records visible after finish. Date/time and summary occupy adjacent row
+columns. Native diagnostics showed the second capture ending without a result
+and subsequent no-speech events while the app kept listening; the first STT/TTS
+turn succeeded. The next bounded check uses three simpler distinct synthetic
+phrases and the same 48 kHz mono PCM preparation as the original native baseline,
+with speech/nomatch events and distinct-transcript assertions retained.
+Summary generation is bounded to 400 output tokens without SDK retries.
