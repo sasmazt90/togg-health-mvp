@@ -7,15 +7,16 @@ import sys
 import time
 import httpx
 import uvicorn
-from live_provider_admission import LiveAdmission
+from live_provider_admission import LiveAdmission,live_run_output,claim_live_run
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--approved-additional-text-run', action='store_true')
+parser.add_argument('--run-id')
 args = parser.parse_args()
 if not args.approved_additional_text_run:
     raise SystemExit('No authorization: no server or provider request')
 ROOT = Path(__file__).resolve().parents[2]
-OUT = ROOT/'audit-results/live-provider/controlled-text'
+OUT = live_run_output(ROOT,args.run_id)
 OUT.mkdir(parents=True, exist_ok=True)
 CONSUMED = OUT/'run-consumed.json'
 if CONSUMED.exists():
@@ -25,7 +26,7 @@ events = []
 original_send = httpx.Client.send
 
 def save():
-    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False}, indent=2), encoding='utf-8')
+    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': args.run_id or 'controlled-text'}, indent=2), encoding='utf-8')
 
 def send(self, request, *args, **kwargs):
     try:
@@ -37,8 +38,7 @@ def send(self, request, *args, **kwargs):
             gate.reject('MODEL_CHANGED')
         kind = gate.admit(request.url.path, data)
         if sum(gate.counts.values()) == 1:
-            with CONSUMED.open('x', encoding='utf-8') as marker:
-                json.dump({'authorization': 'one synthetic written three-turn run', 'automaticRetryAllowed': False}, marker)
+            claim_live_run(OUT,args.run_id)
         start = time.monotonic()
         response = original_send(self, request, *args, **kwargs)  # Actual network, no mock response.
         response.read()

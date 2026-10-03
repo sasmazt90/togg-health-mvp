@@ -84,3 +84,15 @@ def test_honest_fallback_delivered_but_no_following_request_admitted():
     assert not module.forward_admitted_response(Route(),gate,kind,lambda *a:None)
     assert delivered==['LOCAL_DEMO_FALLBACK'] and gate.failed
     with pytest.raises(module.AdmissionRejected):gate.admit('/v1/audio/speech',{'input':'Yerel demo','voice':'coral','response_format':'mp3'})
+
+
+@pytest.mark.parametrize('run_id',['../previous','a/b','', 'UPPERCASE'])
+def test_live_run_identity_cannot_escape_or_reuse_implicit_path(tmp_path,run_id):
+    with pytest.raises(ValueError):module.live_run_output(tmp_path,run_id)
+
+def test_distinct_authorization_preserves_previous_consumed_marker(tmp_path):
+    old=module.live_run_output(tmp_path);module.claim_live_run(old);before=(old/'run-consumed.json').read_bytes()
+    new=module.live_run_output(tmp_path,'20261003-approved-02');module.claim_live_run(new,'20261003-approved-02')
+    with pytest.raises(FileExistsError):module.claim_live_run(new,'20261003-approved-02')
+    assert (old/'run-consumed.json').read_bytes()==before
+    assert new!=old and new.is_relative_to(tmp_path)

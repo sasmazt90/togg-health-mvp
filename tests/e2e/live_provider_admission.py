@@ -100,3 +100,20 @@ def forward_admitted_response(route, gate, kind, record, expected_provider='LIVE
     record(kind, data, response)
     route.fulfill(response=response)
     return success
+
+
+def live_run_output(root, run_id=None):
+    """Distinct authorization ledger; reject traversal and preserve previous run."""
+    from pathlib import Path
+    import re
+    if run_id is not None and not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,63}', run_id):
+        raise ValueError('Invalid live run identity')
+    return Path(root)/'audit-results'/'live-provider'/(run_id or 'controlled-text')
+
+
+def claim_live_run(output, run_id=None):
+    """Exclusive one-shot marker before real HTTP dispatch; never reset/retry."""
+    import json
+    output.mkdir(parents=True,exist_ok=True)
+    with (output/'run-consumed.json').open('x',encoding='utf-8') as marker:
+        json.dump({'runId':run_id or 'controlled-text','authorization':'one user-approved synthetic written three-turn run','automaticRetryAllowed':False,'maxProviderRequests':{'conversation':3,'tts':3,'summary':1}},marker)

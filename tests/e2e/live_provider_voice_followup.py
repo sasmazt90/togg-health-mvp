@@ -4,15 +4,15 @@ Physical capture denied. Exact messages/history checked in browser and HTTP egre
 import argparse,json,time
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
-from live_provider_admission import LiveAdmission,TEXTS,forward_admitted_response
-parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');args=parser.parse_args()
+from live_provider_admission import LiveAdmission,TEXTS,forward_admitted_response,live_run_output
+parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');parser.add_argument('--run-id');args=parser.parse_args()
 if not args.approved_additional_text_run:raise SystemExit('No authorization: zero provider requests')
-OUT=Path('audit-results/live-provider/controlled-text');OUT.mkdir(parents=True,exist_ok=True)
+OUT=live_run_output(Path.cwd(),args.run_id);OUT.mkdir(parents=True,exist_ok=True)
 INIT=r'''(()=>{window.audioProof=[];window.captureAttempts=0;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prototype.start=function(){window.captureAttempts++;throw new DOMException('Capture forbidden in text-only audit','NotAllowedError');};}
 const gum=navigator.mediaDevices?.getUserMedia;if(gum)navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;return Promise.reject(new DOMException('Capture forbidden in text-only audit','NotAllowedError'));};
 const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...a){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null}));}return play.apply(this,a);};})();'''
-proof={'status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
+proof={'runId':args.run_id or 'controlled-text','status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
 gate=LiveAdmission(False);starts=[];speech_starts=[]
 with sync_playwright() as pw:
  browser=pw.chromium.launch(channel='chrome',headless=True,args=['--autoplay-policy=no-user-gesture-required'])
@@ -23,6 +23,8 @@ with sync_playwright() as pw:
   req=route.request
   if req.method=='GET':route.continue_();return
   try:
+   if page.evaluate('window.captureAttempts')!=0:gate.reject('CAPTURE_ATTEMPT_BEFORE_DISPATCH')
+   if page.evaluate('navigator.permissions.query({name:"microphone"}).then(p=>p.state)')!='denied':gate.reject('MICROPHONE_NOT_DENIED')
    data=req.post_data_json;path=req.url.rsplit('/',1)[-1]
    if data.get('cloudConsent') is not True:gate.reject('CLOUD_CONSENT_NOT_EXPLICIT')
    if path=='converse':
@@ -56,10 +58,7 @@ with sync_playwright() as pw:
    expect(page.locator('[data-chat-author="AI"]')).to_have_count(i+1,timeout=35000)
    assert proof['responses'][i]['providerType']=='LIVE_OPENAI'
    page.wait_for_function('(n)=>window.audioProof.filter(e=>e.type==="playing").length===n',arg=i+1,timeout=35000)
-   if i<2:page.wait_for_function('(n)=>window.audioProof.filter(e=>e.type==="ended").length===n',arg=i+1,timeout=90000)
-   else:
-    page.wait_for_timeout(250);page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click()
-    expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','ready')
+   page.wait_for_function('(n)=>window.audioProof.filter(e=>e.type==="ended").length===n',arg=i+1,timeout=90000)
    assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
   assert [x['content'] for x in gate.messages if x['role']=='user']==list(TEXTS)
   replies=page.locator('[data-chat-author="AI"]').all_text_contents();assert len(replies)==len(set(replies))==3
@@ -70,8 +69,8 @@ with sync_playwright() as pw:
   assert gate.counts=={'conversation':3,'tts':3,'summary':1} and proof['historyLengths']==[0,2,4]
   page.wait_for_timeout(1200);assert gate.counts=={'conversation':3,'tts':3,'summary':1}
   proof['audioEvents']=page.evaluate('window.audioProof');playing=[e for e in proof['audioEvents'] if e['type']=='playing'];ended=[e for e in proof['audioEvents'] if e['type']=='ended'];pauses=[e for e in proof['audioEvents'] if e['type']=='pause']
-  assert len(playing)==3 and len(ended)==2 and pauses and not [e for e in proof['audioEvents'] if e['type']=='error']
-  assert pauses[-1]['time']>playing[-1]['time'];proof['thirdPlaybackIntentionallyCancelled']=True
+  assert len(playing)==3 and len(ended)==3 and not [e for e in proof['audioEvents'] if e['type']=='error']
+  proof['allThreePlaybacksEnded']=True
   assert page.evaluate('window.captureAttempts')==0;proof['captureAttempts']=0
   proof['playbackFromUserSendMs']=[round(e['time']-starts[i],1) for i,e in enumerate(playing)]
   proof['playbackFromTTSRequestMs']=[round(e['time']-speech_starts[i],1) for i,e in enumerate(playing)]
@@ -80,7 +79,7 @@ with sync_playwright() as pw:
   proof['status']='FAIL';proof['failureCategory']=type(error).__name__
   raise
  finally:
-  proof['browserAdmission']=gate.proof();proof['audioEvents']=page.evaluate('window.audioProof')
+  proof['browserAdmission']=gate.proof();proof['audioEvents']=page.evaluate('window.audioProof');proof['captureAttempts']=page.evaluate('window.captureAttempts');proof['recordsObserved']=page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history")||"[]").length')
   (OUT/'ui-proof.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8')
   context.close();browser.close()
 print(json.dumps(proof,ensure_ascii=False))
