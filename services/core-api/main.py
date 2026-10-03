@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from contextlib import asynccontextmanager
 import os
 from time import perf_counter
 from openai_client import get_openai_client, close_openai_client
@@ -29,10 +30,18 @@ from mental_provider import (get_active_mental_provider, check_mental_crisis, ge
 from session_memory import SessionMemoryManager
 from care_provider import BrowserCareSearchProvider, DemoCareSearchProvider, CalendarProvider, TravelTimeProvider
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        close_openai_client()
+
 app = FastAPI(
     title="Togg Health MVP Core API",
     description="Togg araç içi önleyici sağlık, görme, cilt, sesli asistan ve randevu orkestrasyonu.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
@@ -74,7 +83,6 @@ async def enforce_browser_origin(request: Request, call_next):
         response.headers["Server-Timing"] = f"{existing}, {timing}" if existing else timing
     return response
 
-app.add_event_handler("shutdown", close_openai_client)
 
 # ---------------------------------------------------------------------------
 # In-Memory State & Mock Data (Local-First)

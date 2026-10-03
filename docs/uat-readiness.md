@@ -38,7 +38,7 @@ Word'ün 38 paragrafı ve 18 gömülü görseli yeniden okunup açıldı. Görse
 - Ara genişlik profil değer sıkışması: açık aralık, satır hizası ve uzun metin sarma.
 - Privacy ekranında iki kayıt yerine tek latest gösterimi: gerçek izinli geçmiş sayımı ve saklanan özet/tema/mood/tarih açıklaması. OFF ve explicit UI ON ayrı gerçek UI kontrolleri.
 - Ses beklerken yanlış "yanıt hazırlanıyor": ayrı chat/audio durumu; metin hazır kalır. Pending TTS mute gerçek request abort eder; summary beklerken iptal late response'ı dışlar.
-- Her provider isteğinde SDK istemcisi/connection pool tekrar kuruluyordu: thread-safe reuse, config değişince close, shutdown close, timeout 25s ve retry 0. Güvenlikten geçmemiş metin veya kısmi audio erkenden yayınlanmaz.
+- Her provider isteğinde SDK istemcisi/connection pool tekrar kuruluyordu: thread-safe reuse, config değişince close, shutdown close, timeout 25s ve retry 0. Güncel FastAPI ile kaldırılan event handler yerine [resmî lifespan](https://fastapi.tiangolo.com/advanced/events/) kullanılır; normal/exceptional çıkışta kapanma testlidir. Güvenlikten geçmemiş metin veya kısmi audio erkenden yayınlanmaz.
 - Backend/egress/browser zaman sınırları ayrı: provider generation aktarım ile örtüşür; saf üretim ve network süresi uydurulmaz. Anahtarsız construction benchmark canlı E2E iyileşmesi değildir.
 - Care yükleme görünmezdi: anlaşılır wait, 12s abort deadline, stale response guard, retry/unmount cleanup; kesintide örnek seçenek açıkça ayrılır. Ham exception loglanmaz.
 - Mobile görme yön paneli alta düşüyordu: iki kolon, en az 44px touch genişliği; optotype hesabı ve 2-down/1-up değiştirilmedi.
@@ -49,7 +49,7 @@ Yeni `uat_ux_followup.py` gerçek keyless production UI/API ile explicit OFF/ON,
 
 `skin_followup.py` gerçek UI taramasından altı bölge/not screenshot'ı ve default-28/edit/dedup/error/ICS/cancel üretir. `windows_pdf_followup.py` gerçek Windows Chrome 132 ile disposable test-profile preference kullanarak kiosk Save-as-PDF yapar, dosyayı gerçek Chrome viewer'da açar ve sayfayı render eder. Bu manuel OS dialog tıklama iddiası değildir; genel Chrome profili veya sistem printer ayarı değişmez.
 
-Tam final Actions artifact verifier: `scripts/verify-uat-delivery.py`; 39 broader, 14 focused, 5 lifecycle, 23 browser, 8 timing, 155 unit (150 eski + 5 yeni, skip 0), 54 safety, 5 dependency, 12 mental, actual-three-angle/reference, native üç tur, 10 yeni UAT; her sayı ve SHA bağımsız okunur. Windows launcher 9 ve gerçek normal `.lnk` ShellExecute kanıtı yerelde ayrıdır. Yakalanmış screenshot, açılıp incelenmiş screenshot değildir; son rapor gerçek açılan envanteri verir.
+Tam final Actions artifact verifier: `scripts/verify-uat-delivery.py`; 39 broader, 14 focused, 5 lifecycle, 23 browser, 8 timing, 157 unit (150 eski + 7 yeni, skip 0), 54 safety, 5 dependency, 12 mental, actual-three-angle/reference, native üç tur, 10 yeni UAT; her sayı ve SHA bağımsız okunur. Windows launcher 9 ve gerçek normal `.lnk` ShellExecute kanıtı yerelde ayrıdır. Yakalanmış screenshot, açılıp incelenmiş screenshot değildir; son rapor gerçek açılan envanteri verir.
 
 ## Açık dependency blocker ve dış koşul
 

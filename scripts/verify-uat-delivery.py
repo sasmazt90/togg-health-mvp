@@ -12,7 +12,7 @@ def passed(name,n):
 passed('broader/results.json',39);passed('focused-results.json',14);passed('media-lifecycle-regressions.json',5);passed('skin-timing/timings.json',8);passed('mental-followup/results.json',12)
 reg=[x for f in (artifact/'backlog').glob('*.json') for x in json.loads(f.read_text())];assert len(reg)==23 and all(x['status']=='PASS' for x in reg)
 sec=load('dependency-security.json')['results'];assert len(sec)==5 and all(x['status']=='PASS' for x in sec)
-for name,n in [('unit.xml',155),('focused-safety.xml',54)]:
+for name,n in [('unit.xml',157),('focused-safety.xml',54)]:
  s=next(ET.parse(artifact/name).getroot().iter('testsuite'));assert s.get('tests')==str(n) and all(s.get(x)=='0' for x in ['failures','errors','skipped'])
 multi=load('skin-multi-angle/results.json');assert multi['status']=='PASS' and not multi['poseMock'] and not multi['reusedFrameForAngles'] and len(multi['captures'])==2
 voice=load('native-three-turn/results.json');assert voice['status']=='PASS' and voice['provider']=='LOCAL_DEMO' and not voice['openAIKeyUsed']
@@ -26,7 +26,7 @@ assert all(s['conclusion']=='success' for s in job['steps'] if 5<=s['number']<=2
 uat=load('uat-20261003/after/results.json');assert len(uat['results'])==10 and all(x['status']=='PASS' for x in uat['results'])
 assert load('live-followup/skin.json')['reminderEditDedupErrorCancel'] is True
 prep=load('live-harness-preparation.json');assert prep['status']=='PASS' and not prep['liveAcceptance'] and len(prep['entrypointsAndDualGates'])==2 and prep['sdkRetries']==0 and prep['previousLedgersUnchanged'] and prep['ownedPortsFree']
-summary={'head':sha,'runId':run,'jobId':job['databaseId'],'overall':meta['conclusion'],'onlyFailedStep':failed,'matrix':{'broader':39,'focused':14,'mediaLifecycle':5,'browserRegressions':23,'timing':8,'unit':155,'unitSkipped':0,'safety':54,'dependency':5,'mentalLifecycle':12,'nativeVoiceTurns':3,'multiAngleCompletedScans':2},'fullAudit':full,'productionAudit':prod,'nativeResumeAfterTTSEndMs':resume,'nativeSTTTranscripts':[s['transcript'] for s in spoken]}
+summary={'head':sha,'runId':run,'jobId':job['databaseId'],'overall':meta['conclusion'],'onlyFailedStep':failed,'matrix':{'broader':39,'focused':14,'mediaLifecycle':5,'browserRegressions':23,'timing':8,'unit':157,'unitSkipped':0,'safety':54,'dependency':5,'mentalLifecycle':12,'nativeVoiceTurns':3,'multiAngleCompletedScans':2},'fullAudit':full,'productionAudit':prod,'nativeResumeAfterTTSEndMs':resume,'nativeSTTTranscripts':[s['transcript'] for s in spoken]}
 (out/f'ci-{run}-matrix-proof.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
 
 negative=load('live-harness-fail-closed.json');assert len(negative)==3 and all(x['status']=='PASS' and x['providerRequests']==0 and x['forwardedBackendRequests']==0 for x in negative)

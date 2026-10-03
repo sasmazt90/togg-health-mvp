@@ -1,5 +1,5 @@
 """Actual MediaPipe/UI baseline, anatomy, reminder and repeat comparison."""
-import json
+import json,re
 from datetime import datetime,timedelta
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
@@ -55,6 +55,7 @@ with sync_playwright() as pw:
     page.get_by_role('button',name='Hatırlat',exact=True).click()
     date_input=page.get_by_role('textbox',name='Hatırlatma tarihi ve saati')
     date_input=page.locator('input[type=datetime-local]')
+    expect(date_input).to_have_value(re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}'))
     default_date=datetime.fromisoformat(date_input.input_value());today=page.evaluate('new Date().toLocaleDateString("sv-SE")')
     assert (default_date.date()-datetime.fromisoformat(today).date()).days==28
     page.set_viewport_size({'width':390,'height':500});page.screenshot(path=str(visual/'actual-reminder-expanded-short.png'))
