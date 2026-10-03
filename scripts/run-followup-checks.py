@@ -11,7 +11,9 @@ import tempfile
 import time
 import urllib.request
 
-parser=argparse.ArgumentParser();parser.add_argument('--live',action='store_true');parser.add_argument('scripts',nargs='+');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--live',action='store_true');parser.add_argument('--provider-admission',action='store_true');parser.add_argument('scripts',nargs='+');args=parser.parse_args()
+if args.provider_admission:
+    assert args.live and args.scripts==['tests/e2e/live_provider_voice_followup.py --approved-additional-text-run'], 'Admission server only supports the explicitly authorized bounded text/TTS run'
 root=Path(__file__).resolve().parents[1];out=root/'audit-results';out.mkdir(exist_ok=True)
 for port in [3000,8000]:
     with socket.socket() as sock:
@@ -22,7 +24,8 @@ processes=[];logs=[];results=[]
 with tempfile.TemporaryDirectory(prefix='attune-followup-') as data:
     env['ATTUNE_DATA_DIR']=data
     try:
-        for name,command in [('backend',[sys.executable,'-m','uvicorn','main:app','--app-dir',str(root/'services/core-api'),'--host','127.0.0.1','--port','8000']),('frontend',[shutil.which('node'),str(root/'node_modules/next/dist/bin/next'),'start',str(root/'apps/vehicle-app'),'--hostname','127.0.0.1','-p','3000'])]:
+        backend_command = [sys.executable, str(root/'tests/e2e/live_provider_backend.py'), '--approved-additional-text-run'] if args.provider_admission else [sys.executable,'-m','uvicorn','main:app','--app-dir',str(root/'services/core-api'),'--host','127.0.0.1','--port','8000']
+        for name,command in [('backend',backend_command),('frontend',[shutil.which('node'),str(root/'node_modules/next/dist/bin/next'),'start',str(root/'apps/vehicle-app'),'--hostname','127.0.0.1','-p','3000'])]:
             service_env={**env,'ATTUNE_LOAD_LOCAL_ENV':'0'} if name=='frontend' else env
             log=(out/(name+'-followup.log')).open('w',encoding='utf-8');logs.append(log)
             processes.append(subprocess.Popen(command,cwd=root,env=service_env,stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0))

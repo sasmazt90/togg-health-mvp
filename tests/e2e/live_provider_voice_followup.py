@@ -1,51 +1,91 @@
-"""Bounded provider/TTS verification after explicit additional-run approval.
-Windows native STT remains pending: physical-microphone-denied source preflight failed.
-No physical microphone permission is granted; all input is explicit synthetic text.
+"""Explicitly authorized synthetic TEXT -> real backend/provider -> OpenAI TTS.
+Physical capture denied. Exact messages/history checked in browser and HTTP egress.
 """
-import argparse
-import json
+import argparse,json,time
 from pathlib import Path
-import time
-from playwright.sync_api import sync_playwright, expect
+from playwright.sync_api import sync_playwright,expect
+from live_provider_admission import LiveAdmission,TEXTS,AdmissionRejected
 parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');args=parser.parse_args()
-if not args.approved_additional_text_run:raise SystemExit('Additional live run requires explicit approval; no provider request made')
-OUT=Path('audit-results/live-provider');OUT.mkdir(parents=True,exist_ok=True)
-TEXTS=['Bugün yeni bir kitap okudum.','Kitabın konusu arkadaşlık üzerineydi.','Arkadaşlarımla bu konuyu konuşmak iyi geldi.']
-INIT=r'''(()=>{window.audioProof=[];const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...args){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null}));}return play.apply(this,args);};})();'''
-proof={'voiceInputAcceptance':'PENDING','input':'explicit synthetic text','subjectiveListeningPerformed':False,'responses':[],'historyLengths':[]}
+if not args.approved_additional_text_run:raise SystemExit('No authorization: zero provider requests')
+OUT=Path('audit-results/live-provider/controlled-text');OUT.mkdir(parents=True,exist_ok=True)
+INIT=r'''(()=>{window.audioProof=[];window.captureAttempts=0;
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prototype.start=function(){window.captureAttempts++;throw new DOMException('Capture forbidden in text-only audit','NotAllowedError');};}
+const gum=navigator.mediaDevices?.getUserMedia;if(gum)navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;return Promise.reject(new DOMException('Capture forbidden in text-only audit','NotAllowedError'));};
+const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...a){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null}));}return play.apply(this,a);};})();'''
+proof={'status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
+gate=LiveAdmission(False);starts=[];speech_starts=[];kinds={}
 with sync_playwright() as pw:
-    browser=pw.chromium.launch(channel='chrome',headless=True,args=['--autoplay-policy=no-user-gesture-required'])
-    context=browser.new_context(viewport={'width':1600,'height':1000},locale='tr-TR');context.add_init_script(INIT)
-    context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
-    page=context.new_page();starts=[]
-    def guard(route):
-        data=route.request.post_data_json
-        turn=len(starts)
-        if turn>=3 or data['userMessage']!=TEXTS[turn]:route.abort();raise RuntimeError('Synthetic admission or request cap failed')
-        assert all(m['role'] in ['user','assistant'] for m in data['history'])
-        starts.append(page.evaluate('performance.now()'));proof['historyLengths'].append(len(data['history']));route.continue_()
-    page.route('**/api/mental/converse',guard)
-    def observe(response):
-        if response.url.endswith('/mental/converse'):
-            data=response.json();proof['responses'].append({'providerType':data['providerType'],'responseMs':round(page.evaluate('performance.now()')-starts[len(proof['responses'])],1)})
-    page.on('response',observe)
-    try:
-        page.goto('http://localhost:3000/mental');page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check()
-        page.get_by_role('combobox',name='Yanıt sesi',exact=True).select_option('openai')
-        page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
-        for turn,text in enumerate(TEXTS):
-            box=page.get_by_role('textbox',name='Görüşme mesajı');expect(box).to_be_enabled();box.fill(text);page.get_by_role('button',name='Gönder',exact=True).click()
-            expect(page.locator('[data-chat-author="AI"]')).to_have_count(turn+1,timeout=35000)
-            assert proof['responses'][turn]['providerType']=='LIVE_OPENAI'
-            page.wait_for_function('(count)=>window.audioProof.filter(e=>e.type==="ended").length===count',arg=turn+1,timeout=60000)
-            assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
-        page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed',timeout=35000)
-        assert proof['historyLengths']==[0,2,4]
-        assert len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))'))==1
-        proof['audioEvents']=page.evaluate('window.audioProof');playing=[e for e in proof['audioEvents'] if e['type']=='playing']
-        assert len(playing)==3 and not [e for e in proof['audioEvents'] if e['type']=='error']
-        proof['playbackOnsetMs']=[round(e['time']-starts[i],1) for i,e in enumerate(playing)]
-        proof['status']='PASS';page.screenshot(path=str(OUT/'synthetic-text-tts-completed.png'),full_page=True)
-    finally:context.close();browser.close()
-(OUT/'synthetic-text-tts-results.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8')
+ browser=pw.chromium.launch(channel='chrome',headless=True,args=['--autoplay-policy=no-user-gesture-required'])
+ context=browser.new_context(viewport={'width':1600,'height':1000},locale='tr-TR');context.add_init_script(INIT)
+ page=context.new_page();cdp=context.new_cdp_session(page)
+ cdp.send('Browser.setPermission',{'permission':{'name':'microphone'},'setting':'denied','origin':'http://localhost:3000','browserContextId':cdp.send('Target.getTargetInfo')['targetInfo']['browserContextId']})
+ def route_guard(route):
+  req=route.request
+  if req.method=='GET':route.continue_();return
+  try:
+   data=req.post_data_json;path=req.url.rsplit('/',1)[-1]
+   if data.get('cloudConsent') is not True:gate.reject('CLOUD_CONSENT_NOT_EXPLICIT')
+   if path=='converse':
+    transformed={'messages':[{'role':'system','content':'Sen Togg araç içi Ruhsal İyi Oluş Asistanısın.'}]+data.get('history',[])+[{'role':'user','content':data.get('userMessage')}]}
+    kind=gate.admit('/v1/chat/completions',transformed);starts.append(page.evaluate('performance.now()'));proof['historyLengths'].append(len(data['history']))
+   elif path=='speech':
+    kind=gate.admit('/v1/audio/speech',{'input':data.get('text'),'voice':'coral','response_format':'mp3'});speech_starts.append(page.evaluate('performance.now()'))
+   elif path=='analyze-session':
+    transformed={'response_format':{'type':'json_object'},'messages':[{'role':'user','content':'Aşağıdaki kullanıcı-asistan araç içi konuşmasını analiz et\nKonuşma Geçmişi:\n'+'\n'.join(f"{m['role']}: {m['content']}" for m in data.get('messages',[]))}]}
+    kind=gate.admit('/v1/chat/completions',transformed)
+   else:gate.reject('UNEXPECTED_UI_POST')
+   kinds[req.url]=kind;route.continue_()
+  except Exception:
+   proof['status']='BLOCKED_BEFORE_BACKEND';route.abort()
+ def observe(response):
+  if response.url not in kinds:return
+  kind=kinds.pop(response.url)
+  if kind in ['conversation','summary']:
+   data=response.json();live=data.get('providerType')=='LIVE_OPENAI'
+   proof['responses'].append({'kind':kind,'providerType':data.get('providerType'),'responseMs':round(page.evaluate('performance.now()')-starts[-1],1) if kind=='conversation' else None})
+   gate.complete(kind,data.get('reply'),live)
+  else:gate.complete(kind,success=response.ok)
+ page.route('**/api/mental/**',route_guard);page.on('response',observe)
+ try:
+  context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
+  page.goto('http://localhost:3000/mental')
+  permission=page.evaluate('navigator.permissions.query({name:"microphone"}).then(p=>p.state)');assert permission=='denied'
+  assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
+  expect(page.get_by_role('checkbox',name='Ses aktarımı onayı',exact=True)).not_to_be_checked()
+  gate.source_verified=True;proof['physicalMicrophone']=permission
+  page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check()
+  page.get_by_role('combobox',name='Yanıt sesi',exact=True).select_option('openai')
+  page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+  for i,text in enumerate(TEXTS):
+   box=page.get_by_role('textbox',name='Görüşme mesajı');expect(box).to_be_enabled();box.fill(text);page.get_by_role('button',name='Gönder',exact=True).click()
+   expect(page.locator('[data-chat-author="AI"]')).to_have_count(i+1,timeout=35000)
+   assert proof['responses'][i]['providerType']=='LIVE_OPENAI'
+   page.wait_for_function('(n)=>window.audioProof.filter(e=>e.type==="playing").length===n',arg=i+1,timeout=35000)
+   if i<2:page.wait_for_function('(n)=>window.audioProof.filter(e=>e.type==="ended").length===n',arg=i+1,timeout=90000)
+   else:
+    page.wait_for_timeout(250);page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click()
+    expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','ready')
+   assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
+  assert [x['content'] for x in gate.messages if x['role']=='user']==list(TEXTS)
+  replies=page.locator('[data-chat-author="AI"]').all_text_contents();assert len(replies)==len(set(replies))==3
+  assert len({m['content'] for m in gate.messages if m['role']=='assistant'})==3
+  assert page.locator('[data-chat-author="USER"]').count()==3
+  page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed',timeout=35000)
+  saved=page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))');assert len(saved)==1 and saved[0]['consented'] and saved[0]['providerType']=='LIVE_OPENAI'
+  assert gate.counts=={'conversation':3,'tts':3,'summary':1} and proof['historyLengths']==[0,2,4]
+  page.wait_for_timeout(1200);assert gate.counts=={'conversation':3,'tts':3,'summary':1}
+  proof['audioEvents']=page.evaluate('window.audioProof');playing=[e for e in proof['audioEvents'] if e['type']=='playing'];ended=[e for e in proof['audioEvents'] if e['type']=='ended'];pauses=[e for e in proof['audioEvents'] if e['type']=='pause']
+  assert len(playing)==3 and len(ended)==2 and pauses and not [e for e in proof['audioEvents'] if e['type']=='error']
+  assert pauses[-1]['time']>playing[-1]['time'];proof['thirdPlaybackIntentionallyCancelled']=True
+  assert page.evaluate('window.captureAttempts')==0;proof['captureAttempts']=0
+  proof['playbackFromUserSendMs']=[round(e['time']-starts[i],1) for i,e in enumerate(playing)]
+  proof['playbackFromTTSRequestMs']=[round(e['time']-speech_starts[i],1) for i,e in enumerate(playing)]
+  proof['records']=1;proof['status']='PASS';page.screenshot(path=str(OUT/'completed.png'),full_page=True)
+ except Exception as error:
+  proof['status']='FAIL';proof['failureCategory']=type(error).__name__
+  raise
+ finally:
+  proof['browserAdmission']=gate.proof();proof['audioEvents']=page.evaluate('window.audioProof')
+  (OUT/'ui-proof.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8')
+  context.close();browser.close()
 print(json.dumps(proof,ensure_ascii=False))

@@ -136,6 +136,9 @@ jobs:
       - name: Conversation lifecycle with actual keyless backend and bounded race controls
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/mental_lifecycle_followup.py 2>&1 | tee audit-results/mental-lifecycle-followup.log
+      - name: Live harness rejects unverified source and contaminated input before dispatch
+        if: ${{ !cancelled() }}
+        run: python -u tests/e2e/live_harness_fail_closed.py 2>&1 | tee audit-results/live-harness-fail-closed.log
       - name: Three actual poses and compatible versioned reference
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/skin_multi_angle_followup.py 2>&1 | tee audit-results/skin-multi-angle-followup.log
