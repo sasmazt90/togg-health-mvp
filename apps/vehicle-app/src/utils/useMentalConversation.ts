@@ -254,5 +254,5 @@ export function useMentalConversation(parked: boolean) {
   function changeSpeech(value: boolean) { if (!value && runtime.current.active) cancel('Ses aktarım izni geri çekildi. Görüşme kapatıldı.'); setSpeechConsent(value); }
   return { phase, active, messages, notice, voiceNotice, voiceState, textMode, voiceEnabled, setVoiceEnabled,
     cloudConsent, setCloudConsent: changeCloud, speechConsent, setSpeechConsent: changeSpeech, speechSource, setSpeechSource,
-    history, summary, provider, start, finish, send, switchText, cancelSummary: () => cancel('Özet hazırlama iptal edildi. Görüşme geçmişe kaydedilmedi.') };
+    history, summary, provider, start, finish, send, switchText, cancelSummary: () => { cancel('Özet hazırlama iptal edildi. Görüşme geçmişe kaydedilmedi.'); setPhase('ready'); } };
 }

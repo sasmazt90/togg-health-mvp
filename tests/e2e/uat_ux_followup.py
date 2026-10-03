@@ -98,7 +98,7 @@ with sync_playwright() as pw:
   try:
    page.goto(BASE+'/mental');start(page);send(page,'Bugün yeni bir kitap okudum.');page.route('**/api/mental/analyze-session',lambda route:pending.append(route));page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();page.wait_for_timeout(100);assert len(pending)==1;snap(page,'mental-summary-wait')
    if args.baseline:return {'previousCancelVisible':page.get_by_role('button',name='Özet hazırlamayı iptal et',exact=True).count()==1}
-   page.get_by_role('button',name='Özet hazırlamayı iptal et',exact=True).click();response=pending[0].fetch();pending[0].fulfill(response=response);page.wait_for_timeout(300);assert history(page)==[] and page.locator('[data-current-summary]').count()==0;snap(page,'mental-summary-cancelled');return {'lateSummaryIgnored':True}
+   page.get_by_role('button',name='Özet hazırlamayı iptal et',exact=True).click();response=pending[0].fetch();pending[0].fulfill(response=response);page.wait_for_timeout(300);expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready');assert history(page)==[] and page.locator('[data-current-summary]').count()==0;snap(page,'mental-summary-cancelled');return {'lateSummaryIgnored':True}
   finally:c.close()
  record('Final summary can be cancelled and late response cannot restore it',summary_cancel)
 
