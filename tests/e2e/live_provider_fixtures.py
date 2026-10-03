@@ -1,11 +1,26 @@
 """Preparation only: SDK HTTP transport fixtures, never a LIVE acceptance proof."""
 import json
 from pathlib import Path
-import httpx
+import ipaddress
+import socket
 
 NONSECRET = 'attune-keyless-fixture-not-a-credential'
 
-def install_fixture(mode, output, gate):
+def deny_nonloopback_connections():
+    """Independent preparation egress boundary, including future SDK drift."""
+    blocked=[]
+    original=socket.socket.connect
+    def connect(self,address):
+        try:allowed=isinstance(address,tuple) and (address[0]=='localhost' or ipaddress.ip_address(address[0]).is_loopback)
+        except ValueError:allowed=False
+        if not allowed:
+            blocked.append('NON_LOOPBACK_CONNECT_BLOCKED')
+            raise PermissionError('Keyless preparation forbids external sockets')
+        return original(self,address)
+    socket.socket.connect=connect
+    return blocked
+
+def install_fixture(mode, output, gate, httpx):
     """Replace transport selection, retaining the actual Client.send/SDK pipeline."""
     fixture_calls = []
     def respond(request):

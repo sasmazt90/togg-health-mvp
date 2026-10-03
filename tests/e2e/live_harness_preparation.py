@@ -28,6 +28,7 @@ for mode in ['success','failure']:
     ui, backend, marker, cleanup = [read(n+'.json') for n in ['ui-proof','egress-proof','run-consumed','cleanup-proof']]
     assert all(p['runId'] == identity for p in [ui,backend,marker,cleanup])
     assert backend['mode']==ui['mode']=='KEYLESS_FIXTURE_PREPARATION' and not ui['liveAcceptance']
+    assert backend['transportFamily'] in ['httpx','httpx2'] and backend['blockedSocketConnections']==0
     assert backend['realHTTPDispatchCalls']==0 and backend['sdkMaxRetries'] and set(backend['sdkMaxRetries'])=={0}
     assert cleanup['ownedProcessesExited'] and cleanup['temporaryStorageRemoved']
     assert ui['physicalMicrophone']=='denied' and ui['captureAttempts']==0

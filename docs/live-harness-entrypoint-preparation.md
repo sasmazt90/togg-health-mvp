@@ -10,6 +10,16 @@ code path. A test-only HTTPX MockTransport prevents provider network traffic.
 No production source contains fixtures or test switches. JSON conversation and
 summary fixtures and a generated binary MP3 tone are preparation evidence only.
 
+The actual SDK default client family is identified before server startup. HTTPX
+and HTTPX2 are admitted at their own `Client.send`; unknown families refuse to
+start. The constructed SDK client must still use that exact gated send method.
+Preparation also independently denies non-loopback socket connections. The
+HTTPX2 migration in SDK 3.24.0 exposed a CI instrumentation gap; the earlier CI
+fallback did not pass this preparation and its zero captured send counter was
+not a verified zero network count. Its sentinel was nonsecret and local key
+loading was disabled. See the official SDK migration documentation:
+https://github.com/openai/openai-python/blob/main/httpx2.md
+
 The successful case verifies both gates, exact session history 0/2/4, alternating
 conversation/TTS followed by one summary, admission before UI release, three
 actual media playing/ended events, and one consented record after explicit end.

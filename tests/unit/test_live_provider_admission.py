@@ -103,8 +103,8 @@ def transport_namespace(output, original_send):
     import ast,json,os,time
     from types import SimpleNamespace
     source=(Path(__file__).parents[1]/'e2e/live_provider_backend.py').read_text(encoding='utf-8')
-    nodes=[n for n in ast.parse(source).body if isinstance(n,ast.FunctionDef) and n.name in ['save','send']]
-    ns={'json':json,'os':os,'time':time,'RUN_ID':'20261003-unit-run','OUT':output,'gate':module.LiveAdmission(True),'events':[],'original_send':original_send,'claim_live_run':module.claim_live_run,'original_send_calls':0,'admission_attempts':0,'sdk_retries':[],'fixture_calls':[],'args':SimpleNamespace(fixture=None),'CONSUMED':output/'run-consumed.json'}
+    nodes=[n for n in ast.parse(source).body if isinstance(n,ast.FunctionDef) and n.name in ['save','send','checked_sdk_init']]
+    ns={'json':json,'os':os,'time':time,'RUN_ID':'20261003-unit-run','OUT':output,'gate':module.LiveAdmission(True),'events':[],'original_send':original_send,'claim_live_run':module.claim_live_run,'original_send_calls':0,'admission_attempts':0,'sdk_retries':[],'openai':SimpleNamespace(__version__='unit-fixture'),'httpx':__import__('httpx'),'blocked_socket_connections':[],'fixture_calls':[],'args':SimpleNamespace(fixture=None),'CONSUMED':output/'run-consumed.json'}
     exec(compile(ast.Module(body=nodes,type_ignores=[]),'exact-current-transport-wrapper','exec'),ns)
     return ns
 
@@ -153,3 +153,17 @@ def test_checked_in_cli_rejects_missing_authorization_or_mixed_live_fixture(comm
     env['ATTUNE_LOAD_LOCAL_ENV']='0'
     result=subprocess.run([sys.executable,*command],cwd=root,env=env,capture_output=True,timeout=10)
     assert result.returncode!=0
+
+@pytest.mark.parametrize('violation',['automatic-retry','unknown-runtime-client'])
+def test_sdk_configuration_error_closes_before_any_transport(tmp_path,violation):
+    from types import SimpleNamespace
+    sends=[];constructors=[]
+    ns=transport_namespace(tmp_path,lambda *a,**k:sends.append(True))
+    def initialize(client,*a,**k):
+        constructors.append(True);client._client=SimpleNamespace(send=lambda:None)
+    ns['original_sdk_init']=initialize
+    with pytest.raises(module.AdmissionRejected):
+        ns['checked_sdk_init'](SimpleNamespace(),max_retries=1 if violation=='automatic-retry' else 0)
+    assert not sends and ns['gate'].failed and sum(ns['gate'].counts.values())==0
+    with pytest.raises(module.AdmissionRejected):ns['gate'].admit('/v1/chat/completions',conversation(ns['gate']))
+    assert len(constructors)==int(violation=='unknown-runtime-client')

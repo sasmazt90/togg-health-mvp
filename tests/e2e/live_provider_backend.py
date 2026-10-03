@@ -5,9 +5,12 @@ import os
 from pathlib import Path
 import sys
 import time
-import httpx
 import uvicorn
 from live_provider_admission import LiveAdmission,live_run_output,claim_live_run
+from live_provider_transport import sdk_http_family
+import openai
+from openai import OpenAI, DefaultHttpxClient
+httpx=sdk_http_family(DefaultHttpxClient)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--approved-additional-text-run', action='store_true')
@@ -27,25 +30,36 @@ gate = LiveAdmission(source_verified=True)  # Content itself is checked before e
 events = []
 original_send = httpx.Client.send
 fixture_calls = []
+blocked_socket_connections = []
 if args.fixture:
-    from live_provider_fixtures import NONSECRET, install_fixture
+    from live_provider_fixtures import NONSECRET, install_fixture, deny_nonloopback_connections
     assert os.getenv('ATTUNE_LOAD_LOCAL_ENV') == '0' and os.getenv('OPENAI_API_KEY') == NONSECRET
     assert RUN_ID and RUN_ID.startswith('prep-')
-    fixture_calls = install_fixture(args.fixture, OUT, gate)
+    blocked_socket_connections = deny_nonloopback_connections()
+    fixture_calls = install_fixture(args.fixture, OUT, gate, httpx)
     print('KEYLESS FIXTURE PREPARATION; NOT LIVE PROVIDER EVIDENCE', flush=True)
 original_send_calls = 0
 admission_attempts = 0
 sdk_retries = []
-from openai import OpenAI
 original_sdk_init = OpenAI.__init__
 def checked_sdk_init(self, *values, **options):
-    assert options.get('max_retries') == 0
-    sdk_retries.append(options['max_retries'])
-    return original_sdk_init(self, *values, **options)
+    try:
+        if options.get('max_retries') != 0:gate.reject('SDK_RETRY_CONFIGURATION_CHANGED')
+        sdk_retries.append(options['max_retries'])
+        result=original_sdk_init(self, *values, **options)
+        if not isinstance(self._client,httpx.Client) or self._client.send.__func__ is not send:
+            gate.reject('SDK_TRANSPORT_CHANGED')
+        save()
+        return result
+    except Exception:
+        gate.failed=True
+        events.append({'kind':None,'failureCategory':'SDK_CONFIGURATION_FAILURE','dispatchStarted':False,'httpStatus':None})
+        save()
+        raise
 OpenAI.__init__ = checked_sdk_init
 
 def save():
-    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': RUN_ID or 'controlled-text', 'mode': 'KEYLESS_FIXTURE_PREPARATION' if args.fixture else 'LIVE_ATTEMPT', 'admissionAttempts':admission_attempts, 'originalSendCalls': original_send_calls, 'fixtureTransportCalls':len(fixture_calls), 'realHTTPDispatchCalls':0 if args.fixture else original_send_calls, 'httpResponses':sum(e.get('httpStatus') is not None for e in events), 'sdkMaxRetries':sdk_retries, 'billingVerified':False}, indent=2), encoding='utf-8')
+    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': RUN_ID or 'controlled-text', 'mode': 'KEYLESS_FIXTURE_PREPARATION' if args.fixture else 'LIVE_ATTEMPT', 'admissionAttempts':admission_attempts, 'originalSendCalls': original_send_calls, 'fixtureTransportCalls':len(fixture_calls), 'realHTTPDispatchCalls':0 if args.fixture else original_send_calls, 'httpResponses':sum(e.get('httpStatus') is not None for e in events), 'sdkMaxRetries':sdk_retries, 'billingVerified':False,'sdkVersion':openai.__version__,'transportFamily':httpx.__name__,'blockedSocketConnections':len(blocked_socket_connections)}, indent=2), encoding='utf-8')
 
 def send(self, request, *send_args, **kwargs):
     global original_send_calls, admission_attempts
