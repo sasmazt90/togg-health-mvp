@@ -50,8 +50,9 @@ function mentalLatest(records: HealthRecord[]) {
   return item ? JSON.stringify({ ...item, dateTr: recordDate(item), primaryTheme: Array.isArray(item.themes) ? item.themes.join(' • ') || 'Günlük paylaşım' : item.primaryTheme || 'Tema kaydı yok', sessionCount: records.length, recommendation: 'Kayıtlı görüşme özeti' }) : null;
 }
 
-export function readHealthRecords(category: HealthCategory): HealthRecord[] {
-  recover();
+function readRecordsLocked(category: HealthCategory, writable = true): HealthRecord[] {
+  if (writable) recover();
+  else if (localStorage.getItem(RECORD_JOURNAL)) throw new Error('Kayıt işlemi sürüyor.');
   const keys = KEYS[category];
   const raw = localStorage.getItem(keys.history);
   const parsed = JSON.parse(raw || '[]');
@@ -78,28 +79,62 @@ export function readHealthRecords(category: HealthCategory): HealthRecord[] {
       records.push(latest); changed = true;
     } else if (latest.id !== match.id) { latest = { ...latest, id: match.id }; changed = true; }
   }
-  if (changed) commit({ [keys.history]: JSON.stringify(records), [keys.latest]: latest ? JSON.stringify(latest) : null });
+  if (changed) {
+    if (!writable) throw new Error('Eski kayıtlar hazırlanıyor.');
+    commit({ [keys.history]: JSON.stringify(records), [keys.latest]: latest ? JSON.stringify(latest) : null });
+  }
   return records;
 }
 
-export function appendHealthRecord(category: HealthCategory, record: HealthRecord, additionalChanges: Record<string, string | null> = {}) {
+// Every writer and crash recovery shares the same cross-tab lock. Readers never
+// undo another tab's active journal. Unsupported browsers fail closed for writes.
+export async function withRecordsLock<T>(operation: () => T | Promise<T>): Promise<T> {
+  if (!navigator.locks) return Promise.reject(new Error('Bu tarayıcı güvenli kayıt işlemini desteklemiyor. Güncel Chrome kullanın.'));
+  return await navigator.locks.request('attune-health-records', operation) as T;
+}
+const preparing = new Map<HealthCategory, Promise<HealthRecord[]>>();
+export function prepareHealthRecords(category: HealthCategory): Promise<HealthRecord[]> {
+  const pending = preparing.get(category);
+  if (pending) return pending;
+  const operation = withRecordsLock(() => {
+    const before = JSON.stringify([...Object.values(KEYS).flatMap(k => [k.history, k.latest]), RECORD_JOURNAL].map(k => localStorage.getItem(k)));
+    const records = readRecordsLocked(category);
+    const after = JSON.stringify([...Object.values(KEYS).flatMap(k => [k.history, k.latest]), RECORD_JOURNAL].map(k => localStorage.getItem(k)));
+    if (before !== after) window.dispatchEvent(new Event('attune-records'));
+    return records;
+  }).finally(() => preparing.delete(category));
+  preparing.set(category, operation);
+  return operation;
+}
+export function readHealthRecords(category: HealthCategory): HealthRecord[] {
+  try { return readRecordsLocked(category, false); }
+  catch (error) {
+    void prepareHealthRecords(category).catch(() => {});
+    throw error;
+  }
+}
+
+export async function appendHealthRecord(category: HealthCategory, record: HealthRecord, additionalChanges: Record<string, string | null> = {}, beforeWrite: () => boolean = () => true): Promise<HealthRecord[]> {
+  return withRecordsLock(() => {
   const containsMedia = (value: unknown): boolean => {
     if (typeof value === 'string') return /^data:(image|audio|video)\//i.test(value);
     if (!value || typeof value !== 'object') return false;
     return Object.entries(value).some(([key, item]) => /^(image|video|audio|pixels|frames|base64|canvas)$/i.test(key) || containsMedia(item));
   };
   if (containsMedia(record) || Object.values(additionalChanges).some(v => v && containsMedia(JSON.parse(v)))) throw new Error('Ham medya kalıcı kayda alınamaz.');
-  const history = readHealthRecords(category).filter(r => r.id !== record.id);
+  const history = readRecordsLocked(category).filter(r => r.id !== record.id);
+  if (!beforeWrite()) throw new Error('Kayıt izni veya işlem durumu değişti; kayıt eklenmedi.');
   // Keep all surviving user records; old ten-record truncation discarded history.
   const records = category === 'mental' ? [...history, record] : [record, ...history];
   commit({ ...additionalChanges, [KEYS[category].history]: JSON.stringify(records), [KEYS[category].latest]: category === 'mental' ? mentalLatest(records) : JSON.stringify(record) });
   window.dispatchEvent(new Event('attune-records'));
   return records;
+  });
 }
 
 export async function deleteHealthRecord(category: HealthCategory, id: string): Promise<string> {
   const operation = async () => {
-    const record = readHealthRecords(category).find(r => r.id === id);
+    const record = readRecordsLocked(category).find(r => r.id === id);
     if (!record) throw new Error('Kayıt bulunamadı. Listeyi yenileyin.');
     // Current capture/conversation UI stores locally. Linked backend records must
     // be confirmed deleted before local copies can be removed; never guess ownership.
@@ -114,7 +149,7 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
       finally { clearTimeout(deadline); }
     }
     // Read again after network await so another surviving record is never overwritten.
-    const remaining = readHealthRecords(category).filter(r => r.id !== id);
+    const remaining = readRecordsLocked(category).filter(r => r.id !== id);
     const keys = KEYS[category];
     const latest = category === 'mental' ? mentalLatest(remaining) : remaining[0] ? JSON.stringify(remaining[0]) : null;
     const changes: Record<string, string | null> = { [keys.history]: JSON.stringify(remaining), [keys.latest]: latest };
@@ -143,5 +178,5 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
     window.dispatchEvent(new Event('attune-records')); window.dispatchEvent(new Event('attune-reminder'));
     return referenceRemoved ? 'Kayıt silindi. Yeni bir cilt referansı gerekiyor.' : 'Kayıt kalıcı olarak silindi.';
   };
-  return navigator.locks ? navigator.locks.request('attune-health-records', operation) : operation();
+  return withRecordsLock(operation);
 }

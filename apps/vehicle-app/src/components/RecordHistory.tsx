@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibleDialog } from './AccessibleDialog';
-import { HealthCategory, HealthRecord, RECORD_LABELS, readHealthRecords, deleteHealthRecord, recordDate } from '../utils/healthRecords';
+import { HealthCategory, HealthRecord, RECORD_LABELS, prepareHealthRecords, deleteHealthRecord, recordDate } from '../utils/healthRecords';
 
 export function RecordHistory({ category, parked }: { category: HealthCategory; parked: boolean }) {
   const [records, setRecords] = useState<HealthRecord[]>([]);
@@ -12,9 +12,10 @@ export function RecordHistory({ category, parked }: { category: HealthCategory; 
   const heading = useRef<HTMLHeadingElement>(null);
   const parkedRef = useRef(parked); parkedRef.current = parked;
   useEffect(() => {
-    const refresh = () => { try { setRecords(readHealthRecords(category)); } catch (error) { setNotice((error as Error).message); } };
+    let mounted = true;
+    const refresh = () => { void prepareHealthRecords(category).then(rows => { if (mounted) setRecords(rows); }).catch(error => { if (mounted) setNotice(error.message); }); };
     refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
-    return () => { window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
+    return () => { mounted = false; window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
   }, [category]);
   const close = () => { if (!inFlight.current) setSelected(null); };
   const remove = async () => {

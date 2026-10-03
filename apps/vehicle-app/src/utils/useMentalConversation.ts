@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { checkCrisisTrigger } from '@packages/safety/crisisDetector';
 import { isMicrophoneAllowed, isMentalSummarySavingAllowed, isDemoMode } from './attuneMode';
 import { MentalHistoryItem, readMentalHistory, saveMentalHistory } from './mentalHistory';
+import { prepareHealthRecords } from './healthRecords';
 
 export type ConversationPhase = 'ready' | 'permission' | 'listening' | 'preparing' | 'speaking' | 'ending' | 'completed' | 'error';
 export interface ConversationMessage {
@@ -221,11 +222,14 @@ export function useMentalConversation(parked: boolean) {
       if (typeof data.summaryText !== 'string' || !data.summaryText.trim() || !Array.isArray(data.themes) || !data.themes.every((t: unknown) => typeof t === 'string')) throw new Error('Invalid summary');
       const item: MentalHistoryItem = { id: r.id, date: new Date().toISOString(), summaryText: data.summaryText, themes: data.themes,
         moodTrend: typeof data.moodTrend === 'string' ? data.moodTrend : undefined, providerType: data.providerType, schemaVersion: 2, completed: true, consented: false };
-      setSummary(item); setPhase('completed');
       if (!isDemoMode() && isMentalSummarySavingAllowed()) {
         // This is the last operation before storage. Consent can change during analysis.
-        item.consented = true; setHistory(saveMentalHistory(item)); setNotice('Tamamlanan görüşmenin tek özeti kaydedildi.');
+        item.consented = true;
+        const records = await saveMentalHistory(item, () => r.mounted && r.epoch === epoch && settings.current.parked && settings.current.speechConsent);
+        if (!r.mounted || r.epoch !== epoch || !settings.current.parked || !settings.current.speechConsent) return;
+        setHistory(records); setNotice('Tamamlanan görüşmenin tek özeti kaydedildi.');
       } else setNotice('Özet hazır. Kalıcı saklama izni kapalı; geçmişe kayıt eklenmedi.');
+      setSummary(item); setPhase('completed');
     } catch {
       if (r.mounted && r.epoch === epoch) { setPhase('error'); setNotice('Görüşme özeti oluşturulamadı veya kaydedilemedi; başarılı kayıt eklenmedi.'); }
     } finally { clearTimeout(deadline); }
@@ -246,10 +250,11 @@ export function useMentalConversation(parked: boolean) {
     voices(); window.speechSynthesis?.addEventListener('voiceschanged', voices);
     const revoke = () => {
       if (r.active && !isMicrophoneAllowed() && !settings.current.textMode) actions.current.cancel('Mikrofon izni geri çekildi. Görüşme kapatıldı; yazarak yeni görüşme başlatabilirsiniz.');
-      if (r.mounted) {
+      void prepareHealthRecords('mental').then(() => {
+        if (!r.mounted) return;
         const records = readMentalHistory(); setHistory(records);
         setSummary(previous => previous?.consented && !records.some(record => record.id === previous.id) ? null : previous);
-      }
+      }).catch(() => { if (r.mounted) setNotice('Kayıtlı görüşmeler okunamadı; veriler değiştirilmedi.'); });
     };
     window.addEventListener('storage', revoke); window.addEventListener('attune-privacy', revoke); window.addEventListener('attune-records', revoke);
     return () => { r.mounted = false; actions.current.cancel(); controller.abort(); window.speechSynthesis?.removeEventListener('voiceschanged', voices); window.removeEventListener('storage', revoke); window.removeEventListener('attune-privacy', revoke); window.removeEventListener('attune-records', revoke); };

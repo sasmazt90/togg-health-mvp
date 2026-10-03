@@ -44,6 +44,7 @@ export default function VisionPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const savedRecordId = useRef<string | null>(null);
+  const persistingRef = useRef(false);
   const [recordNotice, setRecordNotice] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
@@ -84,6 +85,16 @@ export default function VisionPage() {
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; cameraAcquisitionRef.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => {
+      try { if (savedRecordId.current && !readHealthRecords('vision').some(r => r.id === savedRecordId.current)) {
+        savedRecordId.current = null; setTestStep('IDLE'); setRecordNotice('Bu test kaydı silindi.');
+      } } catch { /* A pending transaction will dispatch its completed snapshot. */ }
+    };
+    window.addEventListener('storage', refresh); window.addEventListener('attune-records', refresh);
+    return () => { window.removeEventListener('storage', refresh); window.removeEventListener('attune-records', refresh); };
   }, []);
 
   useEffect(() => {
@@ -162,6 +173,7 @@ export default function VisionPage() {
   };
 
   const handleStartScreenCalibration = () => {
+    savedRecordId.current = null; cameraAcquisitionRef.current += 1;
     setTestStep('SCREEN_CALIBRATION');
   };
 
@@ -184,8 +196,8 @@ export default function VisionPage() {
     setTestStep('TESTING_RIGHT');
   };
 
-  const handleAnswer = (chosen: OptotypeDirection) => {
-    if (!staircase) return;
+  const handleAnswer = async (chosen: OptotypeDirection) => {
+    if (!staircase || persistingRef.current || !parkedRef.current) return;
 
     if (testStep === 'TESTING_RIGHT' || testStep === 'TESTING_LEFT') {
       const isRight = testStep === 'TESTING_RIGHT';
@@ -219,9 +231,13 @@ export default function VisionPage() {
       const outcome = staircase.registerContrastResponse(isCorrect);
       if (outcome.contrastFinished || trialIndex >= 5) {
         const results = staircase.getResults();
-        setTestResults(results);
-        setTestStep('COMPLETED');
-        saveResultsToProfile(results);
+        persistingRef.current = true;
+        const acquisition = cameraAcquisitionRef.current;
+        try {
+          await saveResultsToProfile(results);
+          if (!mountedRef.current || !parkedRef.current || cameraAcquisitionRef.current !== acquisition) return;
+          setTestResults(results); setTestStep('COMPLETED');
+        } finally { persistingRef.current = false; }
       } else {
         setContrastLevelPct(outcome.currentContrastPct);
         setCurrentDirection(staircase.getRandomDirection());
@@ -230,22 +246,13 @@ export default function VisionPage() {
     }
   };
 
-  useEffect(() => {
-    const refresh = () => {
-      if (savedRecordId.current && !readHealthRecords('vision').some(r => r.id === savedRecordId.current)) {
-        savedRecordId.current = null; setTestStep('IDLE'); setRecordNotice('Bu test kaydı silindi.');
-      }
-    };
-    window.addEventListener('storage', refresh); window.addEventListener('attune-records', refresh);
-    return () => { window.removeEventListener('storage', refresh); window.removeEventListener('attune-records', refresh); };
-  }, []);
-
-  const saveResultsToProfile = (results: {
+  const saveResultsToProfile = async (results: {
     rightEye: EyeTestResult | null;
     leftEye: EyeTestResult | null;
     contrast: ContrastResult | null;
   }) => {
     if (!results.rightEye || !results.leftEye || !results.contrast) return;
+    const acquisition = cameraAcquisitionRef.current;
     try {
       const visionRecord = {
         id: crypto.randomUUID(),
@@ -260,7 +267,7 @@ export default function VisionPage() {
         comparisonNote: 'Ölçüm tamamlandı. Kullanıcı doğrulamalı test mesafesi ve adaptif basamak algoritmasıyla kaydedildi.',
         ophthalmologistReferralRecommended: results.rightEye.logMAR > 0.15 || results.leftEye.logMAR > 0.15
       };
-      appendHealthRecord('vision', visionRecord); savedRecordId.current = visionRecord.id; setRecordNotice(null);
+      await appendHealthRecord('vision', visionRecord, {}, () => mountedRef.current && parkedRef.current && acquisition === cameraAcquisitionRef.current); savedRecordId.current = visionRecord.id; setRecordNotice(null);
     } catch (e) {
       setRecordNotice('Sonuç hesaplandı ancak kalıcı kayıt tamamlanamadı.');
     }
@@ -403,7 +410,7 @@ export default function VisionPage() {
               </div>
             </div>
           </section>
-          
+
         </div>
       )}
 

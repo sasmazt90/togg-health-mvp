@@ -1,4 +1,4 @@
-import { appendHealthRecord, readHealthRecords } from './healthRecords';
+import { appendHealthRecord, readHealthRecords, prepareHealthRecords } from './healthRecords';
 import { STORAGE_KEYS, isMentalSummarySavingAllowed } from './attuneMode';
 
 export interface MentalHistoryItem {
@@ -46,7 +46,8 @@ export function readMentalHistory(): MentalHistoryItem[] {
   }
 }
 
-export function saveMentalHistory(item: MentalHistoryItem): MentalHistoryItem[] {
+export async function saveMentalHistory(item: MentalHistoryItem, beforeWrite: () => boolean = () => true): Promise<MentalHistoryItem[]> {
+  await prepareHealthRecords('mental');
   if (!isMentalSummarySavingAllowed()) throw new Error('SUMMARY_CONSENT_REQUIRED');
   const existing = localStorage.getItem(STORAGE_KEYS.MENTAL_HISTORY);
   const readable = readMentalHistory();
@@ -55,5 +56,5 @@ export function saveMentalHistory(item: MentalHistoryItem): MentalHistoryItem[] 
     // Refuse to replace unreadable user records with a seemingly empty new history.
     if (!Array.isArray(parsed) || parsed.length !== readable.length) throw new Error('EXISTING_HISTORY_UNREADABLE');
   }
-  return appendHealthRecord('mental', item) as unknown as MentalHistoryItem[];
+  return await appendHealthRecord('mental', item, {}, () => beforeWrite() && isMentalSummarySavingAllowed()) as unknown as MentalHistoryItem[];
 }

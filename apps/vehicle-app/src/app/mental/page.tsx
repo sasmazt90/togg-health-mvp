@@ -69,18 +69,18 @@ export default function MentalPage() {
     {c.active && isParked && <section data-live-transcript className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5"><h2 className="font-bold">Görüşme Akışı</h2>{conversationTranscript}<button onClick={referral} className="text-togg-turquoise font-bold text-sm">PSİKOLOG SEÇENEKLERİNİ GÖR</button></section>}
     {!c.active && isParked && !demo && <section data-mental-history className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5">
       <div className="flex items-center justify-between gap-3"><h2 className="font-bold">Görüşme temaları</h2><InformationButton title="Görüşme temaları"><p>Bu grafik tanı veya ölçülmüş stres düzeyi değildir; tamamlanmış ve saklama izinli görüşmelerdeki tema paylarını gösterir. Çok temalı görüşmeler her temaya bir kez katkı verir. Tamamlanma ve izin bilgisi doğrulanamayan eski kayıtlar grafiğe katılmaz.</p></InformationButton></div>
-      
+
       {!stats.mentions ? <p>Henüz tema verisi yok.</p> : <>
         <div className="flex flex-wrap gap-4 items-center"><div role="img" aria-label="Görüşme tema payları" className="w-32 h-32 shrink-0 rounded-full" style={{ background: `conic-gradient(${gradient})` }} /><div className="space-y-2">{stats.rows.map((r, i) => <button key={r.theme} onClick={() => setTheme(r.theme)} aria-pressed={theme === r.theme} className="block text-xs text-left rounded-lg px-2 py-1 hover:bg-white/5"><span style={{ color: COLORS[i % COLORS.length] }}>● </span>{r.theme}: %{r.percent} ({r.count}/{stats.mentions} tema kaydı)</button>)}</div></div>
         <p className="text-xs">{stats.sessions} tamamlanmış izinli görüşme, {stats.mentions} tema kaydı. Çok temalı görüşmeler her farklı temaya bir kez katkı verir. Yüzdeler toplamı 100 olacak şekilde yuvarlanır.</p>
         {theme && <div data-selected-theme><h3 className="font-bold">{theme}</h3>{c.history.filter(h => h.schemaVersion === 2 && h.completed && h.consented && h.themes.includes(theme)).map(h => <p className="text-sm mt-2" key={h.id}>{translateMood(h.summaryText)}</p>)}</div>}
       </>}
-      
+
       {c.active && <p className="text-xs text-slate-400">Bu görüşme bitmeden yeni özet veya geçmiş kaydı oluşturulmaz.</p>}
       {c.summary && <div data-current-summary><h3 className="text-sm font-bold">Tamamlanan görüşmenin özeti</h3><p className="text-sm">{translateMood(c.summary.summaryText)}</p><span data-summary-provider={c.summary.providerType} /></div>}
       <RecordHistory category="mental" parked={isParked} />
       <button onClick={referral} className="text-togg-turquoise font-bold text-sm">PSİKOLOG SEÇENEKLERİNİ GÖR</button>
     </section>}
-    
+
   </div>;
 }

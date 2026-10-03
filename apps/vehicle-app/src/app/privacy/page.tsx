@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { RECORD_JOURNAL, readHealthRecords } from '../../utils/healthRecords';
+import { RECORD_JOURNAL, readHealthRecords, withRecordsLock } from '../../utils/healthRecords';
 import { InformationButton } from '../../components/InformationButton';
 import {
   ShieldCheck,
@@ -120,6 +120,7 @@ export default function PrivacyPage() {
         const mCount = mentalHistory.length || (localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL) ? 1 : 0);
 
         setDataStats({ visionCount: vCount, skinCount: sCount, mentalCount: mCount });
+        setStorageUnavailable(false);
       }
     }
     } catch {
@@ -165,6 +166,7 @@ export default function PrivacyPage() {
     const healthKeys = [RECORD_JOURNAL, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
       STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
       STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
+    try { await withRecordsLock(() => {
     for (const key of healthKeys) {
       try {
         localStorage.removeItem(key);
@@ -173,6 +175,8 @@ export default function PrivacyPage() {
         local = false;
       }
     }
+    } ); } catch { local = false; }
+    window.dispatchEvent(new Event('attune-records'));
     window.dispatchEvent(new Event('attune-reminder'));
     let backend = false;
     const controller = new AbortController();

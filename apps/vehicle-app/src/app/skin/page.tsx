@@ -82,6 +82,7 @@ export default function SkinPage() {
   const consecutiveValidFramesRef = useRef<number>(0);
   const mountedRef = useRef(true);
   const acquisitionRef = useRef(0);
+  const persistingRef = useRef(false);
   const parkedRef = useRef(isParked);
   parkedRef.current = isParked;
 
@@ -271,11 +272,16 @@ export default function SkinPage() {
   };
 
   // Taramayı başarıyla tamamlama fonksiyonu
-  const finishScan = (
+  const finishScan = async (
     isDemo: boolean = false,
     finalAlignment?: FaceAlignment,
     finalQuality?: ImageQuality
   ) => {
+    if (persistingRef.current) return;
+    persistingRef.current = true;
+    const acquisition = acquisitionRef.current;
+    const validCapture = () => mountedRef.current && parkedRef.current && acquisitionRef.current === acquisition && isCameraAllowed();
+    try {
     if (demoTimerRef.current) {
       clearInterval(demoTimerRef.current);
       demoTimerRef.current = null;
@@ -392,10 +398,11 @@ export default function SkinPage() {
     // Yalnızca canPersistResult doğrulaması geçerse gerçek sonuç kalıcı olarak saklanır
     if (SkinAnalyzer.canPersistResult(finalResult)) {
       try {
-        appendHealthRecord('skin', finalResult, isFirstScan ? {
+        await appendHealthRecord('skin', finalResult, isFirstScan ? {
           [STORAGE_KEYS.SKIN_BASELINE]: JSON.stringify(regionMetrics),
           [STORAGE_KEYS.SKIN_BASELINE_META]: JSON.stringify({ id: finalResult.id, timestamp: finalResult.timestamp, schemaVersion: 1, scope: 'single-front-v1', quality: qualToUse, pose: capturePose })
-        } : {});
+        } : {}, () => validCapture() && (isFirstScan ? !localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE) : localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE) === JSON.stringify(baselineData)));
+        if (!validCapture()) return;
       } catch (e) {
         setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Referans veya geçmiş kaydı oluşturulduğu doğrulanamadı.');
         setScanState('ERROR');
@@ -414,13 +421,19 @@ export default function SkinPage() {
       if (match) setSelectedRegionId(match);
     }
     setScanState('COMPLETED');
+    } finally { persistingRef.current = false; }
   };
 
   // Real-time video işleme döngüsü (requestAnimationFrame)
-  const finishMultiScan = (captures: Record<SkinAngle, AngleCapture>) => {
+  const finishMultiScan = async (captures: Record<SkinAngle, AngleCapture>) => {
+    if (persistingRef.current) return;
+    persistingRef.current = true;
+    const acquisition = acquisitionRef.current;
+    const validCapture = () => mountedRef.current && parkedRef.current && acquisitionRef.current === acquisition && isCameraAllowed();
     const current: MultiAngleReference = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), schemaVersion: 2, scope: 'three-angle-v2', captures };
     try {
-      const prior: MultiAngleReference | null = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) || 'null');
+      const priorRaw = localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE);
+      const prior: MultiAngleReference | null = JSON.parse(priorRaw || 'null');
       const comparison = compareMultiAngle(current, prior);
       const finalResult: SkinAnalysisResult = {
         id: current.id, timestamp: current.timestamp, quality: captures.FRONT.quality, regions: comparison.regions,
@@ -432,11 +445,12 @@ export default function SkinPage() {
       };
       if (!SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
       // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
-      appendHealthRecord('skin', finalResult, !prior ? { [STORAGE_KEYS.SKIN_MULTI_BASELINE]: JSON.stringify(current) } : {});
+      await appendHealthRecord('skin', finalResult, !prior ? { [STORAGE_KEYS.SKIN_MULTI_BASELINE]: JSON.stringify(current) } : {}, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) === priorRaw);
+      if (!validCapture()) return;
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {
       setErrorMessage('Üç açılı ölçüm veya referans kaydı doğrulanamadı. Eski tek açılı referansınız değiştirilmedi.'); setScanState('ERROR');
-    }
+    } finally { persistingRef.current = false; }
   };
   const finishMultiRef = useRef(finishMultiScan);
   finishMultiRef.current = finishMultiScan;
