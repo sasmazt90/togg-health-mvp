@@ -57,7 +57,7 @@ extra=r'''
 
     c,page=new()
     def mental_upper_crisis():
-        go(page,'/mental')
+        go(page,'/mental?demo=1')
         page.wait_for_function('speechSynthesis.getVoices().some(v=>v.lang.toLowerCase().startsWith("tr"))',timeout=10000)
         prior_tts=page.evaluate('window.__audit.tts.length')
         text_input('İNTİHAR ETMEK İSTİYORUM')

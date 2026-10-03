@@ -56,6 +56,7 @@ with sync_playwright() as pw:
       caller.click();dialog=p.get_by_role('dialog');expect(dialog).to_be_visible()
       p.wait_for_function('document.querySelector("[role=dialog]").contains(document.activeElement)')
       bounds=dialog.bounding_box();assert bounds['y']>=15 and bounds['y']+bounds['height']<=height-15
+      assert dialog.evaluate('(e)=>{const r=e.firstElementChild.getBoundingClientRect();return e.contains(document.elementFromPoint(r.left+10,r.top+10))}'),'Dialog title covered by page navigation'
       for _ in range(15):p.keyboard.press('Tab');assert dialog.evaluate('e=>e.contains(document.activeElement)')
       p.keyboard.press('Shift+Tab');assert dialog.evaluate('e=>e.contains(document.activeElement)')
       snap(p,f'{route or "cockpit"}-information-{i}-{width}',False)

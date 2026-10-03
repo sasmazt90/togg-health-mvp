@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory(prefix='attune-final-zoom-') as profile, sync_p
  preferences=Path(profile)/'Default/Preferences';settings=json.loads(preferences.read_text(encoding='utf-8'));settings.setdefault('partition',{})['default_zoom_level']={'x':math.log(2)/math.log(1.2)};preferences.write_text(json.dumps(settings),encoding='utf-8')
  c=launch();p=c.pages[0];c.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});p.goto('http://localhost:3000');zoom=p.evaluate('({width:innerWidth,dpr:devicePixelRatio})');assert zoom['dpr']/original['dpr']>=1.99 and zoom['width']<original['width']*.55
  def snap(name):
-  raw=p.screenshot();assert sum(ImageStat.Stat(Image.open(io.BytesIO(raw))).var)>10;(OUT/(name+'.png')).write_bytes(raw)
+  raw=base64.b64decode(c.new_cdp_session(p).send('Page.captureScreenshot',{'format':'png','fromSurface':True,'captureBeyondViewport':False})['data']);assert sum(ImageStat.Stat(Image.open(io.BytesIO(raw))).var)>10;(OUT/(name+'.png')).write_bytes(raw)
  screens=[]
  try:
   for route in ['','vision','skin','mental','care','profile','privacy']:
@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='attune-final-zoom-') as profile, sync_p
    p.goto('http://localhost:3000/'+route);p.wait_for_timeout(350);assert p.evaluate('document.documentElement.scrollWidth<=innerWidth');snap((route or 'cockpit')+'-200-top');p.evaluate('scrollTo(0,document.documentElement.scrollHeight)');p.wait_for_timeout(150);snap((route or 'cockpit')+'-200-bottom')
    callers=p.get_by_role('button',name='hakkında bilgi').all()
    for i,caller in enumerate(callers):
-    caller.click();d=p.get_by_role('dialog');expect(d).to_be_visible();assert d.bounding_box()['height']<=p.evaluate('innerHeight')-30;snap(f'{route or "cockpit"}-200-information-{i}');p.keyboard.press('Escape');assert caller.evaluate('e=>e===document.activeElement')
+    caller.click();d=p.get_by_role('dialog');expect(d).to_be_visible();assert d.bounding_box()['height']<=p.evaluate('innerHeight')-30;assert d.evaluate('(e)=>{const r=e.firstElementChild.getBoundingClientRect();return e.contains(document.elementFromPoint(r.left+10,r.top+10))}'),'Dialog title covered by page navigation';snap(f'{route or "cockpit"}-200-information-{i}');p.keyboard.press('Escape');assert caller.evaluate('e=>e===document.activeElement')
    screens.append(route or 'cockpit')
   p.goto('http://localhost:3000/profile')
   for category,history,latest in [('vision','togg_health_vision_history','togg_health_latest_vision'),('skin','togg_health_skin_history','togg_health_latest_skin'),('mental','togg_health_mental_history','togg_health_latest_mental')]:

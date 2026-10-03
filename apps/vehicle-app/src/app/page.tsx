@@ -68,7 +68,7 @@ export default function CockpitDashboard() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-togg-turquoise/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-cyan-900/20 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
             <div className="flex items-center gap-2 text-[11px] font-semibold text-togg-turquoise tracking-wider uppercase">
               <span className="w-2 h-2 rounded-full bg-togg-turquoise animate-pulse" />
