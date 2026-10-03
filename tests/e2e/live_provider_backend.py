@@ -15,6 +15,7 @@ parser.add_argument('--run-id')
 args = parser.parse_args()
 if not args.approved_additional_text_run:
     raise SystemExit('No authorization: no server or provider request')
+RUN_ID = args.run_id
 ROOT = Path(__file__).resolve().parents[2]
 OUT = live_run_output(ROOT,args.run_id)
 OUT.mkdir(parents=True, exist_ok=True)
@@ -26,9 +27,11 @@ events = []
 original_send = httpx.Client.send
 
 def save():
-    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': args.run_id or 'controlled-text'}, indent=2), encoding='utf-8')
+    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': RUN_ID or 'controlled-text'}, indent=2), encoding='utf-8')
 
-def send(self, request, *args, **kwargs):
+def send(self, request, *send_args, **kwargs):
+    kind = None
+    dispatch_started = False
     try:
         if request.url.host != 'api.openai.com' or request.url.scheme != 'https' or request.method != 'POST':
             gate.reject('UNEXPECTED_PROVIDER_DESTINATION')
@@ -38,9 +41,10 @@ def send(self, request, *args, **kwargs):
             gate.reject('MODEL_CHANGED')
         kind = gate.admit(request.url.path, data)
         if sum(gate.counts.values()) == 1:
-            claim_live_run(OUT,args.run_id)
+            claim_live_run(OUT,RUN_ID)
         start = time.monotonic()
-        response = original_send(self, request, *args, **kwargs)  # Actual network, no mock response.
+        dispatch_started = True
+        response = original_send(self, request, *send_args, **kwargs)  # Actual network, no mock response.
         response.read()
         event = {'kind': kind, 'httpStatus': response.status_code, 'durationMs': round((time.monotonic()-start)*1000, 1), 'requestId': response.headers.get('x-request-id')}
         events.append(event)
@@ -53,7 +57,8 @@ def send(self, request, *args, **kwargs):
             (OUT/f"synthetic-reply-{gate.counts['tts']}.mp3").write_bytes(response.content)
         save()
         return response
-    except Exception:
+    except Exception as error:
+        events.append({'kind': kind, 'failureCategory': type(error).__name__, 'dispatchStarted': dispatch_started, 'httpStatus': None})
         gate.failed = True
         save()
         raise

@@ -96,3 +96,44 @@ def test_distinct_authorization_preserves_previous_consumed_marker(tmp_path):
     with pytest.raises(FileExistsError):module.claim_live_run(new,'20261003-approved-02')
     assert (old/'run-consumed.json').read_bytes()==before
     assert new!=old and new.is_relative_to(tmp_path)
+
+
+def transport_namespace(output, original_send):
+    """Compile the exact checked-in wrapper without starting server or provider."""
+    import ast,json,os,time
+    source=(Path(__file__).parents[1]/'e2e/live_provider_backend.py').read_text(encoding='utf-8')
+    nodes=[n for n in ast.parse(source).body if isinstance(n,ast.FunctionDef) and n.name in ['save','send']]
+    ns={'json':json,'os':os,'time':time,'RUN_ID':'20261003-unit-run','OUT':output,'gate':module.LiveAdmission(True),'events':[],'original_send':original_send,'claim_live_run':module.claim_live_run}
+    exec(compile(ast.Module(body=nodes,type_ignores=[]),'exact-current-transport-wrapper','exec'),ns)
+    return ns
+
+def test_actual_transport_wrapper_claims_distinct_run_before_dispatch(tmp_path):
+    import httpx,json
+    calls=[]
+    def original(self,request,*arguments,**options):
+        assert (tmp_path/'run-consumed.json').exists()
+        assert arguments==('sdk-positional-option',) and options=={'stream':False}
+        calls.append(request)
+        return httpx.Response(200,json={'choices':[{'message':{'content':'Sentetik kitap yanıtı'}}]},request=request)
+    ns=transport_namespace(tmp_path,original)
+    data=conversation(ns['gate']);data['model']='gpt-4o-mini'
+    request=httpx.Request('POST','https://api.openai.com/v1/chat/completions',json=data)
+    response=ns['send'](object(),request,'sdk-positional-option',stream=False)
+    assert response.status_code==200 and len(calls)==1
+    assert ns['gate'].counts=={'conversation':1,'tts':0,'summary':0} and ns['gate'].pending is None
+    assert json.loads((tmp_path/'run-consumed.json').read_text())['runId']=='20261003-unit-run'
+
+def test_transport_failure_keeps_consumed_marker_and_safe_category_without_retry(tmp_path):
+    import httpx,json
+    calls=[]
+    def original(*args,**kwargs):
+        calls.append(True);raise httpx.ConnectError('REJECTED_TEST_TOKEN')
+    ns=transport_namespace(tmp_path,original);data=conversation(ns['gate']);data['model']='gpt-4o-mini'
+    request=httpx.Request('POST','https://api.openai.com/v1/chat/completions',json=data)
+    with pytest.raises(httpx.ConnectError):ns['send'](None,request)
+    before=(tmp_path/'run-consumed.json').read_bytes()
+    with pytest.raises(module.AdmissionRejected):ns['send'](None,request)
+    assert len(calls)==1 and (tmp_path/'run-consumed.json').read_bytes()==before and ns['gate'].counts['conversation']==1
+    proof=(tmp_path/'egress-proof.json').read_text();assert 'REJECTED_TEST_TOKEN' not in proof
+    assert json.loads(proof)['events'][0]['failureCategory']=='ConnectError'
+    assert json.loads(proof)['events'][0]['dispatchStarted'] is True
