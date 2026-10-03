@@ -1,5 +1,6 @@
 'use client';
 
+import { AccessibleDialog } from '../AccessibleDialog';
 import React, { useState } from 'react';
 import { isDemoMode } from '../../utils/attuneMode';
 import { SkinReminderForm } from './SkinReminderForm';
@@ -19,14 +20,7 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
 }) => {
   const [showReminder, setShowReminder] = useState(false);
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
-    >
-      <div
-        className="relative w-full max-w-xl bg-[#0B1526] border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AccessibleDialog title="Önerilen Aksiyonlar" onClose={onClose} className="relative w-full max-w-xl bg-[#0B1526] border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -42,7 +36,8 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+            aria-label="Pencereyi kapat"
+            className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -53,13 +48,14 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
           {region.actions.map((act, idx) => {
             if (act.isCareHandoff) {
               return (
-                <div
+                <button
+                  type="button"
                   key={idx}
                   onClick={() => {
                     onClose();
                     onNavigateToCare();
                   }}
-                  className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-togg-turquoise/15 to-transparent border border-togg-turquoise/35 hover:border-togg-turquoise/70 transition-all cursor-pointer group shadow-lg"
+                  className="w-full text-left flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-togg-turquoise/15 to-transparent border border-togg-turquoise/35 hover:border-togg-turquoise/70 transition-all cursor-pointer group shadow-lg"
                 >
                   <div className="flex items-center gap-3.5">
                     <div className="w-9 h-9 rounded-lg bg-togg-turquoise/20 border border-togg-turquoise/40 text-togg-turquoise flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
@@ -75,7 +71,7 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-togg-turquoise group-hover:translate-x-1 transition-transform" />
-                </div>
+                </button>
               );
             }
 
@@ -112,7 +108,6 @@ export const SkinActionsModal: React.FC<SkinActionsModalProps> = ({
             Kapat
           </button>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 };

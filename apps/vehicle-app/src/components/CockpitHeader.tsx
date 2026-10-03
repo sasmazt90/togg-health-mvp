@@ -36,7 +36,7 @@ export const CockpitHeader: React.FC = () => {
   return (
     <header className="border-b border-white/10 bg-[#050b14]/95 backdrop-blur-md sticky top-0 z-50">
       {/* Üst Telemetri ve Güvenlik Durum Çubuğu */}
-      <div className="flex items-center justify-between px-6 py-2 border-b border-white/5 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-2 border-b border-white/5 text-xs">
         <div className="flex items-center gap-4">
           <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
             <img
@@ -53,7 +53,7 @@ export const CockpitHeader: React.FC = () => {
           <div className="hidden md:flex items-center gap-2.5 text-slate-400 border-l border-white/10 pl-4 text-xs">
             <span className="flex items-center gap-1.5 text-slate-200 font-medium">
               <User className="w-3.5 h-3.5 text-togg-turquoise" />
-              <span>{state.driverName}</span>
+              <span>{state.driverName} (örnek araç profili)</span>
             </span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-400">{state.currentLocation.label}</span>
@@ -80,7 +80,7 @@ export const CockpitHeader: React.FC = () => {
           <button
             onClick={toggleDrivingMode}
             disabled={syncStatus === 'loading' || syncStatus === 'updating'}
-            className={`flex items-center gap-2 px-3 py-1 rounded-full font-bold text-xs transition-all border shadow-sm ${
+            className={`flex items-center gap-2 px-3 py-1 rounded-full shrink-0 font-bold text-xs transition-all border shadow-sm ${
               isParked
                 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/70 hover:bg-emerald-900/60'
                 : 'bg-amber-950/60 text-amber-300 border-amber-700/80 hover:bg-amber-900/70 animate-pulse'
@@ -88,7 +88,7 @@ export const CockpitHeader: React.FC = () => {
             title="Sürüş ve Park modları arasında geçiş"
           >
             <Car className="w-3.5 h-3.5" />
-            <span>
+            <span className="whitespace-nowrap">
               {syncStatus !== 'synced' ? <strong>{syncStatus === 'failed' ? 'ARAÇ DURUMU BELİRSİZ' : 'ARAÇ DURUMU DOĞRULANIYOR'}</strong> : isParked ? (
                 <>
                   <strong>PARK</strong> • 0 km/s

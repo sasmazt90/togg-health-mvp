@@ -1,5 +1,6 @@
 """Actual MediaPipe/UI baseline, anatomy, reminder and repeat comparison."""
 import json
+from datetime import datetime,timedelta
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
@@ -38,15 +39,39 @@ with sync_playwright() as pw:
         expect(note).to_be_visible()
         page.keyboard.press('Escape')
         page.get_by_role('button',name='Sonraki Bölge',exact=True).click()
+    visual=OUT/'uat-skin';visual.mkdir(exist_ok=True)
+    for width,height in [(1280,900),(390,844),(820,900)]:
+        page.set_viewport_size({'width':width,'height':height});page.evaluate('scrollTo(0,0)')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        page.screenshot(path=str(visual/f'actual-first-reference-{width}.png'),full_page=True)
+    page.set_viewport_size({'width':1280,'height':900})
+    for region_index in range(6):
+        graphic=page.locator('[data-face-schematic] svg');selected=graphic.get_attribute('aria-label').replace(' anatomik yüz şeması','')
+        page.evaluate('scrollTo(0,0)');page.screenshot(path=str(visual/f'actual-region-{region_index}.png'),full_page=True)
+        page.get_by_role('button',name='Gözlem Notu',exact=True).click();expect(page.get_by_text(selected+' — Referans oluşturuldu',exact=True)).to_be_visible()
+        page.screenshot(path=str(visual/f'actual-region-note-{region_index}.png'));page.keyboard.press('Escape');page.get_by_role('button',name='Sonraki Bölge',exact=True).click()
     page.screenshot(path=str(OUT/'skin-baseline-schematic.png'))
     page.get_by_role('button',name='Önerilen Aksiyonlar',exact=True).click()
     page.get_by_role('button',name='Hatırlat',exact=True).click()
+    date_input=page.get_by_role('textbox',name='Hatırlatma tarihi ve saati')
+    date_input=page.locator('input[type=datetime-local]')
+    default_date=datetime.fromisoformat(date_input.input_value());today=page.evaluate('new Date().toLocaleDateString("sv-SE")')
+    assert (default_date.date()-datetime.fromisoformat(today).date()).days==28
+    page.set_viewport_size({'width':390,'height':500});page.screenshot(path=str(visual/'actual-reminder-expanded-short.png'))
+    date_input.fill('2000-01-01T10:00');page.get_by_role('button',name='Hatırlatmayı kaydet',exact=True).click();expect(page.get_by_role('status')).to_contain_text('Plan kaydedilemedi')
+    assert page.evaluate('localStorage.getItem("togg_health_skin_reminder")') is None
+    date_input.fill(default_date.isoformat(timespec='minutes'))
     page.get_by_role('button',name='Hatırlatmayı kaydet',exact=True).click()
     expect(page.get_by_text('Uygulama içi plan kaydedildi. İşletim sistemi bildirimi kurulmadı.',exact=True)).to_be_visible()
     page.screenshot(path=str(OUT/'reminder-plan.png'),full_page=True)
     reminder=page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_reminder"))')
     page.get_by_role('button',name='Hatırlatmayı kaydet',exact=True).click()
     assert page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_reminder")).id')==reminder['id']
+    updated_date=default_date+timedelta(days=2,hours=1);date_input.fill(updated_date.isoformat(timespec='minutes'));page.get_by_role('button',name='Hatırlatmayı kaydet',exact=True).click()
+    updated=page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_reminder"))');assert updated['id']==reminder['id'] and updated['dueAt']!=reminder['dueAt']
+    reminder=updated
+    close_box=page.get_by_role('button',name='Pencereyi kapat',exact=True).bounding_box();assert 15<=close_box['y'] and close_box['y']+close_box['height']<=485
+    page.screenshot(path=str(visual/'actual-reminder-edited-short.png'))
     with page.expect_download() as pending: page.get_by_role('button',name='Takvim dosyasını indir (.ics)',exact=True).click()
     download=pending.value;download.save_as(str(OUT/'planlanan-takip.ics'))
     calendar=(OUT/'planlanan-takip.ics').read_text(encoding='utf-8')
@@ -54,7 +79,10 @@ with sync_playwright() as pw:
     assert 'cilt' not in calendar.lower() and 'mental' not in calendar.lower()
     page.get_by_role('button',name='Hatırlatmayı iptal et',exact=True).click()
     assert not page.evaluate('localStorage.getItem("togg_health_skin_reminder")')
+    expect(page.get_by_role('status')).to_contain_text('takvim kaydını ayrıca silin')
+    page.screenshot(path=str(visual/'actual-reminder-cancelled-short.png'))
     page.keyboard.press('Escape')
+    page.set_viewport_size({'width':1280,'height':900})
     page.goto('http://localhost:3000/skin')
     page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
@@ -65,7 +93,8 @@ with sync_playwright() as pw:
     assert all('changeFromBaselinePct' in r for r in second['regions'].values())
     assert not errors,errors
     page.screenshot(path=str(OUT/'skin-repeat-schematic.png'))
-    (OUT/'skin.json').write_text(json.dumps({'first':first,'second':second,'calendarUid':reminder['id'],'cameraStoppedInResult':True,'allSixRegionsVisible':True},ensure_ascii=False,indent=2),encoding='utf-8')
+    page.get_by_role('button',name='Zaman İçinde Değişim',exact=True).click();page.screenshot(path=str(visual/'actual-compatible-trend.png'));page.keyboard.press('Escape')
+    (OUT/'skin.json').write_text(json.dumps({'first':first,'second':second,'calendarUid':reminder['id'],'cameraStoppedInResult':True,'allSixRegionsVisible':True,'reminderDefaultCalendarDays':28,'reminderEditDedupErrorCancel':True,'visualScreenshots':'uat-skin (actual production MediaPipe/UI scans, not injected baseline)'},ensure_ascii=False,indent=2),encoding='utf-8')
     # Migration fixture starts from the two actual UI scans above, never injected metrics.
     original_baseline=page.evaluate('localStorage.getItem("togg_health_skin_baseline")')
     page.evaluate('localStorage.removeItem("togg_health_skin_baseline_meta")')

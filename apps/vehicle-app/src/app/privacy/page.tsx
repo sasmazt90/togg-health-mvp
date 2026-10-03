@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Info
 } from 'lucide-react';
+import { readMentalHistory } from '../../utils/mentalHistory';
 import { STORAGE_KEYS, isDemoMode } from '../../utils/attuneMode';
 
 export default function PrivacyPage() {
@@ -112,7 +113,8 @@ export default function PrivacyPage() {
           ? skinHist.length
           : (localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) ? 1 : (localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE) ? 1 : 0));
 
-        const mCount = localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL) ? 1 : 0;
+        const mentalHistory = readMentalHistory();
+        const mCount = mentalHistory.length || (localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL) ? 1 : 0);
 
         setDataStats({ visionCount: vCount, skinCount: sCount, mentalCount: mCount });
       }
@@ -127,22 +129,31 @@ export default function PrivacyPage() {
   }, []);
 
   const handleToggleMentalSaving = (val: boolean) => {
-    setSaveMentalSummaries(val);
-    localStorage.setItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED, String(val));
+    try {
+      localStorage.setItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED, String(val));
+      setSaveMentalSummaries(val);
+      window.dispatchEvent(new Event('attune-privacy'));
+    } catch { setStorageUnavailable(true); }
   };
 
   const handleToggleCamera = () => {
     const next = !cameraAppAllowed;
-    setCameraAppAllowed(next);
-    localStorage.setItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED, String(next));
-    setCameraStatus(deriveEffectiveStatus(next, browserCameraState));
+    try {
+      localStorage.setItem(STORAGE_KEYS.PRIVACY_CAMERA_ALLOWED, String(next));
+      setCameraAppAllowed(next);
+      setCameraStatus(deriveEffectiveStatus(next, browserCameraState));
+      window.dispatchEvent(new Event('attune-privacy'));
+    } catch { setStorageUnavailable(true); }
   };
 
   const handleToggleMic = () => {
     const next = !micAppAllowed;
-    setMicAppAllowed(next);
-    localStorage.setItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED, String(next));
-    setMicStatus(deriveEffectiveStatus(next, browserMicState));
+    try {
+      localStorage.setItem(STORAGE_KEYS.PRIVACY_MIC_ALLOWED, String(next));
+      setMicAppAllowed(next);
+      setMicStatus(deriveEffectiveStatus(next, browserMicState));
+      window.dispatchEvent(new Event('attune-privacy'));
+    } catch { setStorageUnavailable(true); }
   };
 
   const handleWipeAllData = async () => {
@@ -197,13 +208,13 @@ export default function PrivacyPage() {
             </h1>
 
             <p className="text-sm text-slate-300">
-              Attune.more sağlık verilerini local-first ve izin odaklı işler.
+              Attune.more kayıtları bu cihazda tutar. Görüşme ve sesin buluta aktarımı için ayrıca onayınız gerekir.
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs bg-slate-950/80 px-4 py-2 rounded-xl border border-white/10 text-slate-300 shrink-0 self-start md:self-auto">
             <Lock className="w-3.5 h-3.5 text-togg-turquoise" />
-            <span>Local-First Depolama: <strong>Aktif</strong></span>
+            <span>Cihazda Depolama: <strong>Aktif</strong></span>
           </div>
         </div>
       </section>
@@ -233,7 +244,7 @@ export default function PrivacyPage() {
             <div>
               <h2 className="text-base font-bold text-white">Kabin Kamerası</h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yalnızca görme mesafesi ve cilt analizi sırasında yüz ROI tespiti için anlık kullanılır; ham görüntü kaydedilmez.
+                Yalnızca görme mesafesi ve cilt analizi sırasında yüz bölgelerinin belirlenmesi için anlık kullanılır; ham görüntü kaydedilmez.
               </p>
             </div>
           </div>
@@ -272,7 +283,7 @@ export default function PrivacyPage() {
             <div>
               <h2 className="text-base font-bold text-white">Kabin Mikrofonu</h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yalnızca sesli asistan diyalogları için kullanılır. Ses akışı RAM üzerinde işlenir, ses kaydı saklanmaz.
+                Yalnızca sesli asistan diyalogları için kullanılır. Konuşma tanıma hizmeti ayrı onayınızla bulutta çalışabilir. Ham ses bu uygulamada saklanmaz.
               </p>
             </div>
           </div>
@@ -309,7 +320,7 @@ export default function PrivacyPage() {
             <div>
               <h2 className="text-base font-bold text-white">Seans Hafızası</h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yalnızca yüksek seviyeli temalar (uyku, iş stresi) cihazda yerel saklanır.
+                Tamamlanan görüşmenin kısa özeti, temaları, duygu eğilimi ve tarihi bu cihazda saklanır. Ham ses ve tam konuşma dökümü saklanmaz. Kapatmak önceki özetleri silmez.
               </p>
             </div>
           </div>
@@ -350,7 +361,7 @@ export default function PrivacyPage() {
             <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.skinCount}</div>
           </div>
           <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl">
-            <div className="text-xs text-slate-400">Mental Seanslar</div>
+            <div className="text-xs text-slate-400">Görüşme Özetleri</div>
             <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.mentalCount}</div>
           </div>
         </div>

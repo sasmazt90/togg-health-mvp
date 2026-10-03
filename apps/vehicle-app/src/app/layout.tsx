@@ -24,7 +24,7 @@ export default function RootLayout({
             {children}
           </main>
           <footer className="border-t border-cockpit-border/40 py-3 px-6 text-center text-xs text-slate-500 bg-cockpit-surface/50">
-            <div className="flex items-center justify-center gap-2 max-w-[1600px] mx-auto text-[11px]">
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 max-w-[1600px] mx-auto text-[11px]">
               <span className="font-semibold text-slate-300 tracking-wide">Attune<span className="text-togg-turquoise">.more</span></span>
               <span>•</span>
               <span className="text-slate-400">Togg Kişiselleştirilmiş Sağlık Deneyimi</span>

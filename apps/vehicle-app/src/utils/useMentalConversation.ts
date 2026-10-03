@@ -78,7 +78,7 @@ export function useMentalConversation(parked: boolean) {
     const r = runtime.current;
     r.epoch++; r.active = false; r.busy = false; r.failed = true;
     cleanup();
-    if (r.mounted) { setActive(false); setPhase(reason ? 'error' : 'ready'); if (reason) setNotice(reason); }
+    if (r.mounted) { setActive(false); setVoiceState('ready'); setPhase(reason ? 'error' : 'ready'); if (reason) setNotice(reason); }
   }
   function listen() {
     const r = runtime.current, epoch = r.epoch;
@@ -124,7 +124,7 @@ export function useMentalConversation(parked: boolean) {
     r.voiceWaiting = true;
     const end = () => { if (!current()) return; stopAudio(); setVoiceState('ready'); if (!crisis) resume(epoch); else { r.active = false; setActive(false); setPhase('error'); } };
     const fail = () => { if (!current()) return; stopAudio(); setVoiceState('failed'); setVoiceNotice('Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
-    setVoiceState('starting');
+    setVoiceState(settings.current.speechSource === 'openai' ? 'loadingSpeech' : 'starting');
     if (settings.current.speechSource === 'openai') {
       if (!settings.current.cloudConsent) { fail(); return; }
       const controller = new AbortController(); r.controller = controller;
@@ -135,6 +135,7 @@ export function useMentalConversation(parked: boolean) {
         if (!response.ok) throw new Error('Speech service');
         const blob = await response.blob();
         if (!current()) return;
+        setVoiceState('starting');
         const url = URL.createObjectURL(blob); r.audioUrl = url;
         const audio = new Audio(url); r.audio = audio;
         audio.onplaying = () => { if (current()) { setPhase('speaking'); setVoiceState('speaking'); } };
@@ -179,7 +180,7 @@ export function useMentalConversation(parked: boolean) {
       if (!valid(epoch)) return;
       if (typeof data.reply !== 'string' || !data.reply.trim()) throw new Error('Invalid reply');
       r.transcript = r.transcript.map(m => m.id === user.id ? { ...m, completed: true } : m);
-      const badge = data.providerType === 'LIVE_OPENAI' ? 'OpenAI Canlı' : data.providerType === 'CRISIS_SAFETY_GUARD' ? 'Kriz Güvenlik Filtresi' : data.providerType === 'LOCAL_DEMO_FALLBACK' ? 'LOCAL_DEMO_FALLBACK — sağlayıcıya ulaşılamadı' : 'LOCAL_DEMO — Yerel Model';
+      const badge = data.providerType === 'LIVE_OPENAI' ? 'LIVE_OPENAI — OpenAI Canlı' : data.providerType === 'CRISIS_SAFETY_GUARD' ? 'Kriz Güvenlik Filtresi' : data.providerType === 'LOCAL_DEMO_FALLBACK' ? 'LOCAL_DEMO_FALLBACK — sağlayıcıya ulaşılamadı' : 'LOCAL_DEMO — Yerel Model';
       append({ id: `${r.id}-${turn}-ai`, turn, sender: 'AI', text: data.reply, time, completed: true, isCrisis: data.isCrisis, providerBadge: badge });
       if (data.providerType === 'LOCAL_DEMO_FALLBACK') setNotice('Canlı sağlayıcıya ulaşılamadı; bu yanıt yerel demo motorundan geldi.');
       if (data.isCrisis) { r.failed = true; setNotice('Normal görüşme durduruldu. Acil Kriz Destek: 112 Acil Çağrı.'); }
@@ -196,7 +197,7 @@ export function useMentalConversation(parked: boolean) {
     cleanup(); const r = runtime.current;
     r.epoch++; r.active = true; r.failed = false; r.busy = false; r.turn = 0; r.id = crypto.randomUUID(); r.transcript = [];
     settings.current.textMode = asText;
-    setActive(true); setTextMode(asText); setMessages([]); setSummary(null); setNotice(null); setPhase('ready');
+    setActive(true); setTextMode(asText); setMessages([]); setSummary(null); setNotice(null); setVoiceNotice(null); setVoiceState('ready'); setPhase('ready');
     if (!asText) listen();
   }
   async function finish() {
@@ -230,7 +231,7 @@ export function useMentalConversation(parked: boolean) {
     settings.current.textMode = true; abortRecognition(); setTextMode(true);
     if (runtime.current.active && !runtime.current.busy) setPhase('ready');
   }
-  actions.current = { listen, cancel, send, audioOff: () => { if (runtime.current.voiceWaiting) { const epoch = runtime.current.epoch; stopAudio(); setVoiceState('ready'); resume(epoch); } } };
+  actions.current = { listen, cancel, send, audioOff: () => { if (runtime.current.voiceWaiting) { const epoch = runtime.current.epoch; runtime.current.controller?.abort(); runtime.current.controller = null; stopAudio(); setVoiceState('ready'); resume(epoch); } } };
   useEffect(() => {
     const r = runtime.current; r.mounted = true;
     setHistory(readMentalHistory());
@@ -253,5 +254,5 @@ export function useMentalConversation(parked: boolean) {
   function changeSpeech(value: boolean) { if (!value && runtime.current.active) cancel('Ses aktarım izni geri çekildi. Görüşme kapatıldı.'); setSpeechConsent(value); }
   return { phase, active, messages, notice, voiceNotice, voiceState, textMode, voiceEnabled, setVoiceEnabled,
     cloudConsent, setCloudConsent: changeCloud, speechConsent, setSpeechConsent: changeSpeech, speechSource, setSpeechSource,
-    history, summary, provider, start, finish, send, switchText };
+    history, summary, provider, start, finish, send, switchText, cancelSummary: () => cancel('Özet hazırlama iptal edildi. Görüşme geçmişe kaydedilmedi.') };
 }

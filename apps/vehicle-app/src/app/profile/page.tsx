@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { AccessibleDialog } from '../../components/AccessibleDialog';
 import { useVehicle } from '../../context/VehicleContext';
 import { mockInitialHealthProfile } from '@packages/health-profile/mockData';
 import {
@@ -68,7 +68,7 @@ export default function ProfilePage() {
             {isDemo ? 'AY' : 'Siz'}
           </div>
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl md:text-2xl font-extrabold text-white">Sağlık Geçmişim</h1>
               <span className="text-slate-500">•</span>
               <span className="text-slate-300 font-medium text-sm">{isDemo ? profile.user.displayName + ' (örnek kimlik)' : 'Yerel kullanıcı'}</span>
@@ -112,13 +112,13 @@ export default function ProfilePage() {
           </div>
 
           <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex justify-between items-center text-xs">
+            <div className="flex justify-between items-start gap-3 text-xs">
               <span className="text-slate-400">Son Keskinlik</span>
-              <span className="font-mono text-white font-bold">{vision.acuitySummary}</span>
+              <span className="font-mono text-white font-bold text-right min-w-0">{vision.acuitySummary}</span>
             </div>
-            <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-900">
+            <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
               <span className="text-amber-400">Kontrast</span>
-              <span className="font-mono text-slate-300">{vision.contrastSummary}</span>
+              <span className="font-mono text-slate-300 text-right min-w-0">{vision.contrastSummary}</span>
             </div>
           </div>
 
@@ -142,13 +142,13 @@ export default function ProfilePage() {
           </div>
 
           <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex justify-between items-center text-xs">
+            <div className="flex justify-between items-start gap-3 text-xs">
               <span className="text-slate-400">{skin.hasData ? skin.regionNameTr : 'Son Değişim'}</span>
               <span className={`font-mono text-xs font-bold ${skin.hasData ? 'text-amber-400' : 'text-slate-400 font-normal'}`}>
                 {skin.changeLabel}
               </span>
             </div>
-            <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-900">
+            <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
               <span className="text-slate-400">Öneri</span>
               <span className="text-slate-300">{skin.recommendation}</span>
             </div>
@@ -174,11 +174,11 @@ export default function ProfilePage() {
           </div>
 
           <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex justify-between items-center text-xs">
+            <div className="flex justify-between items-start gap-3 text-xs">
               <span className="text-slate-400">Kayıtlı Tema</span>
-              <span className="font-mono text-white font-bold">{mental.primaryTheme}</span>
+              <span className="font-mono text-white font-bold text-right min-w-0">{mental.primaryTheme}</span>
             </div>
-            <div className="flex justify-between items-center text-[11px] pt-1 border-t border-slate-900">
+            <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
               <span className="text-slate-400">Seans Geçmişi</span>
               <span className="font-mono text-togg-turquoise">{mental.sessionCountLabel}</span>
             </div>
@@ -237,8 +237,7 @@ export default function ProfilePage() {
 
       {/* PAYLAŞILABİLİR ÖZET MODALI */}
       {showShareModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-cockpit-surface border border-togg-turquoise/40 rounded-2xl p-6 md:p-8 max-w-lg w-full space-y-5 shadow-2xl animate-in fade-in">
+        <AccessibleDialog title="Hekim Paylaşım Özeti" onClose={() => setShowShareModal(false)} className="bg-cockpit-surface border border-togg-turquoise/40 rounded-2xl p-6 md:p-8 max-w-lg w-full space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2 text-togg-turquoise font-bold">
                 <FileText className="w-5 h-5" />
@@ -246,7 +245,8 @@ export default function ProfilePage() {
               </div>
               <button
                 onClick={() => setShowShareModal(false)}
-                className="text-slate-400 hover:text-white text-xs"
+                aria-label="Pencereyi kapat"
+                className="w-11 shrink-0 text-slate-400 hover:text-white text-xs"
               >
                 ✕
               </button>
@@ -296,8 +296,7 @@ export default function ProfilePage() {
                 <span>Yazdır / PDF olarak kaydet</span>
               </button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
     </div>
   );

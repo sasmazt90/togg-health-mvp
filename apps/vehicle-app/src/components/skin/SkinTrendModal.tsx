@@ -1,5 +1,6 @@
 'use client';
 
+import { AccessibleDialog } from '../AccessibleDialog';
 import React, { useMemo } from 'react';
 import { TrendingUp, X, Info } from 'lucide-react';
 import { SkinRegionData, RegionTrendPoint } from '../../data/skinDemoFixture';
@@ -76,14 +77,7 @@ export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose 
     : '';
 
   return (
-    <div
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200"
-    >
-      <div
-        className="relative w-full max-w-xl bg-[#0B1526] border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AccessibleDialog title="Zaman İçinde Değişim" onClose={onClose} className="relative w-full max-w-xl bg-[#0B1526] border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -99,7 +93,8 @@ export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose 
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+            aria-label="Pencereyi kapat"
+            className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -231,7 +226,6 @@ export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose 
           <span>{isDemo ? 'Referans baz: 17 Eylül 2026' : 'İlk Ölçüm: Referans Baz Çizgisi'}</span>
           <span className="text-amber-400 font-medium">İzleme sıklığı: Periyodik</span>
         </div>
-      </div>
-    </div>
+    </AccessibleDialog>
   );
 };
