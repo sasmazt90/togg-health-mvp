@@ -148,7 +148,9 @@ def test_skin_history_strictly_excludes_raw_images():
     content = skin_page.read_text(encoding="utf-8")
 
     # localStorage.setItem('togg_health_skin_history' bloğunda yalnız sayısal telemetri olmalı
-    assert "STORAGE_KEYS.SKIN_HISTORY" in content
+    assert "appendHealthRecord('skin', finalResult" in content
+    store = (root_dir / 'apps/vehicle-app/src/utils/healthRecords.ts').read_text(encoding='utf-8')
+    assert 'STORAGE_KEYS.SKIN_HISTORY' in store and 'containsMedia(record)' in store
     assert "toDataURL" not in content
     assert "image/jpeg" not in content
     assert "image/png" not in content
@@ -167,7 +169,7 @@ def test_privacy_empty_storage_counts_are_strictly_zero():
     assert "vision ? 1 : 1" not in content
     assert "mental ? 2 : 2" not in content
     # Gerçek sayım mantığı bulunmalı
-    assert "localStorage.getItem(STORAGE_KEYS.LATEST_VISION) ? 1 : 0" in content
+    assert "readHealthRecords('vision').length" in content
     # Browser denied cannot become effective GRANTED merely due to app preference
     assert "deriveEffectiveStatus" in content
     assert "if (!appAllowed)" in content

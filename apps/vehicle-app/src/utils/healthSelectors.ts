@@ -167,7 +167,7 @@ export function getSkinSummary(demoMode: boolean = isDemoMode()): SkinSummaryDat
       regionNameTr,
       changePct,
       changeLabel,
-      recommendation: parsed.comparisonUnavailable ? 'Uyumlu ışık/netlik/poz koşullarında yeniden deneyin' : isBaseline ? 'Sonraki uygun taramayla karşılaştırılacak' : parsed.referralSuggested ? 'Uzman görüşü önerildi' : 'Referans bandında',
+      recommendation: parsed.referenceDeleted ? 'Yeni referans taraması gerekiyor' : parsed.comparisonUnavailable ? 'Uyumlu ışık/netlik/poz koşullarında yeniden deneyin' : isBaseline ? 'Sonraki uygun taramayla karşılaştırılacak' : parsed.referralSuggested ? 'Uzman görüşü önerildi' : 'Referans bandında',
       isBaseline,
       rawRecord: parsed
     };

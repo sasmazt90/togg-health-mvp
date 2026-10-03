@@ -23,6 +23,8 @@ import {
   Check,
   RotateCcw
 } from 'lucide-react';
+import { appendHealthRecord, readHealthRecords } from '../../utils/healthRecords';
+import { InformationButton } from '../../components/InformationButton';
 import { isCameraAllowed } from '../../utils/attuneMode';
 
 export default function VisionPage() {
@@ -41,6 +43,8 @@ export default function VisionPage() {
   // Kamera ve Kullanıcı Doğrulamalı Test Mesafesi
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const savedRecordId = useRef<string | null>(null);
+  const [recordNotice, setRecordNotice] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const cameraAcquisitionRef = useRef(0);
@@ -226,6 +230,16 @@ export default function VisionPage() {
     }
   };
 
+  useEffect(() => {
+    const refresh = () => {
+      if (savedRecordId.current && !readHealthRecords('vision').some(r => r.id === savedRecordId.current)) {
+        savedRecordId.current = null; setTestStep('IDLE'); setRecordNotice('Bu test kaydı silindi.');
+      }
+    };
+    window.addEventListener('storage', refresh); window.addEventListener('attune-records', refresh);
+    return () => { window.removeEventListener('storage', refresh); window.removeEventListener('attune-records', refresh); };
+  }, []);
+
   const saveResultsToProfile = (results: {
     rightEye: EyeTestResult | null;
     leftEye: EyeTestResult | null;
@@ -234,7 +248,7 @@ export default function VisionPage() {
     if (!results.rightEye || !results.leftEye || !results.contrast) return;
     try {
       const visionRecord = {
-        id: `vis-${Date.now()}`,
+        id: crypto.randomUUID(),
         date: new Date().toISOString(),
         testCompleted: true,
         acuityRightLogMAR: results.rightEye.logMAR,
@@ -246,9 +260,9 @@ export default function VisionPage() {
         comparisonNote: 'Ölçüm tamamlandı. Kullanıcı doğrulamalı test mesafesi ve adaptif basamak algoritmasıyla kaydedildi.',
         ophthalmologistReferralRecommended: results.rightEye.logMAR > 0.15 || results.leftEye.logMAR > 0.15
       };
-      localStorage.setItem('togg_health_latest_vision', JSON.stringify(visionRecord));
+      appendHealthRecord('vision', visionRecord); savedRecordId.current = visionRecord.id; setRecordNotice(null);
     } catch (e) {
-      console.warn('LocalStorage error:', e);
+      setRecordNotice('Sonuç hesaplandı ancak kalıcı kayıt tamamlanamadı.');
     }
   };
 
@@ -293,6 +307,7 @@ export default function VisionPage() {
 
   return (
     <div className="space-y-6">
+      {recordNotice && <p role="status" className="text-sm text-amber-200">{recordNotice}</p>}
       {/* SCREEN 02: GÖRME TESTİ BAŞLANGIÇ EKRANI (1600x900 İLK VİEWPORT İÇİNDE %55 / %45) */}
       {testStep === 'IDLE' && (
         <div className="space-y-6">
@@ -306,12 +321,12 @@ export default function VisionPage() {
                     <span>Önleyici Görme Değerlendirmesi</span>
                   </div>
 
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-                    Görme Kontrolü ve Ön Değerlendirme
-                  </h1>
+                  <div className="flex items-center justify-between gap-3"><h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+                    Görme Kontrolü
+                  </h1><InformationButton title="Görme testi"><p>Halkanın açık yönünü seçerek her göz için ayrı keskinlik ve kontrast ön değerlendirmesi yapılır. Ekran kalibrasyonu ve doğruladığınız mesafe ölçeği belirler; gerçek mesafe sensörle ölçülmez.</p><p>Bu test tıbbi muayene yerine geçmez. Görüşünüzde değişim varsa göz hekimine danışın. Sonuçlar bu cihazda saklanır.</p></InformationButton></div>
 
                   <p className="text-sm text-slate-300 leading-relaxed max-w-xl">
-                    Adaptif Landolt C staircase motoru ve kullanıcı doğrulamalı test mesafesiyle kabin ekranında görme keskinliği ve kontrast takibi.
+                    Ekranı ve mesafeyi ayarlayın, halkanın açık yönünü seçin.
                   </p>
                 </div>
 
@@ -382,52 +397,13 @@ export default function VisionPage() {
 
                   <div className="text-center space-y-0.5">
                     <div className="text-xs font-semibold text-white">Optotip Keskinlik ve Kontrast Halkası</div>
-                    <div className="text-[11px] text-slate-400">Adaptif Basamak Test Motoru Hazır</div>
+                    <div className="text-[11px] text-slate-400">Halkanın açık yönünü seçin</div>
                   </div>
                 </div>
               </div>
             </div>
           </section>
-
-          {/* Below Fold: Test Hakkında Bilgilendirme */}
-          <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-4 shadow-xl">
-            <div className="flex items-center gap-2 text-sm font-bold text-white border-b border-white/10 pb-3">
-              <Info className="w-4 h-4 text-togg-turquoise" />
-              <span>Test Hakkında & Ön Değerlendirme Esasları</span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 space-y-1.5">
-                <div className="text-white font-semibold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-togg-turquoise" />
-                  <span>Landolt C Halkaları</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Uluslararası optotip standardına göre halkanın 4 yönündeki boşluk tespit edilerek görme keskinliği LogMAR olarak ölçülür.
-                </p>
-              </div>
-
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 space-y-1.5">
-                <div className="text-white font-semibold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-togg-turquoise" />
-                  <span>Doğrulanmış Test Mesafesi</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Kart kalibrasyonu ve kullanıcı tarafından teyit edilen mesafeyle optotip ekranda milimetrik hassasiyetle ölçeklendirilir.
-                </p>
-              </div>
-
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 space-y-1.5">
-                <div className="text-white font-semibold flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  <span>İşlevsel Ön Tarama</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Bu test tıbbi muayene yerine geçmez; kabin içi konfor ve değişim takibine yönelik fonksiyonel bir ön değerlendirmedir.
-                </p>
-              </div>
-            </div>
-          </section>
+          
         </div>
       )}
 
@@ -437,7 +413,7 @@ export default function VisionPage() {
           <div className="space-y-1">
             <h2 className="text-lg font-bold text-white">1. Adım: Ekran Boyutu Kalibrasyonu</h2>
             <p className="text-xs text-slate-300">
-              Landolt C halkasının fiziksel milimetre boyutunu ekranınızda tam tutturabilmek için lütfen ekranınıza standart bir kart (85.6 mm) tutun ve kutuyu genişliğiyle birebir örtüşene kadar kaydırıcıyla ayarlayın.
+              Ekrana 85,6 mm genişliğinde standart bir kart tutun. Kutuyu kartın genişliğiyle eşleşene kadar ayarlayın.
             </p>
           </div>
 

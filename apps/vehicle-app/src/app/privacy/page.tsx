@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { RECORD_JOURNAL, readHealthRecords } from '../../utils/healthRecords';
+import { InformationButton } from '../../components/InformationButton';
 import {
   ShieldCheck,
   Lock,
@@ -17,6 +19,23 @@ import {
 } from 'lucide-react';
 import { readMentalHistory } from '../../utils/mentalHistory';
 import { STORAGE_KEYS, isDemoMode } from '../../utils/attuneMode';
+
+  const deriveEffectiveStatus = (
+    appAllowed: boolean,
+    browserState: 'granted' | 'denied' | 'prompt'
+  ): 'GRANTED' | 'DENIED' | 'PROMPT' => {
+    if (!appAllowed) {
+      return 'DENIED';
+    }
+    if (browserState === 'granted') {
+      return 'GRANTED';
+    }
+    if (browserState === 'denied') {
+      return 'DENIED';
+    }
+    return 'PROMPT';
+  };
+
 
 export default function PrivacyPage() {
   const [cameraAppAllowed, setCameraAppAllowed] = useState<boolean>(true);
@@ -36,23 +55,7 @@ export default function PrivacyPage() {
   const [wipeResult, setWipeResult] = useState<{ local: boolean; backend: boolean } | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
 
-  const deriveEffectiveStatus = (
-    appAllowed: boolean,
-    browserState: 'granted' | 'denied' | 'prompt'
-  ): 'GRANTED' | 'DENIED' | 'PROMPT' => {
-    if (!appAllowed) {
-      return 'DENIED';
-    }
-    if (browserState === 'granted') {
-      return 'GRANTED';
-    }
-    if (browserState === 'denied') {
-      return 'DENIED';
-    }
-    return 'PROMPT';
-  };
-
-  const checkStatus = () => {
+  const checkStatus = useCallback(() => {
     try {
     if (typeof window !== 'undefined') {
       // 1. Uygulama içi izin tercihi (App preference)
@@ -101,7 +104,7 @@ export default function PrivacyPage() {
       if (isDemoMode()) {
         setDataStats({ visionCount: 1, skinCount: 2, mentalCount: 2 });
       } else {
-        const vCount = localStorage.getItem(STORAGE_KEYS.LATEST_VISION) ? 1 : 0;
+        const vCount = readHealthRecords('vision').length;
 
         let skinHist: any[] = [];
         try {
@@ -121,12 +124,12 @@ export default function PrivacyPage() {
     }
     } catch {
       setStorageUnavailable(true);
-    }
-  };
+    }  }, []);
 
   useEffect(() => {
-    checkStatus();
-  }, []);
+    checkStatus(); window.addEventListener('attune-records', checkStatus); window.addEventListener('storage', checkStatus);
+    return () => { window.removeEventListener('attune-records', checkStatus); window.removeEventListener('storage', checkStatus); };
+  }, [checkStatus]);
 
   const handleToggleMentalSaving = (val: boolean) => {
     try {
@@ -159,7 +162,7 @@ export default function PrivacyPage() {
   const handleWipeAllData = async () => {
     setWipeStatus('WIPING');
     let local = true;
-    const healthKeys = [STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
+    const healthKeys = [RECORD_JOURNAL, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
       STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
       STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
     for (const key of healthKeys) {
@@ -208,7 +211,7 @@ export default function PrivacyPage() {
             </h1>
 
             <p className="text-sm text-slate-300">
-              Attune.more kayıtları bu cihazda tutar. Görüşme ve sesin buluta aktarımı için ayrıca onayınız gerekir.
+              Kullanım tercihlerinizi ve kayıtlarınızı yönetin.
             </p>
           </div>
 
@@ -242,10 +245,7 @@ export default function PrivacyPage() {
             </div>
 
             <div>
-              <h2 className="text-base font-bold text-white">Kabin Kamerası</h2>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yalnızca görme mesafesi ve cilt analizi sırasında yüz bölgelerinin belirlenmesi için anlık kullanılır; ham görüntü kaydedilmez.
-              </p>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Kabin Kamerası</h2><InformationButton title="Kabin Kamerası"><p>Kamera yalnız görme ve cilt kontrolleri için kullanılır. Ham görüntü saklanmaz. Bu tercih tarayıcı/cihaz izni değildir; Başlat eyleminde gerçek izin istenir. Bilinçli olarak kapattığınız tercih korunur.</p></InformationButton></div>
             </div>
           </div>
 
@@ -281,10 +281,7 @@ export default function PrivacyPage() {
             </div>
 
             <div>
-              <h2 className="text-base font-bold text-white">Kabin Mikrofonu</h2>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yalnızca sesli asistan diyalogları için kullanılır. Konuşma tanıma hizmeti ayrı onayınızla bulutta çalışabilir. Ham ses bu uygulamada saklanmaz.
-              </p>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Kabin Mikrofonu</h2><InformationButton title="Kabin Mikrofonu"><p>Mikrofon yalnız görüşmeyi başlattığınızda kullanılır. Tarayıcı/cihaz izni ayrıca gerekir; bu tercih onu onaylamaz. Konuşma tanıma hizmeti sesi buluta aktarabilir. Aktarım Ruhsal İyi Oluş ekranındaki hizmet onayına bağlıdır. Ham ses uygulamada saklanmaz.</p></InformationButton></div>
             </div>
           </div>
 
@@ -318,10 +315,7 @@ export default function PrivacyPage() {
             </div>
 
             <div>
-              <h2 className="text-base font-bold text-white">Seans Hafızası</h2>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Tamamlanan görüşmenin kısa özeti, temaları, duygu eğilimi ve tarihi bu cihazda saklanır. Ham ses ve tam konuşma dökümü saklanmaz. Kapatmak önceki özetleri silmez.
-              </p>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Seans Hafızası</h2><InformationButton title="Seans Hafızası"><p>Tamamlanan görüşmenin kısa özeti, temaları, duygu eğilimi ve tarihi bu cihazda saklanır. Ham ses ve tam konuşma dökümü saklanmaz. Kapatmak önceki kayıtları silmez. Görüşme başlatmak için saklama izni zorunlu değildir.</p></InformationButton></div>
             </div>
           </div>
 

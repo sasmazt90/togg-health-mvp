@@ -62,7 +62,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=trusted_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
     expose_headers=["Server-Timing"],
 )
@@ -276,6 +276,8 @@ def converse_mental_assistant(payload: ConversePayload):
         }
 
     # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
+    if payload.cloudConsent and not os.getenv('OPENAI_API_KEY', '').strip():
+        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
     provider = get_active_mental_provider() if payload.cloudConsent else LocalFallbackMentalProvider()
     history = payload.history or []
     driver_name = vehicle_state.get("driverName", "Ahmet Bey")
@@ -293,6 +295,8 @@ def converse_mental_assistant(payload: ConversePayload):
 def analyze_mental_session(payload: AnalyzeSessionPayload):
     if not any(m.get('role') == 'user' and m.get('content', '').strip() for m in payload.messages):
         raise HTTPException(status_code=422, detail='EMPTY_SESSION')
+    if payload.cloudConsent and not os.getenv('OPENAI_API_KEY', '').strip():
+        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
     analyzer = get_active_session_analyzer() if payload.cloudConsent else LocalFallbackSessionAnalyzer()
     return analyzer.analyze_session(payload.messages)
 
@@ -327,6 +331,21 @@ def mental_speech(payload: SpeechPayload):
 @app.get("/api/mental/sessions")
 def get_mental_sessions():
     return SessionMemoryManager.get_all_sessions()
+
+class DeleteSessionPayload(BaseModel):
+    deletionToken: str = Field(min_length=64, max_length=64)
+
+@app.delete('/api/mental/sessions/{session_id}')
+def delete_mental_session(session_id: str, payload: DeleteSessionPayload):
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    try:
+        deleted = SessionMemoryManager.delete_session(session_id, payload.deletionToken)
+    except (OSError, ValueError, RuntimeError):
+        raise HTTPException(status_code=503, detail='DELETION_UNVERIFIED') from None
+    if not deleted:
+        raise HTTPException(status_code=404, detail='OWNED_RECORD_NOT_FOUND')
+    return {'deleted': True}
 
 @app.post("/api/mental/sessions")
 def record_mental_session(payload: CreateSessionPayload):

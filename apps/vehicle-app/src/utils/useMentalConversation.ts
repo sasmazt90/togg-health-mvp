@@ -5,7 +5,7 @@ import { checkCrisisTrigger } from '@packages/safety/crisisDetector';
 import { isMicrophoneAllowed, isMentalSummarySavingAllowed, isDemoMode } from './attuneMode';
 import { MentalHistoryItem, readMentalHistory, saveMentalHistory } from './mentalHistory';
 
-export type ConversationPhase = 'ready' | 'listening' | 'preparing' | 'speaking' | 'ending' | 'completed' | 'error';
+export type ConversationPhase = 'ready' | 'permission' | 'listening' | 'preparing' | 'speaking' | 'ending' | 'completed' | 'error';
 export interface ConversationMessage {
   id: string; turn: number; sender: 'USER' | 'AI'; text: string; time: string;
   completed: boolean; isCrisis?: boolean; providerBadge?: string;
@@ -29,7 +29,7 @@ export function useMentalConversation(parked: boolean) {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [cloudConsent, setCloudConsent] = useState(false);
   const [speechConsent, setSpeechConsent] = useState(false);
-  const [speechSource, setSpeechSource] = useState<'native' | 'openai'>('native');
+  const speechSource = isDemoMode() ? 'native' as const : 'openai' as const;
   const [history, setHistory] = useState<MentalHistoryItem[]>([]);
   const [summary, setSummary] = useState<MentalHistoryItem | null>(null);
   const [provider, setProvider] = useState({ apiKeyConfigured: false, providerName: 'Yerel Kural Motoru (Demo)' });
@@ -65,7 +65,7 @@ export function useMentalConversation(parked: boolean) {
   }
   function valid(epoch: number) {
     const r = runtime.current;
-    return r.mounted && r.epoch === epoch && r.active && settings.current.parked;
+    return r.mounted && r.epoch === epoch && r.active && settings.current.parked && settings.current.speechConsent;
   }
   function resume(epoch: number) {
     if (!valid(epoch)) return;
@@ -112,6 +112,7 @@ export function useMentalConversation(parked: boolean) {
       r.recognition = null;
       if (!accepted && !failed && !r.busy) resume(epoch);
     };
+    setPhase('permission');
     try { recognition.start(); } catch { abortRecognition(); setTextMode(true); setPhase('ready'); setNotice('Mikrofon başlatılamadı. Yazarak devam edebilirsiniz.'); }
   }
   async function speak(text: string, epoch: number, crisis: boolean) {
@@ -179,6 +180,7 @@ export function useMentalConversation(parked: boolean) {
       }
       if (!valid(epoch)) return;
       if (typeof data.reply !== 'string' || !data.reply.trim()) throw new Error('Invalid reply');
+      if (!isDemoMode() && !['LIVE_OPENAI', 'CRISIS_SAFETY_GUARD'].includes(data.providerType)) throw new Error('Unexpected demo reply');
       r.transcript = r.transcript.map(m => m.id === user.id ? { ...m, completed: true } : m);
       const badge = data.providerType === 'LIVE_OPENAI' ? 'LIVE_OPENAI — OpenAI Canlı' : data.providerType === 'CRISIS_SAFETY_GUARD' ? 'Kriz Güvenlik Filtresi' : data.providerType === 'LOCAL_DEMO_FALLBACK' ? 'LOCAL_DEMO_FALLBACK — sağlayıcıya ulaşılamadı' : 'LOCAL_DEMO — Yerel Model';
       append({ id: `${r.id}-${turn}-ai`, turn, sender: 'AI', text: data.reply, time, completed: true, isCrisis: data.isCrisis, providerBadge: badge });
@@ -193,7 +195,7 @@ export function useMentalConversation(parked: boolean) {
     } finally { clearTimeout(deadline); }
   }
   function start(asText = settings.current.textMode) {
-    if (!settings.current.parked || runtime.current.active) return;
+    if (!settings.current.parked || runtime.current.active || !settings.current.speechConsent) return;
     cleanup(); const r = runtime.current;
     r.epoch++; r.active = true; r.failed = false; r.busy = false; r.turn = 0; r.id = crypto.randomUUID(); r.transcript = [];
     settings.current.textMode = asText;
@@ -214,7 +216,8 @@ export function useMentalConversation(parked: boolean) {
         body: JSON.stringify({ messages: completed.map(m => ({ role: m.sender === 'USER' ? 'user' : 'assistant', content: m.text })), cloudConsent: settings.current.cloudConsent }), signal: controller.signal });
       if (!response.ok) throw new Error('Summary service');
       const data = await response.json();
-      if (!r.mounted || r.epoch !== epoch || !settings.current.parked) return;
+      if (!r.mounted || r.epoch !== epoch || !settings.current.parked || !settings.current.speechConsent) return;
+      if (!isDemoMode() && data.providerType !== 'LIVE_OPENAI') throw new Error('Unexpected demo summary');
       if (typeof data.summaryText !== 'string' || !data.summaryText.trim() || !Array.isArray(data.themes) || !data.themes.every((t: unknown) => typeof t === 'string')) throw new Error('Invalid summary');
       const item: MentalHistoryItem = { id: r.id, date: new Date().toISOString(), summaryText: data.summaryText, themes: data.themes,
         moodTrend: typeof data.moodTrend === 'string' ? data.moodTrend : undefined, providerType: data.providerType, schemaVersion: 2, completed: true, consented: false };
@@ -239,20 +242,31 @@ export function useMentalConversation(parked: boolean) {
     fetch(API + '/provider-status', { signal: controller.signal }).then(res => res.json()).then(data => {
       if (r.mounted) setProvider(data);
     }).catch(() => {});
-    const voices = () => { if (r.mounted && !r.voiceWaiting) setVoiceState(window.speechSynthesis?.getVoices().some(v => v.lang.toLowerCase().startsWith('tr')) ? 'ready' : 'unavailable'); };
+    const voices = () => { if (r.mounted && !r.voiceWaiting) setVoiceState(!isDemoMode() || window.speechSynthesis?.getVoices().some(v => v.lang.toLowerCase().startsWith('tr')) ? 'ready' : 'unavailable'); };
     voices(); window.speechSynthesis?.addEventListener('voiceschanged', voices);
     const revoke = () => {
       if (r.active && !isMicrophoneAllowed() && !settings.current.textMode) actions.current.cancel('Mikrofon izni geri çekildi. Görüşme kapatıldı; yazarak yeni görüşme başlatabilirsiniz.');
-      if (r.mounted) setHistory(readMentalHistory());
+      if (r.mounted) {
+        const records = readMentalHistory(); setHistory(records);
+        setSummary(previous => previous?.consented && !records.some(record => record.id === previous.id) ? null : previous);
+      }
     };
-    window.addEventListener('storage', revoke); window.addEventListener('attune-privacy', revoke);
-    return () => { r.mounted = false; actions.current.cancel(); controller.abort(); window.speechSynthesis?.removeEventListener('voiceschanged', voices); window.removeEventListener('storage', revoke); window.removeEventListener('attune-privacy', revoke); };
+    window.addEventListener('storage', revoke); window.addEventListener('attune-privacy', revoke); window.addEventListener('attune-records', revoke);
+    return () => { r.mounted = false; actions.current.cancel(); controller.abort(); window.speechSynthesis?.removeEventListener('voiceschanged', voices); window.removeEventListener('storage', revoke); window.removeEventListener('attune-privacy', revoke); window.removeEventListener('attune-records', revoke); };
   }, []);
   useEffect(() => { if (!parked && (runtime.current.active || phase === 'ending')) actions.current.cancel('Sürüş geçişinde görüşme güvenle kapatıldı. Park ettiğinizde yeni görüşme başlatabilirsiniz.'); }, [parked, phase]);
   useEffect(() => { if (!voiceEnabled) actions.current.audioOff(); }, [voiceEnabled]);
   function changeCloud(value: boolean) { if (!value && (runtime.current.active || phase === 'ending')) cancel('Bulut aktarım izni geri çekildi. Görüşme kapatıldı.'); setCloudConsent(value); }
   function changeSpeech(value: boolean) { if (!value && runtime.current.active) cancel('Ses aktarım izni geri çekildi. Görüşme kapatıldı.'); setSpeechConsent(value); }
+  function changeServiceConsent(value: boolean) {
+    // Invalidate synchronously: a response can settle before React commits state.
+    settings.current.speechConsent = value;
+    settings.current.cloudConsent = value && !isDemoMode();
+    if (!value) cancel('Hizmet onayı geri çekildi. Görüşme ve ses durduruldu.');
+    setSpeechConsent(value); setCloudConsent(value && !isDemoMode());
+  }
   return { phase, active, messages, notice, voiceNotice, voiceState, textMode, voiceEnabled, setVoiceEnabled,
-    cloudConsent, setCloudConsent: changeCloud, speechConsent, setSpeechConsent: changeSpeech, speechSource, setSpeechSource,
-    history, summary, provider, start, finish, send, switchText, cancelSummary: () => { cancel('Özet hazırlama iptal edildi. Görüşme geçmişe kaydedilmedi.'); setPhase('ready'); } };
+    serviceConsent: speechConsent, setServiceConsent: changeServiceConsent,
+    cloudConsent, setCloudConsent: changeCloud, speechConsent, setSpeechConsent: changeSpeech, speechSource,
+    history, summary, provider, start, finish, send, switchText, cancelConversation: () => cancel('Görüşme başlatma iptal edildi.'), cancelSummary: () => { cancel('Özet hazırlama iptal edildi. Görüşme geçmişe kaydedilmedi.'); setPhase('ready'); } };
 }

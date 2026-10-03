@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { RecordHistory } from '../../components/RecordHistory';
+import { InformationButton } from '../../components/InformationButton';
+import { readHealthRecords } from '../../utils/healthRecords';
 import { AccessibleDialog } from '../../components/AccessibleDialog';
 import { useVehicle } from '../../context/VehicleContext';
 import { mockInitialHealthProfile } from '@packages/health-profile/mockData';
@@ -51,12 +54,14 @@ export default function ProfilePage() {
   const [timeline, setTimeline] = useState<HealthTimelineItem[]>([]);
 
   useEffect(() => {
-    const demo = isDemoMode();
-    setIsDemo(demo);
-    setVision(getVisionSummary(demo));
-    setSkin(getSkinSummary(demo));
-    setMental(getMentalSummary(demo));
-    setTimeline(getHealthTimeline(demo));
+    const refresh = () => {
+      const demo = isDemoMode(); setIsDemo(demo);
+      try { if (!demo) for (const category of ['vision', 'skin', 'mental'] as const) readHealthRecords(category); }
+      catch { setShareError('Kayıtlar doğrulanamadı; veri değiştirilmedi.'); }
+      setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo)); setTimeline(getHealthTimeline(demo));
+    };
+    refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
   }, []);
 
   return (
@@ -69,7 +74,7 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-extrabold text-white">Sağlık Geçmişim</h1>
+              <h1 className="text-xl md:text-2xl font-extrabold text-white">Sağlık Geçmişim</h1><InformationButton title="Sağlık geçmişi"><p>Sonuçlar bu tarayıcı profilinde saklanır. Silme yalnız seçtiğiniz uygulama kaydını kaldırır; dış sağlayıcının geçmiş isteklerini silmez. Paylaşımda yalnız seçtiğiniz kategoriler yazdırılır.</p></InformationButton>
               <span className="text-slate-500">•</span>
               <span className="text-slate-300 font-medium text-sm">{isDemo ? profile.user.displayName + ' (örnek kimlik)' : 'Yerel kullanıcı'}</span>
               {isDemo && (
@@ -124,7 +129,7 @@ export default function ProfilePage() {
 
           <p className="text-[11px] text-slate-400">
             {vision.hasData
-              ? 'Baz çizgiye göre kontrast ve keskinlik seviyeleri izlenmektedir.'
+              ? 'Tamamlanan son görme testi gösteriliyor.'
               : 'Henüz tamamlanmış görme değerlendirmesi bulunmuyor.'}
           </p>
         </div>
@@ -156,7 +161,7 @@ export default function ProfilePage() {
 
           <p className="text-[11px] text-slate-400">
             {skin.hasData
-              ? (skin.rawRecord?.clinicalNoteTr || 'Piksel bazlı anatomik ROI telemetrisi kaydedildi.')
+              ? (skin.rawRecord?.clinicalNoteTr || 'Cilt analizi kaydedildi.')
               : 'Henüz tamamlanmış cilt analizi taraması bulunmuyor.'}
           </p>
         </div>
@@ -192,48 +197,11 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* 3. BELOW FOLD: ZAMANA YAYILAN SAĞLIK GEÇMİŞİ (LONGITUDINAL TIMELINE) */}
-      <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-7 shadow-xl space-y-5">
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
-          <div className="space-y-0.5">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-togg-turquoise" />
-              <span>Zamana Yayılan Değişim Çizelgesi</span>
-            </h2>
-            <p className="text-xs text-slate-400">
-              Bu cihazda tamamladığınız değerlendirmelerin kayıtları.
-            </p>
-          </div>
-          <span className="text-xs text-slate-400 font-mono">{timeline.length} Kayıtlı Olay</span>
-        </div>
-
-        {timeline.length > 0 ? (
-          <div className="space-y-4">
-            {timeline.map((item) => (
-              <div key={item.id} className="bg-slate-950/70 border border-white/5 rounded-xl p-4.5 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-togg-turquoise" />
-                    <strong className="text-white">{item.moduleName}</strong>
-                  </div>
-                  <span className="text-slate-400 font-mono text-[11px]">{item.dateTr}</span>
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-8 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800/50 space-y-2">
-            <Info className="w-6 h-6 text-slate-500 mx-auto" />
-            <p className="font-medium text-slate-300">Henüz kayıtlı ölçüm geçmişi bulunmuyor.</p>
-            <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-              Görme testi veya cilt taraması yaptıkça zaman içindeki değişimleriniz burada sıralanacaktır.
-            </p>
-          </div>
-        )}
-      </section>
+      {!isDemo && <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 space-y-7">
+        <RecordHistory category="vision" parked={isParked} />
+        <RecordHistory category="skin" parked={isParked} />
+        <RecordHistory category="mental" parked={isParked} />
+      </section>}
 
       {/* PAYLAŞILABİLİR ÖZET MODALI */}
       {showShareModal && (

@@ -61,7 +61,7 @@ const dir=JSON.parse(fs.readFileSync(0,'utf8')).dir;
 const Module=require('module'),original=Module._resolveFilename;
 Module._resolveFilename=function(request,parent,...rest){if(request==='@mediapipe/tasks-vision')return original.call(this,request,{paths:module.paths},...rest);return original.call(this,request,parent,...rest);};
 function load(name){const file=dir+'/'+name+'.js';fs.writeFileSync(file,ts.transpileModule(fs.readFileSync('apps/vehicle-app/src/utils/'+name+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);return require(file);}
-load('attuneMode');const H=load('mentalHistory');
+load('attuneMode');load('healthRecords');const H=load('mentalHistory');
 const item=(id,themes,extra={})=>({id,date:'2026-10-03T10:00:00Z',summaryText:'Gerçek tamamlanmış paylaşım',themes,schemaVersion:2,completed:true,consented:true,...extra});
 assert.deepEqual(H.mentalThemeStats([]),{sessions:0,mentions:0,rows:[]});
 const stats=H.mentalThemeStats([item('1',['a','a','b']),item('2',['c']),item('old',['x'],{schemaVersion:undefined}),item('cancelled',['x'],{completed:false}),item('no-consent',['x'],{consented:false})]);

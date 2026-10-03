@@ -1,3 +1,4 @@
+import { appendHealthRecord, readHealthRecords } from './healthRecords';
 import { STORAGE_KEYS, isMentalSummarySavingAllowed } from './attuneMode';
 
 export interface MentalHistoryItem {
@@ -34,7 +35,7 @@ export function mentalThemeStats(history: MentalHistoryItem[]) {
 
 export function readMentalHistory(): MentalHistoryItem[] {
   try {
-    const entries = JSON.parse(localStorage.getItem(STORAGE_KEYS.MENTAL_HISTORY) || '[]');
+    const entries = readHealthRecords('mental');
     if (!Array.isArray(entries)) return [];
     return entries.filter((item): item is MentalHistoryItem =>
       typeof item?.id === 'string' && typeof item.date === 'string' &&
@@ -54,23 +55,5 @@ export function saveMentalHistory(item: MentalHistoryItem): MentalHistoryItem[] 
     // Refuse to replace unreadable user records with a seemingly empty new history.
     if (!Array.isArray(parsed) || parsed.length !== readable.length) throw new Error('EXISTING_HISTORY_UNREADABLE');
   }
-  const history = readable.filter(entry => entry.id !== item.id);
-  history.push(item);
-  const previousLatest = localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL);
-  const latest = JSON.stringify({
-    dateTr: new Date(item.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
-    primaryTheme: item.themes.join(' • ') || 'Günlük paylaşım',
-    sessionCount: history.length,
-    summaryText: item.summaryText,
-    recommendation: 'Kayıtlı görüşme özeti'
-  });
-  try {
-    localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, latest);
-    localStorage.setItem(STORAGE_KEYS.MENTAL_HISTORY, JSON.stringify(history));
-  } catch (error) {
-    if (previousLatest === null) localStorage.removeItem(STORAGE_KEYS.LATEST_MENTAL);
-    else localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, previousLatest);
-    throw error;
-  }
-  return history;
+  return appendHealthRecord('mental', item) as unknown as MentalHistoryItem[];
 }

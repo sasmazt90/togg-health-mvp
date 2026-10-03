@@ -19,6 +19,8 @@ import {
   buildSkinRegionViewModel
 } from '../../data/skinDemoFixture';
 import { isDemoMode, STORAGE_KEYS, isCameraAllowed } from '../../utils/attuneMode';
+import { appendHealthRecord } from '../../utils/healthRecords';
+import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
 import { SkinStartView } from '../../components/skin/SkinStartView';
@@ -178,6 +180,19 @@ export default function SkinPage() {
       window.removeEventListener('attune-privacy', revoke);
     };
   }, [isParked]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (scanState !== 'COMPLETED' || isDemoMode()) return;
+      try {
+        const latest = JSON.parse(localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) || 'null');
+        if (latest?.regions) setAnalysisResult(latest);
+        else { setAnalysisResult(null); setScanState('READY'); }
+      } catch { setErrorMessage('Kayıt durumu doğrulanamadı.'); setScanState('ERROR'); }
+    };
+    window.addEventListener('storage', refresh); window.addEventListener('attune-records', refresh);
+    return () => { window.removeEventListener('storage', refresh); window.removeEventListener('attune-records', refresh); };
+  }, [scanState]);
 
   // Real modda COMPLETED durumu doğrulaması: Kayıtlı gerçek analiz yoksa COMPLETED state'e izin verilmez
   useEffect(() => {
@@ -358,7 +373,7 @@ export default function SkinPage() {
     const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, comparisonUnavailable ? null : baselineData, 20.0);
 
     const finalResult: SkinAnalysisResult = {
-      id: `skin-${Date.now()}`,
+      id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       quality: qualToUse,
       regions: comparison.comparedRegions,
@@ -377,29 +392,10 @@ export default function SkinPage() {
     // Yalnızca canPersistResult doğrulaması geçerse gerçek sonuç kalıcı olarak saklanır
     if (SkinAnalyzer.canPersistResult(finalResult)) {
       try {
-        if (isFirstScan) {
-          localStorage.setItem(STORAGE_KEYS.SKIN_BASELINE, JSON.stringify(regionMetrics));
-          localStorage.setItem(STORAGE_KEYS.SKIN_BASELINE_META, JSON.stringify({
-            id: finalResult.id, timestamp: finalResult.timestamp, schemaVersion: 1,
-            scope: 'single-front-v1', quality: qualToUse, pose: capturePose
-          }));
-        }
-        localStorage.setItem(STORAGE_KEYS.LATEST_SKIN, JSON.stringify(finalResult));
-
-        // Geçmiş telemetrisi (ham görsel saklanmaz, yalnızca sayısal veriler)
-        const storedHistory = localStorage.getItem(STORAGE_KEYS.SKIN_HISTORY);
-        const historyList = storedHistory ? JSON.parse(storedHistory) : [];
-        historyList.unshift({
-          id: finalResult.id,
-          timestamp: finalResult.timestamp,
-          regions: finalResult.regions,
-          highestChangeRegion: finalResult.highestChangeRegion,
-          highestChangePct: finalResult.highestChangePct,
-          referralSuggested: finalResult.referralSuggested,
-          isBaseline: finalResult.isBaseline,
-          usedMediaPipe: true, comparisonUnavailable, baselineId: finalResult.baselineId
-        });
-        localStorage.setItem(STORAGE_KEYS.SKIN_HISTORY, JSON.stringify(historyList.slice(0, 10)));
+        appendHealthRecord('skin', finalResult, isFirstScan ? {
+          [STORAGE_KEYS.SKIN_BASELINE]: JSON.stringify(regionMetrics),
+          [STORAGE_KEYS.SKIN_BASELINE_META]: JSON.stringify({ id: finalResult.id, timestamp: finalResult.timestamp, schemaVersion: 1, scope: 'single-front-v1', quality: qualToUse, pose: capturePose })
+        } : {});
       } catch (e) {
         setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Referans veya geçmiş kaydı oluşturulduğu doğrulanamadı.');
         setScanState('ERROR');
@@ -422,7 +418,7 @@ export default function SkinPage() {
 
   // Real-time video işleme döngüsü (requestAnimationFrame)
   const finishMultiScan = (captures: Record<SkinAngle, AngleCapture>) => {
-    const current: MultiAngleReference = { id: `skin-${Date.now()}`, timestamp: new Date().toISOString(), schemaVersion: 2, scope: 'three-angle-v2', captures };
+    const current: MultiAngleReference = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), schemaVersion: 2, scope: 'three-angle-v2', captures };
     try {
       const prior: MultiAngleReference | null = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) || 'null');
       const comparison = compareMultiAngle(current, prior);
@@ -436,18 +432,7 @@ export default function SkinPage() {
       };
       if (!SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
       // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
-      const history = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_HISTORY) || '[]');
-      if (!Array.isArray(history)) throw new Error('Invalid history');
-      const keys = [STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.LATEST_SKIN, STORAGE_KEYS.SKIN_HISTORY];
-      const previous = keys.map(key => localStorage.getItem(key));
-      try {
-        localStorage.setItem(STORAGE_KEYS.LATEST_SKIN, JSON.stringify(finalResult));
-        localStorage.setItem(STORAGE_KEYS.SKIN_HISTORY, JSON.stringify([finalResult, ...history].slice(0, 10)));
-        if (!prior) localStorage.setItem(STORAGE_KEYS.SKIN_MULTI_BASELINE, JSON.stringify(current));
-      } catch (error) {
-        keys.forEach((key, i) => { try { if (previous[i] === null) localStorage.removeItem(key); else localStorage.setItem(key, previous[i]!); } catch {} });
-        throw error;
-      }
+      appendHealthRecord('skin', finalResult, !prior ? { [STORAGE_KEYS.SKIN_MULTI_BASELINE]: JSON.stringify(current) } : {});
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {
       setErrorMessage('Üç açılı ölçüm veya referans kaydı doğrulanamadı. Eski tek açılı referansınız değiştirilmedi.'); setScanState('ERROR');
@@ -788,7 +773,7 @@ export default function SkinPage() {
       {/* SCREEN 1: SKIN START VIEW (REFERANS 1 & 2)                  */}
       {/* ============================================================ */}
       {scanState === 'READY' && (
-        <><label className="flex gap-2 text-sm"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Üç açılı tarama: ön, anatomik sağ, anatomik sol. Kapalıyken eski tek karşı açı akışı kullanılır.</label><SkinStartView onStart={startCamera} /></>
+        <><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm text-slate-300">{multiAngle ? "Ön ve iki yan pozda kısa bir tarama." : "Yalnız ön pozda kısa bir tarama."}</p><InformationButton title="Cilt taraması"><p>Görüntü bu cihazda işlenir; ham fotoğraf saklanmaz. İlk uygun tarama referans olur. Işık, netlik ve poz uyumsuzsa karşılaştırma yapılmaz. Sonuç klinik tanı değildir.</p><label className="flex min-h-11 items-center gap-3"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Ön, sağ ve sol pozlarda tara. Kapalıyken yalnız ön poz kullanılır.</label></InformationButton></div><SkinStartView onStart={startCamera} /></>
       )}
 
       {/* ============================================================ */}

@@ -1,5 +1,6 @@
 'use client';
 
+import { InformationButton } from '../../components/InformationButton';
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { AccessibleDialog } from '../../components/AccessibleDialog';
 import { useSearchParams } from 'next/navigation';
@@ -279,7 +280,7 @@ function CareContent() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-togg-turquoise/10 border border-togg-turquoise/30 text-togg-turquoise text-[11px] font-semibold tracking-wider uppercase">
               <CalendarCheck className="w-3.5 h-3.5" />
-              <span>Care Agent • Akıllı Hekim Erişimi</span>
+              <span>Uzman Erişimi • Akıllı Hekim Erişimi</span>
             </div>
 
             <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
@@ -287,7 +288,7 @@ function CareContent() {
             </h1>
 
             <p className="text-sm text-slate-300">
-              Branşınıza göre uzman seçeneklerini inceleyin. Güncel uygunluğu ve randevuyu sağlayıcının sayfasında doğrulayın.
+              Branş seçin; uygunluğu sağlayıcının sayfasında doğrulayın.
             </p>
           </div>
 
@@ -297,7 +298,7 @@ function CareContent() {
           </div>
         </div>
 
-        <p data-care-limits className="text-xs text-amber-200 leading-relaxed">Takvim ve ulaşım bilgileri örnektir. Kişisel takviminize veya canlı rota hesabına bağlı değildir. Burada randevu oluşturulmaz.</p>
+        <div className="flex items-center gap-3"><p data-care-limits className="text-xs text-amber-200">Takvim ve ulaşım örnektir. Burada randevu oluşturulmaz.</p><InformationButton title="Uzman seçenekleri"><p>Kişisel takvim ve canlı rota entegrasyonu yoktur. Takvim ve ulaşım alanları örnektir. Harici sayfada uygunluğu kontrol edip randevuyu kendiniz tamamlarsınız. Paylaşım ayrı eylemde onaylanır; yönlendirme hazırlamak bilgilerinizi hekime göndermez.</p></InformationButton></div>
 
         {/* AKTİF SEVK BAĞLAMI BİLDİRİMİ */}
         {referralContext && (
@@ -377,7 +378,7 @@ function CareContent() {
             <div className="space-y-3 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 text-[10px] font-semibold tracking-wider uppercase">
-                  Örnek eşleşme puanı: %{featuredSlot.matchScore}
+                  Uzman seçeneği
                 </span>
                 <span className="px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-800 text-[10px] font-mono">
                   {featuredSlot.isOnline ? 'Online Görüşme' : 'Yüz Yüze Muayene'}

@@ -20,6 +20,7 @@ Oturum Özeti Analizcisi:
 """
 
 import os
+from fastapi import HTTPException
 from openai_client import get_openai_client
 import unicodedata
 import re
@@ -208,11 +209,7 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
                 "escalationSuggested": "psikolog" in reply_text.lower()
             }
         except Exception as e:
-            fallback = LocalFallbackMentalProvider()
-            result = fallback.generate_reply(user_message, is_driving, history, driver_name)
-            result["fallbackReason"] = provider_error_category(e)
-            result["providerType"] = "LOCAL_DEMO_FALLBACK"
-            return result
+            raise HTTPException(status_code=503, detail=provider_error_category(e)) from None
 
 
 # ---------------------------------------------------------------------------
@@ -328,11 +325,7 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
             data["providerType"] = "LIVE_OPENAI"
             return data
         except Exception as e:
-            fallback = LocalFallbackSessionAnalyzer()
-            res = fallback.analyze_session(messages)
-            res["fallbackReason"] = provider_error_category(e)
-            res["providerType"] = "LOCAL_DEMO_FALLBACK"
-            return res
+            raise HTTPException(status_code=503, detail=provider_error_category(e)) from None
 
 
 # ---------------------------------------------------------------------------

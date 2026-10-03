@@ -1,0 +1,147 @@
+import { STORAGE_KEYS } from './attuneMode';
+
+export type HealthCategory = 'vision' | 'skin' | 'mental';
+export type HealthRecord = { id: string; date?: string; timestamp?: string; dateTr?: string; [key: string]: any };
+export const RECORD_LABELS = { vision: 'Görme testi', skin: 'Cilt analizi', mental: 'Ruhsal iyi oluş özeti' };
+export const RECORD_JOURNAL = 'attune_health_transaction_v1';
+const KEYS = {
+  vision: { history: 'togg_health_vision_history', latest: STORAGE_KEYS.LATEST_VISION },
+  skin: { history: STORAGE_KEYS.SKIN_HISTORY, latest: STORAGE_KEYS.LATEST_SKIN },
+  mental: { history: STORAGE_KEYS.MENTAL_HISTORY, latest: STORAGE_KEYS.LATEST_MENTAL }
+};
+
+export function recordDate(record: HealthRecord): string {
+  const value = record.date || record.timestamp;
+  return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('tr-TR') : record.dateTr || 'Tarih kaydı yok';
+}
+
+function recover() {
+  const raw = localStorage.getItem(RECORD_JOURNAL);
+  if (!raw) return;
+  const backup = JSON.parse(raw);
+  if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('Kayıt işlemi doğrulanamadı.');
+  const allowed = new Set<string>([...Object.values(KEYS).flatMap(k => [k.history, k.latest]), STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.REFERRAL_CONTEXT]);
+  for (const [key, value] of Object.entries(backup)) {
+    if (!allowed.has(key) || (value !== null && typeof value !== 'string')) throw new Error('Kayıt işlemi doğrulanamadı.');
+    if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value as string);
+  }
+  localStorage.removeItem(RECORD_JOURNAL);
+}
+
+function commit(changes: Record<string, string | null>) {
+  recover();
+  const before = Object.fromEntries(Object.keys(changes).map(key => [key, localStorage.getItem(key)]));
+  // A persisted undo journal makes interrupted multi-key writes recoverable on reopen.
+  localStorage.setItem(RECORD_JOURNAL, JSON.stringify(before));
+  try {
+    for (const [key, value] of Object.entries(changes)) {
+      if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value);
+      if (localStorage.getItem(key) !== value) throw new Error('Kayıt değişikliği doğrulanamadı.');
+    }
+    localStorage.removeItem(RECORD_JOURNAL);
+  } catch (error) {
+    try { recover(); } catch { /* Retain journal and report failure; next read retries recovery. */ }
+    throw error;
+  }
+}
+
+function mentalLatest(records: HealthRecord[]) {
+  const item = records.at(-1);
+  return item ? JSON.stringify({ ...item, dateTr: recordDate(item), primaryTheme: Array.isArray(item.themes) ? item.themes.join(' • ') || 'Günlük paylaşım' : item.primaryTheme || 'Tema kaydı yok', sessionCount: records.length, recommendation: 'Kayıtlı görüşme özeti' }) : null;
+}
+
+export function readHealthRecords(category: HealthCategory): HealthRecord[] {
+  recover();
+  const keys = KEYS[category];
+  const raw = localStorage.getItem(keys.history);
+  const parsed = JSON.parse(raw || '[]');
+  if (!Array.isArray(parsed) || parsed.some(r => !r || typeof r !== 'object' || Array.isArray(r))) throw new Error('Eski kayıtlar okunamadı; veriler değiştirilmedi.');
+  let changed = false;
+  const ids = new Set<string>();
+  const records = parsed.map(r => {
+    const id = typeof r.id === 'string' && r.id && !ids.has(r.id) ? r.id : crypto.randomUUID();
+    ids.add(id); if (id !== r.id) changed = true;
+    return { ...r, id } as HealthRecord;
+  });
+  const latestRaw = localStorage.getItem(keys.latest);
+  let latest = latestRaw ? JSON.parse(latestRaw) : null;
+  if (latest && (typeof latest !== 'object' || Array.isArray(latest))) throw new Error('Son kayıt okunamadı; veriler değiştirilmedi.');
+  if (latest) {
+    let match = records.find(r => r.id === latest.id);
+    if (!match && !latest.id) {
+      const signature = (r: any) => JSON.stringify(Object.fromEntries(Object.entries(r).filter(([k]) => k !== 'id').sort(([a], [b]) => a.localeCompare(b))));
+      match = records.find(r => signature(r) === signature(latest));
+      if (category === 'mental' && !match) match = records.find(r => r.summaryText === latest.summaryText && Array.isArray(r.themes) && r.themes.join(' • ') === latest.primaryTheme);
+    }
+    if (!match) {
+      latest = { ...latest, id: typeof latest.id === 'string' && latest.id && !ids.has(latest.id) ? latest.id : crypto.randomUUID() };
+      records.push(latest); changed = true;
+    } else if (latest.id !== match.id) { latest = { ...latest, id: match.id }; changed = true; }
+  }
+  if (changed) commit({ [keys.history]: JSON.stringify(records), [keys.latest]: latest ? JSON.stringify(latest) : null });
+  return records;
+}
+
+export function appendHealthRecord(category: HealthCategory, record: HealthRecord, additionalChanges: Record<string, string | null> = {}) {
+  const containsMedia = (value: unknown): boolean => {
+    if (typeof value === 'string') return /^data:(image|audio|video)\//i.test(value);
+    if (!value || typeof value !== 'object') return false;
+    return Object.entries(value).some(([key, item]) => /^(image|video|audio|pixels|frames|base64|canvas)$/i.test(key) || containsMedia(item));
+  };
+  if (containsMedia(record) || Object.values(additionalChanges).some(v => v && containsMedia(JSON.parse(v)))) throw new Error('Ham medya kalıcı kayda alınamaz.');
+  const history = readHealthRecords(category).filter(r => r.id !== record.id);
+  // Keep all surviving user records; old ten-record truncation discarded history.
+  const records = category === 'mental' ? [...history, record] : [record, ...history];
+  commit({ ...additionalChanges, [KEYS[category].history]: JSON.stringify(records), [KEYS[category].latest]: category === 'mental' ? mentalLatest(records) : JSON.stringify(record) });
+  window.dispatchEvent(new Event('attune-records'));
+  return records;
+}
+
+export async function deleteHealthRecord(category: HealthCategory, id: string): Promise<string> {
+  const operation = async () => {
+    const record = readHealthRecords(category).find(r => r.id === id);
+    if (!record) throw new Error('Kayıt bulunamadı. Listeyi yenileyin.');
+    // Current capture/conversation UI stores locally. Linked backend records must
+    // be confirmed deleted before local copies can be removed; never guess ownership.
+    if (record.backendSessionId) {
+      if (category !== 'mental' || !record.backendDeletionToken) throw new Error('Sunucu kaydının silme yetkisi doğrulanamadı. Yerel kayıt korundu.');
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 8000);
+      try {
+        const response = await fetch(`http://localhost:8000/api/mental/sessions/${encodeURIComponent(record.backendSessionId)}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deletionToken: record.backendDeletionToken }), signal: controller.signal });
+        if (!response.ok || (await response.json()).deleted !== true) throw new Error('Backend deletion unconfirmed');
+      } catch { throw new Error('Sunucu kaydı silinemedi veya doğrulanamadı. Yerel kayıt korundu; tekrar deneyebilirsiniz.'); }
+      finally { clearTimeout(deadline); }
+    }
+    // Read again after network await so another surviving record is never overwritten.
+    const remaining = readHealthRecords(category).filter(r => r.id !== id);
+    const keys = KEYS[category];
+    const latest = category === 'mental' ? mentalLatest(remaining) : remaining[0] ? JSON.stringify(remaining[0]) : null;
+    const changes: Record<string, string | null> = { [keys.history]: JSON.stringify(remaining), [keys.latest]: latest };
+    let referenceRemoved = false;
+    if (category === 'skin') {
+      const single = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE_META) || 'null');
+      const multi = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) || 'null');
+      if (single?.id === id || (!single?.id && record.isBaseline && record.comparisonScope !== 'three-angle-v2')) {
+        changes[STORAGE_KEYS.SKIN_BASELINE] = null; changes[STORAGE_KEYS.SKIN_BASELINE_META] = null; referenceRemoved = true;
+      }
+      if (multi?.id === id) { changes[STORAGE_KEYS.SKIN_MULTI_BASELINE] = null; referenceRemoved = true; }
+      for (const item of remaining) if (item.baselineId === id) {
+        item.comparisonUnavailable = true; item.referenceDeleted = true;
+        delete item.highestChangePct; item.referralSuggested = false;
+        for (const region of Object.values(item.regions || {}) as any[]) { delete region.changeFromBaselinePct; region.comparisonUnavailable = true; }
+        item.clinicalNoteTr = 'Bu karşılaştırmanın referansı silindi. Yeni bir referans taraması gerekiyor.';
+      }
+      changes[keys.history] = JSON.stringify(remaining);
+      changes[keys.latest] = remaining[0] ? JSON.stringify(remaining[0]) : null;
+      if (referenceRemoved) changes[STORAGE_KEYS.SKIN_REMINDER] = null;
+    }
+    const referral = JSON.parse(localStorage.getItem(STORAGE_KEYS.REFERRAL_CONTEXT) || 'null');
+    if (referral?.sourceModule === category.toUpperCase()) changes[STORAGE_KEYS.REFERRAL_CONTEXT] = null;
+    try { commit(changes); }
+    catch { throw new Error(record.backendSessionId ? 'Sunucu silindi; yerel kopya silinemedi. Yerel kayıt için tekrar deneyin.' : 'Yerel kayıt silinemedi veya doğrulanamadı. Tekrar deneyebilirsiniz.'); }
+    window.dispatchEvent(new Event('attune-records')); window.dispatchEvent(new Event('attune-reminder'));
+    return referenceRemoved ? 'Kayıt silindi. Yeni bir cilt referansı gerekiyor.' : 'Kayıt kalıcı olarak silindi.';
+  };
+  return navigator.locks ? navigator.locks.request('attune-health-records', operation) : operation();
+}

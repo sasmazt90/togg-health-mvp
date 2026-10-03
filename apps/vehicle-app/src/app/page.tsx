@@ -1,5 +1,6 @@
 'use client';
 
+import { InformationButton } from '../components/InformationButton';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useVehicle } from '../context/VehicleContext';
@@ -53,12 +54,11 @@ export default function CockpitDashboard() {
   const [timeline, setTimeline] = useState<HealthTimelineItem[]>([]);
 
   useEffect(() => {
-    const demo = isDemoMode();
-    setIsDemo(demo);
-    setVision(getVisionSummary(demo));
-    setSkin(getSkinSummary(demo));
-    setMental(getMentalSummary(demo));
-    setTimeline(getHealthTimeline(demo));
+    const refresh = () => {
+      const demo = isDemoMode(); setIsDemo(demo); setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo)); setTimeline(getHealthTimeline(demo));
+    };
+    refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
   }, []);
 
   return (
@@ -81,12 +81,12 @@ export default function CockpitDashboard() {
             </div>
 
             <div className="space-y-1">
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3"><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white flex items-center gap-3">
                 <span>ATTUNE</span>
                 <span className="text-togg-turquoise">.more</span>
-              </h1>
+              </h1><InformationButton title="Attune kokpiti"><p>Kontroller yalnız park halinde kullanılabilir. Bu uygulama klinik tanı sağlamaz. Araç durumu simülasyondur; gerçek araç, rota veya donanım bağlantısı yoktur. Gerçek kayıt yoksa sonuç ve geçmiş üretilmez.</p></InformationButton></div>
               <p className="text-sm md:text-base text-slate-300 leading-relaxed">
-                Sağlığınızdaki değişimleri yolculuk boyunca takip eden kişisel iyi oluş deneyimi.
+                Park halinde görme, cilt ve iyi oluş kontrollerinizi başlatın.
               </p>
             </div>
 
@@ -177,7 +177,7 @@ export default function CockpitDashboard() {
                 Görme Kontrolü
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Landolt C halkalarıyla görme keskinliği ve kontrast ön değerlendirmesi.
+                Keskinlik ve kontrast ön değerlendirmesi.
               </p>
             </div>
 
@@ -229,7 +229,7 @@ export default function CockpitDashboard() {
                 Cilt Kontrolü
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                6 anatomik yüz bölgesinde zaman içindeki piksel değişim takibi.
+                Ön ve yan pozlarda cilt değişimlerini izleyin.
               </p>
             </div>
 
@@ -283,7 +283,7 @@ export default function CockpitDashboard() {
                 Ruhsal İyi Oluş
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Kabin içi sesli diyalog, stres ve uyku eğilimleri takibi.
+                Konuşun veya yazın; görüşme özetinizi izleyin.
               </p>
             </div>
 

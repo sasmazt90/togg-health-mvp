@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useVehicle } from '../context/VehicleContext';
@@ -21,6 +21,8 @@ import {
 
 export const CockpitHeader: React.FC = () => {
   const pathname = usePathname();
+  const navigation = useRef<HTMLElement>(null);
+  useEffect(() => { navigation.current?.querySelector("[aria-current=page]")?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [pathname]);
   const { state, toggleDrivingMode, isParked, syncStatus, syncError } = useVehicle();
 
   const navItems = [
@@ -107,7 +109,7 @@ export const CockpitHeader: React.FC = () => {
       </div>
 
       {/* Ana Navigasyon Sekmeleri (Geniş Otomotiv Dokunmatik Çubuğu) */}
-      <nav className="flex items-center justify-between px-6 py-1.5 overflow-x-auto">
+      <nav ref={navigation} aria-label="Ana sekmeler" className="flex items-center justify-between px-6 py-1.5 overflow-x-auto">
         <div className="flex items-center gap-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -116,6 +118,7 @@ export const CockpitHeader: React.FC = () => {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap min-h-touch ${
                   isActive
                     ? 'bg-togg-turquoise/15 text-togg-turquoise border border-togg-turquoise/30 shadow-[0_0_15px_rgba(0,194,231,0.18)] font-bold'
