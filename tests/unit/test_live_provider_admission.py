@@ -54,3 +54,33 @@ def test_other_egress_paths_fail_closed(violation):
     endpoint = '/v1/responses' if violation == 'unknown-endpoint' else '/v1/chat/completions'
     with pytest.raises(module.AdmissionRejected): gate.admit(endpoint, data)
     assert gate.failed and gate.counts['conversation'] == (1 if violation == 'concurrent' else 0)
+
+def test_response_completes_before_browser_can_request_tts():
+    gate = module.LiveAdmission(True)
+    kind = gate.admit('/v1/chat/completions', conversation(gate))
+    events = []
+    class Response:
+        ok = True
+        def json(self): return {'providerType':'LIVE_OPENAI','reply':'Sentetik yanıt'}
+    class Route:
+        def fetch(self, **options):
+            assert options['max_retries']==0
+            return Response()
+        def fulfill(self, **options):
+            assert gate.pending is None and events==['recorded']
+            gate.admit('/v1/audio/speech', {'input':'Sentetik yanıt','voice':'coral','response_format':'mp3'})
+    assert module.forward_admitted_response(Route(),gate,kind,lambda *a:events.append('recorded'))
+    assert gate.counts=={'conversation':1,'tts':1,'summary':0} and not gate.failed
+
+def test_honest_fallback_delivered_but_no_following_request_admitted():
+    gate = module.LiveAdmission(True)
+    kind = gate.admit('/v1/chat/completions',conversation(gate));delivered=[]
+    class Response:
+        ok = True
+        def json(self): return {'providerType':'LOCAL_DEMO_FALLBACK','reply':'Yerel demo'}
+    class Route:
+        def fetch(self, **options): return Response()
+        def fulfill(self, **options): delivered.append(options['response'].json()['providerType'])
+    assert not module.forward_admitted_response(Route(),gate,kind,lambda *a:None)
+    assert delivered==['LOCAL_DEMO_FALLBACK'] and gate.failed
+    with pytest.raises(module.AdmissionRejected):gate.admit('/v1/audio/speech',{'input':'Yerel demo','voice':'coral','response_format':'mp3'})

@@ -4,7 +4,7 @@ Physical capture denied. Exact messages/history checked in browser and HTTP egre
 import argparse,json,time
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
-from live_provider_admission import LiveAdmission,TEXTS,AdmissionRejected
+from live_provider_admission import LiveAdmission,TEXTS,forward_admitted_response
 parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');args=parser.parse_args()
 if not args.approved_additional_text_run:raise SystemExit('No authorization: zero provider requests')
 OUT=Path('audit-results/live-provider/controlled-text');OUT.mkdir(parents=True,exist_ok=True)
@@ -13,7 +13,7 @@ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prot
 const gum=navigator.mediaDevices?.getUserMedia;if(gum)navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;return Promise.reject(new DOMException('Capture forbidden in text-only audit','NotAllowedError'));};
 const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...a){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null}));}return play.apply(this,a);};})();'''
 proof={'status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
-gate=LiveAdmission(False);starts=[];speech_starts=[];kinds={}
+gate=LiveAdmission(False);starts=[];speech_starts=[]
 with sync_playwright() as pw:
  browser=pw.chromium.launch(channel='chrome',headless=True,args=['--autoplay-policy=no-user-gesture-required'])
  context=browser.new_context(viewport={'width':1600,'height':1000},locale='tr-TR');context.add_init_script(INIT)
@@ -34,18 +34,13 @@ with sync_playwright() as pw:
     transformed={'response_format':{'type':'json_object'},'messages':[{'role':'user','content':'Aşağıdaki kullanıcı-asistan araç içi konuşmasını analiz et\nKonuşma Geçmişi:\n'+'\n'.join(f"{m['role']}: {m['content']}" for m in data.get('messages',[]))}]}
     kind=gate.admit('/v1/chat/completions',transformed)
    else:gate.reject('UNEXPECTED_UI_POST')
-   kinds[req.url]=kind;route.continue_()
+   def record(kind,data,response):
+    if data is not None:
+     proof['responses'].append({'kind':kind,'providerType':data.get('providerType'),'responseMs':round(page.evaluate('performance.now()')-starts[-1],1) if kind=='conversation' else None})
+   if not forward_admitted_response(route,gate,kind,record):proof['status']='PROVIDER_FAILURE_NO_RETRY'
   except Exception:
    proof['status']='BLOCKED_BEFORE_BACKEND';route.abort()
- def observe(response):
-  if response.url not in kinds:return
-  kind=kinds.pop(response.url)
-  if kind in ['conversation','summary']:
-   data=response.json();live=data.get('providerType')=='LIVE_OPENAI'
-   proof['responses'].append({'kind':kind,'providerType':data.get('providerType'),'responseMs':round(page.evaluate('performance.now()')-starts[-1],1) if kind=='conversation' else None})
-   gate.complete(kind,data.get('reply'),live)
-  else:gate.complete(kind,success=response.ok)
- page.route('**/api/mental/**',route_guard);page.on('response',observe)
+ page.route('**/api/mental/**',route_guard)
  try:
   context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
   page.goto('http://localhost:3000/mental')

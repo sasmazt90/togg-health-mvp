@@ -80,3 +80,23 @@ class LiveAdmission:
 
     def proof(self):
         return {'sourceVerified': self.source_verified, 'counts': self.counts.copy(), 'blockedReasons': self.blocked.copy(), 'closed': self.failed, 'completedPairs': len(self.messages)//2}
+
+def forward_admitted_response(route, gate, kind, record, expected_provider='LIVE_OPENAI'):
+    """Verify the actual backend response BEFORE releasing it to the browser.
+
+    An on-response callback can reenter while response.json() pumps Playwright,
+    allowing the browser's next request to arrive before the prior gate completes.
+    fetch/verify/fulfill removes that race without fabricating provider output.
+    """
+    response = route.fetch(max_redirects=0, max_retries=0, timeout=35000)
+    data = response.json() if kind in ['conversation', 'summary'] else None
+    success = response.ok and (data is None or data.get('providerType') == expected_provider)
+    try:
+        gate.complete(kind, data.get('reply') if data else None, success)
+    except AdmissionRejected:
+        # An admitted request's honest fallback/error remains visible, while
+        # the closed gate blocks every subsequent provider-bound request.
+        success = False
+    record(kind, data, response)
+    route.fulfill(response=response)
+    return success
