@@ -12,6 +12,7 @@ from live_provider_admission import LiveAdmission,live_run_output,claim_live_run
 parser = argparse.ArgumentParser()
 parser.add_argument('--approved-additional-text-run', action='store_true')
 parser.add_argument('--run-id')
+parser.add_argument('--fixture', choices=['success','failure'])
 args = parser.parse_args()
 if not args.approved_additional_text_run:
     raise SystemExit('No authorization: no server or provider request')
@@ -25,11 +26,29 @@ if CONSUMED.exists():
 gate = LiveAdmission(source_verified=True)  # Content itself is checked before every HTTP send.
 events = []
 original_send = httpx.Client.send
+fixture_calls = []
+if args.fixture:
+    from live_provider_fixtures import NONSECRET, install_fixture
+    assert os.getenv('ATTUNE_LOAD_LOCAL_ENV') == '0' and os.getenv('OPENAI_API_KEY') == NONSECRET
+    assert RUN_ID and RUN_ID.startswith('prep-')
+    fixture_calls = install_fixture(args.fixture, OUT, gate)
+    print('KEYLESS FIXTURE PREPARATION; NOT LIVE PROVIDER EVIDENCE', flush=True)
+original_send_calls = 0
+admission_attempts = 0
+sdk_retries = []
+from openai import OpenAI
+original_sdk_init = OpenAI.__init__
+def checked_sdk_init(self, *values, **options):
+    assert options.get('max_retries') == 0
+    sdk_retries.append(options['max_retries'])
+    return original_sdk_init(self, *values, **options)
+OpenAI.__init__ = checked_sdk_init
 
 def save():
-    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': RUN_ID or 'controlled-text'}, indent=2), encoding='utf-8')
+    (OUT/'egress-proof.json').write_text(json.dumps({**gate.proof(), 'events': events, 'rawRejectedContentRetained': False, 'runId': RUN_ID or 'controlled-text', 'mode': 'KEYLESS_FIXTURE_PREPARATION' if args.fixture else 'LIVE_ATTEMPT', 'admissionAttempts':admission_attempts, 'originalSendCalls': original_send_calls, 'fixtureTransportCalls':len(fixture_calls), 'realHTTPDispatchCalls':0 if args.fixture else original_send_calls, 'httpResponses':sum(e.get('httpStatus') is not None for e in events), 'sdkMaxRetries':sdk_retries, 'billingVerified':False}, indent=2), encoding='utf-8')
 
 def send(self, request, *send_args, **kwargs):
+    global original_send_calls, admission_attempts
     kind = None
     dispatch_started = False
     try:
@@ -39,20 +58,26 @@ def send(self, request, *send_args, **kwargs):
         expected_model = os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts') if request.url.path.endswith('/speech') else os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
         if data.get('model') != expected_model:
             gate.reject('MODEL_CHANGED')
+        admission_attempts += 1
         kind = gate.admit(request.url.path, data)
         if sum(gate.counts.values()) == 1:
             claim_live_run(OUT,RUN_ID)
+            if args.fixture:
+                marker=json.loads(CONSUMED.read_text());marker['authorization']='keyless fixture preparation only; no live authorization consumed';CONSUMED.write_text(json.dumps(marker),encoding='utf-8')
+        assert json.loads(CONSUMED.read_text())['runId'] == (RUN_ID or 'controlled-text')
         start = time.monotonic()
         dispatch_started = True
-        response = original_send(self, request, *send_args, **kwargs)  # Actual network, no mock response.
+        original_send_calls += 1
+        response = original_send(self, request, *send_args, **kwargs)  # Original SDK send; fixture transport is enabled only by explicit keyless preparation.
         response.read()
-        event = {'kind': kind, 'httpStatus': response.status_code, 'durationMs': round((time.monotonic()-start)*1000, 1), 'requestId': response.headers.get('x-request-id')}
+        event = {'kind': kind, 'httpStatus': response.status_code, 'durationMs': round((time.monotonic()-start)*1000, 1), 'requestId': response.headers.get('x-request-id'), 'markerBeforeDispatch': CONSUMED.exists(), 'admissionCompletedBeforeBackendReturn':False}
         events.append(event)
         if kind == 'conversation' and response.is_success:
             reply = response.json()['choices'][0]['message']['content']
         else:
             reply = None
         gate.complete(kind, reply, response.is_success)
+        event['admissionCompletedBeforeBackendReturn'] = True
         if kind == 'tts' and response.is_success:
             (OUT/f"synthetic-reply-{gate.counts['tts']}.mp3").write_bytes(response.content)
         save()

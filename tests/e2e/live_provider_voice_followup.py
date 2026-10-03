@@ -5,14 +5,14 @@ import argparse,json,time
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 from live_provider_admission import LiveAdmission,TEXTS,forward_admitted_response,live_run_output
-parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');parser.add_argument('--run-id');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');parser.add_argument('--run-id');parser.add_argument('--fixture',choices=['success','failure']);args=parser.parse_args()
 if not args.approved_additional_text_run:raise SystemExit('No authorization: zero provider requests')
 OUT=live_run_output(Path.cwd(),args.run_id);OUT.mkdir(parents=True,exist_ok=True)
 INIT=r'''(()=>{window.audioProof=[];window.captureAttempts=0;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prototype.start=function(){window.captureAttempts++;throw new DOMException('Capture forbidden in text-only audit','NotAllowedError');};}
 const gum=navigator.mediaDevices?.getUserMedia;if(gum)navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;return Promise.reject(new DOMException('Capture forbidden in text-only audit','NotAllowedError'));};
 const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...a){if(!this.__observed){this.__observed=true;for(const type of ['playing','ended','error','pause','abort'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now(),error:this.error?.code||null}));}return play.apply(this,a);};})();'''
-proof={'runId':args.run_id or 'controlled-text','status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
+proof={'mode':'KEYLESS_FIXTURE_PREPARATION' if args.fixture else 'LIVE_ATTEMPT','liveAcceptance':False,'runId':args.run_id or 'controlled-text','status':'NOT_RUN','input':'synthetic written text','nativeVoiceInputTested':False,'subjectiveListeningPerformed':False,'responses':[],'historyLengths':[],'failedContentRetained':False}
 gate=LiveAdmission(False);starts=[];speech_starts=[]
 with sync_playwright() as pw:
  browser=pw.chromium.launch(channel='chrome',headless=True,args=['--autoplay-policy=no-user-gesture-required'])
@@ -37,6 +37,8 @@ with sync_playwright() as pw:
     kind=gate.admit('/v1/chat/completions',transformed)
    else:gate.reject('UNEXPECTED_UI_POST')
    def record(kind,data,response):
+    assert gate.pending is None
+    proof.setdefault('admissionCompletedBeforeUI',[]).append(kind)
     if data is not None:
      proof['responses'].append({'kind':kind,'providerType':data.get('providerType'),'responseMs':round(page.evaluate('performance.now()')-starts[-1],1) if kind=='conversation' else None})
    if not forward_admitted_response(route,gate,kind,record):proof['status']='PROVIDER_FAILURE_NO_RETRY'
@@ -74,10 +76,20 @@ with sync_playwright() as pw:
   assert page.evaluate('window.captureAttempts')==0;proof['captureAttempts']=0
   proof['playbackFromUserSendMs']=[round(e['time']-starts[i],1) for i,e in enumerate(playing)]
   proof['playbackFromTTSRequestMs']=[round(e['time']-speech_starts[i],1) for i,e in enumerate(playing)]
-  proof['records']=1;proof['status']='PASS';page.screenshot(path=str(OUT/'completed.png'),full_page=True)
+  proof['records']=1;proof['status']='PASS';proof['liveAcceptance']=not bool(args.fixture);page.screenshot(path=str(OUT/'completed.png'),full_page=True)
  except Exception as error:
   proof['status']='FAIL';proof['failureCategory']=type(error).__name__
-  raise
+  if args.fixture=='failure' and gate.failed:
+   from live_provider_admission import AdmissionRejected
+   try:
+    gate.admit('/v1/chat/completions',{})
+    raise AssertionError('Closed browser gate accepted another request')
+   except AdmissionRejected:pass
+   # Separate backend probe bypasses the browser gate; the closed egress gate must block it.
+   response=context.request.post('http://localhost:8000/api/mental/converse',data={'userMessage':TEXTS[0],'history':[],'cloudConsent':True})
+   assert response.json()['providerType']=='LOCAL_DEMO_FALLBACK'
+   proof['secondBrowserAdmissionBlocked']=True;proof['secondBackendProbeCompleted']=True;proof['status']='EXPECTED_FAILURE_PREPARATION_PASS'
+  else:raise
  finally:
   proof['browserAdmission']=gate.proof();proof['audioEvents']=page.evaluate('window.audioProof');proof['captureAttempts']=page.evaluate('window.captureAttempts');proof['recordsObserved']=page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history")||"[]").length')
   (OUT/'ui-proof.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8')

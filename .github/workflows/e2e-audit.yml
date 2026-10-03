@@ -83,6 +83,9 @@ jobs:
           pactl info > audit-results/pulse-info.txt
           speech-dispatcher --spawn > audit-results/speech-dispatcher.log 2>&1
           python tests/e2e/native_audio_preflight.py
+      - name: Keyless checked-in live harness entrypoints and both admission gates
+        if: ${{ !cancelled() }}
+        run: python -u tests/e2e/live_harness_preparation.py 2>&1 | tee audit-results/live-harness-preparation.log
       - name: Original app focused diagnostics with actual MediaPipe and OS audio
         if: ${{ !cancelled() }}
         env:

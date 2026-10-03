@@ -101,9 +101,10 @@ def test_distinct_authorization_preserves_previous_consumed_marker(tmp_path):
 def transport_namespace(output, original_send):
     """Compile the exact checked-in wrapper without starting server or provider."""
     import ast,json,os,time
+    from types import SimpleNamespace
     source=(Path(__file__).parents[1]/'e2e/live_provider_backend.py').read_text(encoding='utf-8')
     nodes=[n for n in ast.parse(source).body if isinstance(n,ast.FunctionDef) and n.name in ['save','send']]
-    ns={'json':json,'os':os,'time':time,'RUN_ID':'20261003-unit-run','OUT':output,'gate':module.LiveAdmission(True),'events':[],'original_send':original_send,'claim_live_run':module.claim_live_run}
+    ns={'json':json,'os':os,'time':time,'RUN_ID':'20261003-unit-run','OUT':output,'gate':module.LiveAdmission(True),'events':[],'original_send':original_send,'claim_live_run':module.claim_live_run,'original_send_calls':0,'admission_attempts':0,'sdk_retries':[],'fixture_calls':[],'args':SimpleNamespace(fixture=None),'CONSUMED':output/'run-consumed.json'}
     exec(compile(ast.Module(body=nodes,type_ignores=[]),'exact-current-transport-wrapper','exec'),ns)
     return ns
 
@@ -137,3 +138,18 @@ def test_transport_failure_keeps_consumed_marker_and_safe_category_without_retry
     proof=(tmp_path/'egress-proof.json').read_text();assert 'REJECTED_TEST_TOKEN' not in proof
     assert json.loads(proof)['events'][0]['failureCategory']=='ConnectError'
     assert json.loads(proof)['events'][0]['dispatchStarted'] is True
+
+
+@pytest.mark.parametrize('command', [
+    ['tests/e2e/live_provider_backend.py'],
+    ['tests/e2e/live_provider_voice_followup.py'],
+    ['scripts/run-followup-checks.py','--live','--provider-admission','--harness-fixture','success','--live-run-id','prep-forbidden','invalid.py'],
+    ['scripts/run-followup-checks.py','--provider-admission','--harness-fixture','success','--live-run-id','live-forbidden','invalid.py'],
+])
+def test_checked_in_cli_rejects_missing_authorization_or_mixed_live_fixture(command):
+    import os,subprocess,sys
+    root=Path(__file__).resolve().parents[2]
+    env={k:v for k,v in os.environ.items() if not k.startswith('OPENAI_')}
+    env['ATTUNE_LOAD_LOCAL_ENV']='0'
+    result=subprocess.run([sys.executable,*command],cwd=root,env=env,capture_output=True,timeout=10)
+    assert result.returncode!=0
