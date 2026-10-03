@@ -22,9 +22,9 @@ with sync_playwright() as pw:
   try:
    c.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
    page.goto('http://localhost:3000/mental');assert page.evaluate('navigator.permissions.query({name:"microphone"}).then(p=>p.state)')=='denied'
-   expect(page.get_by_role('checkbox',name='Ses aktarımı onayı',exact=True)).not_to_be_checked()
-   page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check()
-   page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+   expect(page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True)).not_to_be_checked()
+   page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check()
+   page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
    page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik izin dışı kitap cümlesi.' if case=='unexpected-user' else TEXTS[0]);page.get_by_role('button',name='Gönder',exact=True).click()
    expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','error')
    assert len(intercepted)==1 and not forwarded and sum(gate.counts.values())==0

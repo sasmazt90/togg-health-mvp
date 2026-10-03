@@ -1,7 +1,7 @@
 """Test-only admission at the HTTP egress boundary; never replaces provider output."""
 from threading import RLock
 
-TEXTS = ('Bugün yeni bir kitap okudum.', 'Kitabın konusu arkadaşlık üzerineydi.', 'Arkadaşlarımla bu konuyu konuşmak iyi geldi.')
+TEXTS = ('Bugün yeni bir kitap okudum.', 'Bugün yeni bir film izledim.', 'Bugün yeni bir şarkı dinledim.')
 
 class AdmissionRejected(RuntimeError):
     pass
@@ -33,6 +33,8 @@ class LiveAdmission:
                     self.reject('TTS_BUDGET_OR_ORDER')
                 if not self.messages or data.get('input') != self.messages[-1]['content']:
                     self.reject('TTS_NOT_CURRENT_VERIFIED_REPLY')
+                if not isinstance(data.get('input'), str) or len(data['input']) > 2000:
+                    self.reject('TTS_INPUT_BUDGET')
                 if data.get('voice') != 'coral' or data.get('response_format') != 'mp3':
                     self.reject('TTS_CONFIGURATION_CHANGED')
             elif endpoint == '/v1/chat/completions':
@@ -116,4 +118,4 @@ def claim_live_run(output, run_id=None):
     import json
     output.mkdir(parents=True,exist_ok=True)
     with (output/'run-consumed.json').open('x',encoding='utf-8') as marker:
-        json.dump({'runId':run_id or 'controlled-text','authorization':'one user-approved synthetic written three-turn run','automaticRetryAllowed':False,'maxProviderRequests':{'conversation':3,'tts':3,'summary':1}},marker)
+        json.dump({'runId':run_id or 'controlled-text','authorization':'one user-approved synthetic written three-turn run','automaticRetryAllowed':False,'maxProviderRequests':{'conversation':3,'tts':3,'summary':1},'approvedSyntheticTexts':list(TEXTS),'maxBudgetUSD':1.0,'maxTTSInputCharactersPerRequest':2000,'providerAccountSpendingLimitCreated':False},marker)

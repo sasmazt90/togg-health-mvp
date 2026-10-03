@@ -13,7 +13,7 @@ with sync_playwright() as pw:
     captures=[]
     for repetition in range(2):
         page.goto('http://localhost:3000/skin')
-        expect(page.get_by_role('checkbox',name='Üç açılı tarama',exact=True)).to_be_checked()
+        page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click();expect(page.get_by_role('checkbox',name='Üç açılı tarama',exact=True)).to_be_checked();page.keyboard.press('Escape')
         page.get_by_role('button',name='Analizi Başlat',exact=True).click()
         page.wait_for_function('document.querySelector("canvas")?.dataset.completedAngles==="FRONT"',timeout=65000)
         assert page.evaluate('localStorage.getItem("togg_health_latest_skin")') is None if repetition==0 else True

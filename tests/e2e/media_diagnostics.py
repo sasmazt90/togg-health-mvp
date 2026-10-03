@@ -59,7 +59,7 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
   def unavailable():raise UnsupportedCapability('Native Chrome could not launch: '+message)
   for name in names:record(name,unavailable)
   return
- c,p=new(b);go(p,'/mental');p.wait_for_timeout(1200)
+ c,p=new(b);go(p,'/mental?demo=1');p.wait_for_timeout(1200)
  env=browser_environment(p,b,'native-browser-environment-'+str(headed));env['launchArgs']=native_args;save('native-browser-environment-'+str(headed),env)
  amplitude=None
  def audio_energy():
@@ -78,7 +78,7 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
   try:
    # Feed a complete phrase only after the native capture device is listening.
    # Starting paplay before asynchronous Chrome capture clipped the first phrase.
-   p.get_by_role('checkbox',name='Ses aktarımı onayı',exact=True).check();p.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click()
+   p.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();(p.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check(), p.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click())
    p.wait_for_function('window.__audit.speech.some(e=>e.type==="audiostart") || window.__audit.speech.some(e=>e.type==="error")',timeout=10000)
    if p.evaluate('window.__audit.speech.some(e=>e.type==="audiostart")'):player,log=play_fixture()
    p.wait_for_timeout(18000);d=snap(p,'native-speech-'+str(headed))

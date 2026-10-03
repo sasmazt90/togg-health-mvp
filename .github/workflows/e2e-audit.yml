@@ -94,7 +94,7 @@ jobs:
           DEBUG: pw:browser
         run: |
           node node_modules/next/dist/bin/next start apps/vehicle-app --hostname 127.0.0.1 -p 3000 > audit-results/frontend.log 2>&1 &
-          python -m uvicorn main:app --app-dir services/core-api --host 127.0.0.1 --port 8000 > audit-results/backend.log 2>&1 &
+          python tests/e2e/ui_contract_backend.py > audit-results/backend.log 2>&1 &
           for i in $(seq 1 45); do
             if curl -fsS http://localhost:3000/ >/dev/null && curl -fsS http://localhost:8000/api/health >/dev/null; then break; fi
             sleep 1
@@ -136,7 +136,7 @@ jobs:
         run: |
           python -u tests/e2e/live_followup.py 2>&1 | tee audit-results/live-followup-geometry.log
           python -u tests/e2e/skin_followup.py 2>&1 | tee audit-results/live-followup-skin.log
-      - name: Conversation lifecycle with actual keyless backend and bounded race controls
+      - name: Conversation lifecycle with keyless generation fixture and real validation/storage
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/mental_lifecycle_followup.py 2>&1 | tee audit-results/mental-lifecycle-followup.log
       - name: UAT actual UI consent, short modals, waiting faults and responsive routes
@@ -147,7 +147,7 @@ jobs:
       - name: Live harness rejects unverified source and contaminated input before dispatch
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/live_harness_fail_closed.py 2>&1 | tee audit-results/live-harness-fail-closed.log
-      - name: Real keyless backend response admitted before immediate TTS dispatch
+      - name: Keyless generation fixture admitted before unavailable TTS; no live claim
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/live_harness_order_followup.py 2>&1 | tee audit-results/live-harness-order.log
       - name: Three actual poses and compatible versioned reference
@@ -159,6 +159,9 @@ jobs:
           PULSE_SOURCE: audit_input
           PULSE_SINK: audit_output
         run: xvfb-run -a python -u tests/e2e/native_three_turn_followup.py 2>&1 | tee audit-results/native-three-turn-followup.log
+      - name: Final service consent and durable per-record deletion
+        if: ${{ !cancelled() }}
+        run: python -u tests/e2e/final_user_flow.py 2>&1 | tee audit-results/final-user-flow.log
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -58,11 +58,11 @@ with sync_playwright() as pw:
   page.goto('http://localhost:3000/mental')
   permission=page.evaluate('navigator.permissions.query({name:"microphone"}).then(p=>p.state)');assert permission=='denied'
   assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
-  expect(page.get_by_role('checkbox',name='Ses aktarımı onayı',exact=True)).not_to_be_checked()
+  expect(page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True)).not_to_be_checked()
   gate.source_verified=True;proof['physicalMicrophone']=permission
-  page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check()
-  page.get_by_role('combobox',name='Yanıt sesi',exact=True).select_option('openai')
-  page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+  page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check()
+
+  page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
   for i,text in enumerate(TEXTS):
    box=page.get_by_role('textbox',name='Görüşme mesajı');expect(box).to_be_enabled();box.fill(text);page.get_by_role('button',name='Gönder',exact=True).click()
    expect(page.locator('[data-chat-author="AI"]')).to_have_count(i+1,timeout=35000)
@@ -96,7 +96,7 @@ with sync_playwright() as pw:
    except AdmissionRejected:pass
    # Separate backend probe bypasses the browser gate; the closed egress gate must block it.
    response=context.request.post('http://localhost:8000/api/mental/converse',data={'userMessage':TEXTS[0],'history':[],'cloudConsent':True})
-   assert response.json()['providerType']=='LOCAL_DEMO_FALLBACK'
+   assert response.status==503 and 'providerType' not in response.json()
    proof['secondBrowserAdmissionBlocked']=True;proof['secondBackendProbeCompleted']=True;proof['status']='EXPECTED_FAILURE_PREPARATION_PASS'
   else:raise
  finally:

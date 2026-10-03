@@ -13,14 +13,14 @@ with sync_playwright() as pw:
   if path=='converse':kind=gate.admit('/v1/chat/completions',{'messages':[{'role':'system','content':'Sen Togg araç içi Ruhsal İyi Oluş Asistanısın.'}]+d['history']+[{'role':'user','content':d['userMessage']}]})
   elif path=='speech':kind=gate.admit('/v1/audio/speech',{'input':d['text'],'voice':'coral','response_format':'mp3'})
   else:route.abort();return
-  forward_admitted_response(route,gate,kind,lambda kind,data,res:records.append({'kind':kind,'httpStatus':res.status,'providerType':data.get('providerType') if data else None}),expected_provider='LOCAL_DEMO')
+  forward_admitted_response(route,gate,kind,lambda kind,data,res:records.append({'kind':kind,'httpStatus':res.status,'providerType':data.get('providerType') if data else None}),expected_provider='LIVE_OPENAI')
  page.route('**/api/mental/**',guard)
  try:
-  page.goto('http://localhost:3000/mental');page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check();page.get_by_role('combobox',name='Yanıt sesi',exact=True).select_option('openai');page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+  page.goto('http://localhost:3000/mental');page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
   page.get_by_role('textbox',name='Görüşme mesajı').fill(TEXTS[0]);page.get_by_role('button',name='Gönder',exact=True).click()
   expect(page.get_by_text('Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True)).to_be_visible()
   assert gate.counts=={'conversation':1,'tts':1,'summary':0}
-  assert gate.blocked==['PROVIDER_FAILED_NO_RETRY'] and records==[{'kind':'conversation','httpStatus':200,'providerType':'LOCAL_DEMO'},{'kind':'tts','httpStatus':503,'providerType':None}]
+  assert gate.blocked==['PROVIDER_FAILED_NO_RETRY'] and records==[{'kind':'conversation','httpStatus':200,'providerType':'LIVE_OPENAI'},{'kind':'tts','httpStatus':503,'providerType':None}]
   assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
   proof={'status':'PASS','mode':'keyless real backend/UI ordering check','realOpenAIRequests':0,'realOpenAITTSRequests':0,'records':records,'gate':gate.proof(),'liveAcceptanceClaim':False}
   Path('audit-results/live-harness-order.json').write_text(json.dumps(proof,indent=2));print(json.dumps(proof))

@@ -34,7 +34,7 @@ with sync_playwright() as pw:
 
     def scan():
         page.goto(base + '/skin')
-        page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button', name='Analizi Başlat', exact=True).click()
+        (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button', name='Analizi Başlat', exact=True).click()
         page.wait_for_function('document.querySelector("canvas")?.dataset.mediapipeActive==="true" && window.__draws>2', timeout=30000)
         before = page.evaluate('window.__draws')
         page.wait_for_timeout(600)
@@ -77,8 +77,8 @@ with sync_playwright() as pw:
         target = session.send('Target.getTargetInfo')['targetInfo']
         session.send('Browser.setPermission', {'permission': {'name': 'microphone'}, 'setting': 'denied', 'origin': base, 'browserContextId': target['browserContextId']})
         assert page.evaluate('navigator.permissions.query({name:"microphone"}).then(p=>p.state)') == 'denied'
-        page.get_by_role('checkbox', name='Ses aktarımı onayı', exact=True).check()
-        page.get_by_role('button', name='Görüşmeyi Başlat', exact=True).click()
+        page.get_by_role('checkbox', name='TOGG Attune hizmet onayı', exact=True).check()
+        page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button', name='Görüşmeyi Başlat', exact=True).click()
         expect(page.get_by_text('Ses girişine izin verilmedi.', exact=False)).to_be_visible(timeout=15000)
         expect(page.get_by_role('textbox',name='Görüşme mesajı')).to_be_visible()
         expect(page.get_by_role('button', name='Görüşmeyi Bitir', exact=True)).to_be_visible()

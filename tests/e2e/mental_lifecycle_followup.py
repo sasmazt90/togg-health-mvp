@@ -24,10 +24,10 @@ with sync_playwright() as pw:
         context = browser.new_context(viewport={'width': 1600, 'height': 1000}, locale='tr-TR')
         context.request.post('http://localhost:8000/api/vehicle/speed', data={'speedKmH': 0})
         page = context.new_page(); page.goto(BASE + '/mental')
-        expect(page.get_by_role('button', name='Görüşmeyi Başlat', exact=True)).to_be_enabled()
+        expect(page.get_by_role('button', name='Görüşmeyi Başlat', exact=True)).to_be_disabled();page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();expect(page.get_by_role('button', name='Görüşmeyi Başlat', exact=True)).to_be_enabled()
         return context, page
     def text_start(page):
-        page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
+        page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
         mute = page.get_by_role('button', name='Sesli yanıtı kapat', exact=True)
         if mute.count(): mute.click()
     def send(page, text):
@@ -63,7 +63,7 @@ with sync_playwright() as pw:
             page.reload(); expect(page.locator('[data-mental-history]')).to_contain_text('1 kayıtlı görüşme')
             return {'turns': 3, 'historyLengths': [0,2,4], 'records': 1, 'nativeAudioClaim': False}
         finally: context.close()
-    record('Three actual local text turns preserve history; one summary only at finish', three_text_turns)
+    record('Three synthetic fixture text turns preserve history; one summary only at finish', three_text_turns)
 
     def no_consent():
         context, page = fresh()
@@ -97,7 +97,7 @@ with sync_playwright() as pw:
             page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik gecikmiş tur'); page.get_by_role('button',name='Gönder',exact=True).click()
             page.wait_for_timeout(200); assert len(pending) == 1
             page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click()
-            pending[0].fulfill(json={'reply': 'GEÇ OLAY', 'providerType':'LOCAL_DEMO'})
+            pending[0].fulfill(json={'reply': 'GEÇ OLAY', 'providerType':'LIVE_OPENAI'})
             page.wait_for_timeout(500)
             assert 'GEÇ OLAY' not in page.locator('body').inner_text()
             assert storage(page) == []
@@ -128,7 +128,7 @@ with sync_playwright() as pw:
             page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik sürüş geçişi');page.get_by_role('button',name='Gönder',exact=True).click()
             page.wait_for_timeout(200);page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
             expect(page.get_by_text('Sürüş geçişinde görüşme güvenle kapatıldı.',exact=False)).to_be_visible()
-            pending[0].fulfill(json={'reply':'GEÇ SÜRÜŞ OLAYI','providerType':'LOCAL_DEMO'})
+            pending[0].fulfill(json={'reply':'GEÇ SÜRÜŞ OLAYI','providerType':'LIVE_OPENAI'})
             page.wait_for_timeout(400);assert 'GEÇ SÜRÜŞ OLAYI' not in page.locator('body').inner_text() and storage(page)==[]
             return {'drivingCancelled': True}
         finally: context.request.post('http://localhost:8000/api/vehicle/speed', data={'speedKmH':0});context.close()
@@ -150,7 +150,7 @@ with sync_playwright() as pw:
             page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik navigasyon turu');page.get_by_role('button',name='Gönder',exact=True).click()
             page.wait_for_timeout(200);assert len(pending)==1
             page.get_by_role('link',name='Sağlık Geçmişim',exact=True).click()
-            pending[0].fulfill(json={'reply':'GEÇ NAVİGASYON OLAYI','providerType':'LOCAL_DEMO'})
+            pending[0].fulfill(json={'reply':'GEÇ NAVİGASYON OLAYI','providerType':'LIVE_OPENAI'})
             page.get_by_role('link',name='Ruhsal İyi Oluş',exact=True).click()
             expect(page.get_by_role('button',name='Görüşmeyi Başlat',exact=True)).to_be_visible()
             assert page.locator('[data-chat-author]').count()==0 and storage(page)==[]
@@ -161,12 +161,12 @@ with sync_playwright() as pw:
     def revoked_cloud():
         context, page = fresh(); pending=[]
         try:
-            page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check();text_start(page)
+            page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();text_start(page)
             page.route('**/api/mental/converse',lambda r:pending.append(r))
             page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik izin geri çekme');page.get_by_role('button',name='Gönder',exact=True).click()
-            page.wait_for_timeout(200);page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).uncheck()
+            page.wait_for_timeout(200);page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).uncheck()
             expect(page.get_by_role('button',name='Görüşmeyi Başlat',exact=True)).to_be_visible()
-            pending[0].fulfill(json={'reply':'GEÇ BULUT OLAYI','providerType':'LOCAL_DEMO'});page.wait_for_timeout(400)
+            pending[0].fulfill(json={'reply':'GEÇ BULUT OLAYI','providerType':'LIVE_OPENAI'});page.wait_for_timeout(400)
             assert 'GEÇ BULUT OLAYI' not in page.locator('body').inner_text() and storage(page)==[]
             return {'revokedCloudCancelled':True}
         finally:context.close()
@@ -195,7 +195,7 @@ with sync_playwright() as pw:
             page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();page.wait_for_timeout(200);assert len(pending)==1
             page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
             expect(page.get_by_text('Sürüş geçişinde görüşme güvenle kapatıldı.',exact=False)).to_be_visible()
-            pending[0].fulfill(json={'summaryText':'GEÇ ÖZET','themes':['kitap'],'moodTrend':'NEUTRAL','providerType':'LOCAL_DEMO'})
+            pending[0].fulfill(json={'summaryText':'GEÇ ÖZET','themes':['kitap'],'moodTrend':'NEUTRAL','providerType':'LIVE_OPENAI'})
             page.wait_for_timeout(400);assert storage(page)==[] and 'GEÇ ÖZET' not in page.locator('body').inner_text()
             return {'lateSummaryIgnoredAfterDriving':True}
         finally:context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});context.close()

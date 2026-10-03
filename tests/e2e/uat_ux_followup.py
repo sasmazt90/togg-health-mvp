@@ -24,7 +24,7 @@ with sync_playwright() as pw:
   context=browser.new_context(viewport={'width':width,'height':height},locale='tr-TR');context.add_init_script(INIT)
   context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0});page=context.new_page();return context,page
  def start(page):
-  page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+  page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
   mute=page.get_by_role('button',name='Sesli yanıtı kapat',exact=True)
   if mute.count():mute.click()
  def send(page,text):
@@ -78,7 +78,7 @@ with sync_playwright() as pw:
    page.goto(BASE+'/profile');modal_checks(page,page.get_by_role('button',name='Hekimle Paylaşılabilir Özet',exact=True),'Hekim Paylaşım Özeti','profile-two-record-modal') if not args.baseline else None
    page.get_by_role('button',name='Hekimle Paylaşılabilir Özet',exact=True).click();assert page.get_by_role('checkbox').evaluate_all('(a)=>a.every(i=>!i.checked)')
    page.get_by_label('Ruhsal iyi oluş',exact=True).check();preview=page.locator('[data-share-preview]').inner_text();assert 'Ruhsal iyi oluş' in preview and 'Cilt' not in preview and 'Görme' not in preview;snap(page,'profile-selected-mental-only',True)
-   return {'savingOffCompletedRecords':0,'explicitUIOnCompletedRecords':2,'noDuplicateSummary':True,'themes':3,'captureAttempts':page.evaluate('window.captureAttempts'),'actualLocalBackend':True}
+   return {'savingOffCompletedRecords':0,'explicitUIOnCompletedRecords':2,'noDuplicateSummary':True,'themes':3,'captureAttempts':page.evaluate('window.captureAttempts'),'actualValidationStorageBackend':True,'generationFixture':True,'liveAcceptance':False}
   finally:c.close()
  record('Local saving OFF and explicit ON through actual privacy UI; exact chart and export selection',consent)
 
@@ -106,22 +106,22 @@ with sync_playwright() as pw:
   c,page=fresh();chat=[];tts=[]
   try:
    page.route('**/api/mental/provider-status',lambda route:route.fulfill(json={'apiKeyConfigured':True,'providerName':'UI capability fixture only; no key','isLiveLLM':False}))
-   page.goto(BASE+'/mental');page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check();page.get_by_role('combobox',name='Yanıt sesi',exact=True).select_option('openai');page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+   page.goto(BASE+'/mental');page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
    page.route('**/api/mental/converse',lambda route:chat.append(route));page.route('**/api/mental/speech',lambda route:tts.append(route));page.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');page.get_by_role('button',name='Gönder',exact=True).click();page.wait_for_timeout(100);assert len(chat)==1;snap(page,'mental-chat-wait')
    expect(page.locator('[data-conversation-phase]')).to_contain_text('Yanıt hazırlanıyor')
-   response=chat[0].fetch();assert response.json()['providerType']=='LOCAL_DEMO';chat[0].fulfill(response=response);expect(page.locator('[data-chat-author="AI"]')).to_have_count(1);page.wait_for_timeout(100);assert len(tts)==1
+   response=chat[0].fetch();assert response.json()['providerType']=='LIVE_OPENAI';chat[0].fulfill(response=response);expect(page.locator('[data-chat-author="AI"]')).to_have_count(1);page.wait_for_timeout(100);assert len(tts)==1
    snap(page,'mental-audio-wait')
    if not args.baseline:expect(page.locator('[data-conversation-phase]')).to_contain_text('Ses hazırlanıyor')
-   text=page.locator('[data-chat-author="AI"]').inner_text();assert 'LOCAL_DEMO' in text
+   text=page.locator('[data-chat-author="AI"]').inner_text();assert 'LOCAL_DEMO' not in text and 'LIVE_OPENAI' not in text;assert page.locator('[data-provider-kind=LIVE_OPENAI]').count()==1
    response=tts[0].fetch();assert response.status==503;tts[0].fulfill(response=response);expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','failed');assert page.locator('[data-chat-author="AI"]').inner_text()==text;snap(page,'mental-audio-error-text-retained')
-   return {'actualChat':'LOCAL_DEMO','actualTTSHTTP':503,'textRetained':True,'UIConfiguredFixtureNotLiveProof':True,'captureAttempts':page.evaluate('window.captureAttempts')}
+   return {'actualChat':'KEYLESS_GENERATION_FIXTURE','actualTTSHTTP':503,'textRetained':True,'UIConfiguredFixtureNotLiveProof':True,'captureAttempts':page.evaluate('window.captureAttempts')}
   finally:c.close()
  record('Chat wait and voice wait are distinct; actual keyless TTS failure retains text',waiting_audio)
 
  def mute_pending():
   c,page=fresh();pending=[]
   try:
-   page.route('**/api/mental/provider-status',lambda route:route.fulfill(json={'apiKeyConfigured':True,'isLiveLLM':False}));page.goto(BASE+'/mental');page.get_by_role('checkbox',name='OpenAI bulut aktarımı onayı',exact=True).check();page.get_by_role('combobox',name='Yanıt sesi',exact=True).select_option('openai');page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+   page.route('**/api/mental/provider-status',lambda route:route.fulfill(json={'apiKeyConfigured':True,'isLiveLLM':False}));page.goto(BASE+'/mental');page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
    page.route('**/api/mental/speech',lambda route:pending.append(route));page.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');page.get_by_role('button',name='Gönder',exact=True).click();expect(page.locator('[data-chat-author="AI"]')).to_have_count(1);page.wait_for_timeout(100);assert len(pending)==1
    page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready');pending[0].abort();page.wait_for_timeout(200);expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','ready');assert len(history(page))==0;return {'voiceCancelledWithoutTextLoss':True}
   finally:c.close()
@@ -142,7 +142,7 @@ with sync_playwright() as pw:
   try:
    page.goto(BASE+'/privacy');buttons=page.get_by_role('button',name='Erişimi Kapat',exact=True);buttons.nth(0).click();page.get_by_role('button',name='Erişimi Kapat',exact=True).click();snap(page,'privacy-app-media-off',True)
    page.goto(BASE+'/skin');page.get_by_role('button',name='Analizi Başlat',exact=True).click();expect(page.get_by_role('button',name='Tekrar Dene',exact=True)).to_be_visible();snap(page,'skin-permission-off',True)
-   page.goto(BASE+'/mental');page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click();expect(page.get_by_text('Mikrofon kullanım izni Gizlilik ayarlarında kapalıdır.',exact=False)).to_be_visible();assert page.evaluate('window.captureAttempts')==0
+   page.goto(BASE+'/mental');page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click();expect(page.get_by_text('Mikrofon kullanım izni Gizlilik ayarlarında kapalıdır.',exact=False)).to_be_visible();assert page.evaluate('window.captureAttempts')==0
    page.route('**/api/mental/converse',lambda r:r.abort());page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click();page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik kesinti kontrolü');page.get_by_role('button',name='Gönder',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','error');snap(page,'mental-api-outage',True)
    page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();assert history(page)==[]
    page.get_by_title('Sürüş ve Park modları arasında geçiş').click();expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_contain_text('SÜRÜŞ')
@@ -190,7 +190,7 @@ with sync_playwright() as pw:
    page.set_viewport_size({'width':1280,'height':900})
    for route in ['mental','profile','privacy']:
     page.goto(BASE+'/'+route);page.evaluate('document.body.style.zoom="2"');assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');snap(page,route+'-css-reflow-200',True);page.evaluate('document.body.style.zoom=""')
-   return {'visionLayouts':layouts,'longTurns':4,'reflow':'200% CSS zoom layout check; not OS/browser zoom acceptance','provider':'actual LOCAL_DEMO'}
+   return {'visionLayouts':layouts,'longTurns':4,'reflow':'200% CSS zoom layout check; not OS/browser zoom acceptance','provider':'keyless synthetic generation fixture'}
   finally:c.close()
  record('Measured vision panels at three widths; long actual transcript and 200 percent reflow',vision_long_reflow)
  browser.close()

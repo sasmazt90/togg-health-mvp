@@ -117,7 +117,7 @@ def test_actual_transport_wrapper_claims_distinct_run_before_dispatch(tmp_path):
         calls.append(request)
         return httpx.Response(200,json={'choices':[{'message':{'content':'Sentetik kitap yanıtı'}}]},request=request)
     ns=transport_namespace(tmp_path,original)
-    data=conversation(ns['gate']);data['model']='gpt-4o-mini'
+    data=conversation(ns['gate']);data['model']='gpt-4o-mini';data['max_tokens']=250
     request=httpx.Request('POST','https://api.openai.com/v1/chat/completions',json=data)
     response=ns['send'](object(),request,'sdk-positional-option',stream=False)
     assert response.status_code==200 and len(calls)==1
@@ -129,7 +129,7 @@ def test_transport_failure_keeps_consumed_marker_and_safe_category_without_retry
     calls=[]
     def original(*args,**kwargs):
         calls.append(True);raise httpx.ConnectError('REJECTED_TEST_TOKEN')
-    ns=transport_namespace(tmp_path,original);data=conversation(ns['gate']);data['model']='gpt-4o-mini'
+    ns=transport_namespace(tmp_path,original);data=conversation(ns['gate']);data['model']='gpt-4o-mini';data['max_tokens']=250
     request=httpx.Request('POST','https://api.openai.com/v1/chat/completions',json=data)
     with pytest.raises(httpx.ConnectError):ns['send'](None,request)
     before=(tmp_path/'run-consumed.json').read_bytes()

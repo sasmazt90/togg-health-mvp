@@ -11,7 +11,8 @@ import tempfile
 import time
 import urllib.request
 
-parser=argparse.ArgumentParser();parser.add_argument('--live',action='store_true');parser.add_argument('--provider-admission',action='store_true');parser.add_argument('--live-run-id');parser.add_argument('--harness-fixture',choices=['success','failure']);parser.add_argument('scripts',nargs='+');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--live',action='store_true');parser.add_argument('--provider-admission',action='store_true');parser.add_argument('--live-run-id');parser.add_argument('--harness-fixture',choices=['success','failure']);parser.add_argument('--contract-provider',action='store_true');parser.add_argument('scripts',nargs='+');args=parser.parse_args()
+assert not args.contract_provider or (not args.live and not args.provider_admission), 'Synthetic UI fixture cannot load a key or claim live acceptance'
 if args.harness_fixture:
     assert not args.live and args.provider_admission and args.live_run_id and args.live_run_id.startswith('prep-')
 if args.provider_admission:
@@ -31,6 +32,7 @@ try:
         env['ATTUNE_DATA_DIR']=data
         try:
             backend_command = [sys.executable, str(root/'tests/e2e/live_provider_backend.py'), '--approved-additional-text-run'] if args.provider_admission else [sys.executable,'-m','uvicorn','main:app','--app-dir',str(root/'services/core-api'),'--host','127.0.0.1','--port','8000']
+            if args.contract_provider: backend_command = [sys.executable, str(root/'tests/e2e/ui_contract_backend.py')]
             if args.provider_admission and args.live_run_id:backend_command += ['--run-id',args.live_run_id]
             if args.harness_fixture:backend_command += ['--fixture',args.harness_fixture]
             for name,command in [('backend',backend_command),('frontend',[shutil.which('node'),str(root/'node_modules/next/dist/bin/next'),'start',str(root/'apps/vehicle-app'),'--hostname','127.0.0.1','-p','3000'])]:
@@ -50,7 +52,7 @@ try:
                 name=Path(script.split()[0]).stem
                 with (out/(name+'-followup.log')).open('w',encoding='utf-8') as log:
                     result=subprocess.run([sys.executable,*script.split()],cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT)
-                results.append({'script':script,'exitCode':result.returncode});print(json.dumps(results[-1]),flush=True)
+                results.append({'script':script,'exitCode':result.returncode,'generationFixture':bool(args.contract_provider),'liveAcceptance':False if args.contract_provider or not args.live else None});print(json.dumps(results[-1]),flush=True)
         finally:
             for process in reversed(processes):
                 if process.poll() is None:process.terminate()

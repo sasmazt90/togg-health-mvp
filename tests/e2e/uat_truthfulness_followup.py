@@ -1,7 +1,7 @@
 """Keyless UI evidence for cockpit provenance, Care limits and selected print.
 
 --before only captures observations of the unchanged starting product; it is
-never an acceptance result. Actual LOCAL_DEMO conversation creates the record.
+never an acceptance result. Keyless synthetic generation fixture conversation creates the record.
 Permission/network denial is controlled; no successful sensor/provider is faked.
 """
 import argparse, json, os, subprocess, traceback
@@ -81,7 +81,7 @@ with sync_playwright() as pw:
                 assert button.get_attribute('aria-describedby')=='share-print-status'
             page.keyboard.press('Escape')
             # Actual keyless backend and actual UI, written synthetic text; no STT/TTS.
-            page.goto(BASE+'/mental'); page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+            page.goto(BASE+'/mental'); page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
             page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click()
             page.get_by_role('textbox',name='Görüşme mesajı').fill('Ailemle güzel bir kitap okudum.')
             page.get_by_role('button',name='Gönder',exact=True).click()
@@ -112,8 +112,8 @@ with sync_playwright() as pw:
             page.goto(BASE+'/care'); expect(page.get_by_role('button',name='RANDEVUYU İNCELE',exact=True)).to_be_visible()
             snap(page,f'care-service-error-{width}')
             if not args.before:
-                expect(page.locator('[data-care-limits]')).to_contain_text('Kişisel takviminize veya canlı rota hesabına bağlı değildir')
-                expect(page.get_by_text('Örnek eşleşme puanı',exact=False)).to_be_visible()
+                expect(page.locator('[data-care-limits]')).to_contain_text('Burada randevu oluşturulmaz');page.get_by_role('button',name='Uzman seçenekleri hakkında bilgi',exact=True).click();expect(page.get_by_role('dialog',name='Uzman seçenekleri',exact=True)).to_contain_text('Kişisel takvim ve canlı rota entegrasyonu yoktur');page.keyboard.press('Escape')
+                expect(page.get_by_text('Uzman seçeneği',exact=True)).to_be_visible(); assert 'eşleşme puanı' not in page.locator('main').inner_text().lower()
                 expect(page.get_by_text('Örnek ulaşım:',exact=False).first).to_be_visible()
                 expect(page.get_by_text('Demo takvim',exact=False).last).to_be_visible()
                 assert 'Takviminizle Uyumlu' not in page.locator('main').inner_text()
@@ -127,7 +127,7 @@ with sync_playwright() as pw:
         finally:
             c.request.post(API+'/api/vehicle/speed',data={'speedKmH':0}); c.close()
     browser.close()
-proof={'results':results,'screenshots':screens,'sourceHead':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'productionBuildId':Path('apps/vehicle-app/.next/BUILD_ID').read_text().strip(),'beforeObservationOnly':args.before,'provider':'actual LOCAL_DEMO written input; no OpenAI dispatch','physicalCaptureAttempts':0}
+proof={'results':results,'screenshots':screens,'sourceHead':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'productionBuildId':Path('apps/vehicle-app/.next/BUILD_ID').read_text().strip(),'beforeObservationOnly':args.before,'provider':'keyless synthetic generation fixture written input; no OpenAI dispatch','physicalCaptureAttempts':0}
 (OUT/'results.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf-8')
 print(json.dumps(proof,ensure_ascii=False))
 raise SystemExit(any(x['status']=='FAIL' for x in results))

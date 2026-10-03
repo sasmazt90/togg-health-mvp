@@ -14,7 +14,7 @@ with sync_playwright() as pw:
     assert context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0}).ok
     page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
     page.goto('http://localhost:3000/skin')
-    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     page.wait_for_function('''()=>{const video=document.querySelector('video');return video && video.videoWidth>0 && video.videoHeight>0;}''')
     geometry=page.locator('video').evaluate('''video=>{
       const box=video.getBoundingClientRect();const panel=video.closest('[data-face-panel]').getBoundingClientRect();
@@ -86,7 +86,7 @@ with sync_playwright() as pw:
     page.keyboard.press('Escape')
     page.set_viewport_size({'width':1280,'height':900})
     page.goto('http://localhost:3000/skin')
-    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
     second=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
     assert second['id']!=first['id'] and second['isBaseline'] is False
@@ -101,7 +101,7 @@ with sync_playwright() as pw:
     original_baseline=page.evaluate('localStorage.getItem("togg_health_skin_baseline")')
     page.evaluate('localStorage.removeItem("togg_health_skin_baseline_meta")')
     page.goto('http://localhost:3000/skin')
-    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
     legacy=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
     assert legacy['isBaseline'] is False and legacy['comparisonUnavailable'] is True
@@ -112,7 +112,7 @@ with sync_playwright() as pw:
     page.evaluate('localStorage.setItem("togg_health_skin_baseline","invalid-reference-json")')
     latest_before=page.evaluate('localStorage.getItem("togg_health_latest_skin")')
     page.goto('http://localhost:3000/skin')
-    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Mevcut referans okunamadı. Referansınız değiştirilmedi; bu tarama kaydedilmedi.',exact=True)).to_be_visible(timeout=45000)
     assert page.evaluate('localStorage.getItem("togg_health_skin_baseline")')=='invalid-reference-json'
     assert page.evaluate('localStorage.getItem("togg_health_latest_skin")')==latest_before

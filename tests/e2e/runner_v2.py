@@ -85,7 +85,7 @@ extra=r'''
 
     c,page=new()
     def privacy_mic():
-        go(page,'/privacy');page.get_by_role('button',name='Erişimi Kapat',exact=True).nth(1).click();page.get_by_role('link',name='Ruhsal İyi Oluş',exact=True).click();page.wait_for_timeout(800);page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click();snap(page,'privacy-mic-off');require('Mikrofon kullanım izni Gizlilik ayarlarında kapalıdır' in page.locator('body').inner_text(),'App microphone preference ignored');require(not page.evaluate('window.__audit.speech.some(e=>e.type==="start")'),'Recognition starts without app permission')
+        go(page,'/privacy');page.get_by_role('button',name='Erişimi Kapat',exact=True).nth(1).click();page.get_by_role('link',name='Ruhsal İyi Oluş',exact=True).click();page.wait_for_timeout(800);page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click();snap(page,'privacy-mic-off');require('Mikrofon kullanım izni Gizlilik ayarlarında kapalıdır' in page.locator('body').inner_text(),'App microphone preference ignored');require(not page.evaluate('window.__audit.speech.some(e=>e.type==="start")'),'Recognition starts without app permission')
     check('privacy microphone off blocks listening and offers typing',privacy_mic);close(c,'privacy-mic')
 '''
 source=source.replace('    browser.close()\n',extra+'\n    browser.close()\n')

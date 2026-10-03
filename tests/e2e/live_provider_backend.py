@@ -72,6 +72,10 @@ def send(self, request, *send_args, **kwargs):
         expected_model = os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts') if request.url.path.endswith('/speech') else os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
         if data.get('model') != expected_model:
             gate.reject('MODEL_CHANGED')
+        if request.url.path == '/v1/chat/completions':
+            limit = 400 if data.get('response_format') == {'type':'json_object'} else 250
+            if not isinstance(data.get('max_tokens'), int) or not 1 <= data['max_tokens'] <= limit: gate.reject('OUTPUT_TOKEN_BUDGET')
+            if len(json.dumps(data.get('messages', []), ensure_ascii=False)) > 14000: gate.reject('INPUT_CONTEXT_BUDGET')
         admission_attempts += 1
         kind = gate.admit(request.url.path, data)
         if sum(gate.counts.values()) == 1:

@@ -30,7 +30,7 @@ def record(name, fn):
 
 
 def enter_text(page, text):
-    page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
+    page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
     mute=page.get_by_role('button',name='Sesli yanıtı kapat',exact=True)
     if mute.count(): mute.click()
     old_count=page.locator('[data-chat-author="AI"]').count()

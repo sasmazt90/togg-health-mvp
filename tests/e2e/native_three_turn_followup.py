@@ -17,8 +17,8 @@ with sync_playwright() as pw:
     context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
     page=context.new_page();requests=[];page.on('request',lambda r:requests.append(r.post_data_json) if r.url.endswith('/mental/converse') else None)
     try:
-        page.goto('http://localhost:3000/mental');page.wait_for_function('speechSynthesis.getVoices().some(v=>v.lang.toLowerCase().startsWith("tr"))')
-        page.get_by_role('checkbox',name='Ses aktarımı onayı',exact=True).check();page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click()
+        page.goto('http://localhost:3000/mental?demo=1');page.wait_for_function('speechSynthesis.getVoices().some(v=>v.lang.toLowerCase().startsWith("tr"))')
+        page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click()
         for i in range(3):
             expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','listening',timeout=20000)
             page.wait_for_function('window.currentNativeRecognition?.audioStarted===true',timeout=20000)
@@ -31,7 +31,7 @@ with sync_playwright() as pw:
         page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
         page.wait_for_timeout(1200);assert page.locator('[data-chat-author="USER"]').count()==page.locator('[data-chat-author="AI"]').count()==3
         assert [len(r['history']) for r in requests]==[0,2,4]
-        assert len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))'))==1
+        assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None # Explicit demo never persists a personal summary.
         proof=page.evaluate('window.nativeProof');assert len([e for e in proof['stt'] if e['type']=='result'])==3
         assert len({e['transcript'] for e in proof['stt'] if e['type']=='result'})==3
         assert len([e for e in proof['tts'] if e['type']=='start'])==3
