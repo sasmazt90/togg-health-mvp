@@ -9,6 +9,7 @@ export interface MentalHistoryItem {
   completed?: boolean;
   consented?: boolean;
   moodTrend?: string;
+  providerType?: string;
 }
 
 const MOOD_LABELS: Record<string, string> = { STRESSED: 'Gergin', TIRED: 'Yorgun', RELAXED: 'Rahat', NEUTRAL: 'Nötr' };

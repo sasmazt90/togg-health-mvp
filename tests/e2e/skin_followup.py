@@ -43,6 +43,7 @@ with sync_playwright() as pw:
     page.get_by_role('button',name='Hatırlat',exact=True).click()
     page.get_by_role('button',name='Hatırlatmayı kaydet',exact=True).click()
     expect(page.get_by_text('Uygulama içi plan kaydedildi. İşletim sistemi bildirimi kurulmadı.',exact=True)).to_be_visible()
+    page.screenshot(path=str(OUT/'reminder-plan.png'),full_page=True)
     reminder=page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_reminder"))')
     page.get_by_role('button',name='Hatırlatmayı kaydet',exact=True).click()
     assert page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_reminder")).id')==reminder['id']
@@ -92,6 +93,7 @@ with sync_playwright() as pw:
     page.get_by_label('Cilt',exact=True).check()
     preview=page.locator('[data-share-preview]').inner_text()
     assert 'Cilt' in preview and 'Ruhsal iyi oluş' not in preview and 'Görme' not in preview
+    page.screenshot(path=str(OUT/'selected-share-preview.png'),full_page=True)
     # Observe the native print event and the actual print document; do not replace print().
     page.evaluate('''()=>{
       window.printReports=[];

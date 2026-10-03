@@ -37,6 +37,11 @@ export default function MentalPage() {
   let angle = 0;
   const gradient = stats.rows.map((row, i) => { const start = angle; angle += row.percent * 3.6; return `${COLORS[i % COLORS.length]} ${start}deg ${angle}deg`; }).join(', ');
 
+  const conversationTranscript = <div ref={transcript} data-conversation-transcript className="max-h-[28rem] overflow-y-auto space-y-3" onScroll={() => { const el = transcript.current; if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
+        {!c.messages.length && <p className="text-sm text-slate-400">Merhaba, bugün kendinizi nasıl hissediyorsunuz? Paylaşmak istediğiniz bir konu varsa dinliyorum.</p>}
+        {c.messages.map((m, i) => <article key={m.id} data-chat-author={m.sender} data-chat-position={i} data-turn={m.turn} className={`rounded-xl border p-3 text-sm ${m.isCrisis ? 'border-rose-500 bg-rose-950' : m.sender === 'USER' ? 'border-togg-turquoise/30 bg-togg-darkBlue' : 'border-white/10 bg-slate-950'}`}><p className="text-xs text-slate-400">{m.sender === 'USER' ? 'Siz' : 'Attune'} · {m.time}</p><p className="mt-1">{m.text}</p>{m.providerBadge && <p className="mt-2 text-xs text-togg-turquoise">{m.providerBadge}</p>}</article>)}
+      </div>;
+
   return <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
     <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5">
       <div className="flex items-center gap-2 text-togg-turquoise"><HeartPulse /><span>Sesli İyi Oluş Asistanı</span></div>
@@ -58,13 +63,11 @@ export default function MentalPage() {
       {!isParked && <p className="text-amber-200">Sürüş sırasında görüşme kapalıdır. Lütfen dikkatinizi yola verin.</p>}
       <button onClick={() => { c.switchText(); if (!c.active) c.start(true); }} disabled={!isParked || c.phase === 'ending'} className="text-sm underline disabled:opacity-50">İsterseniz yazabilirsiniz</button>
       {c.textMode && <div className="flex gap-2"><input aria-label="Görüşme mesajı" value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) send(); }} placeholder="Düşüncelerinizi yazın..." disabled={!c.active || ['preparing', 'speaking', 'ending', 'error'].includes(c.phase)} className="min-w-0 flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2" /><button onClick={send} disabled={!c.active || !input.trim() || ['preparing', 'speaking', 'ending', 'error'].includes(c.phase)} className="bg-togg-turquoise text-togg-darkBlue rounded-xl p-3 disabled:opacity-50">Gönder</button></div>}
-      <div ref={transcript} data-conversation-transcript className="max-h-[28rem] overflow-y-auto space-y-3" onScroll={() => { const el = transcript.current; if (el) follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
-        {!c.messages.length && <p className="text-sm text-slate-400">Merhaba, bugün kendinizi nasıl hissediyorsunuz? Paylaşmak istediğiniz bir konu varsa dinliyorum.</p>}
-        {c.messages.map((m, i) => <article key={m.id} data-chat-author={m.sender} data-chat-position={i} data-turn={m.turn} className={`rounded-xl border p-3 text-sm ${m.isCrisis ? 'border-rose-500 bg-rose-950' : m.sender === 'USER' ? 'border-togg-turquoise/30 bg-togg-darkBlue' : 'border-white/10 bg-slate-950'}`}><p className="text-xs text-slate-400">{m.sender === 'USER' ? 'Siz' : 'Attune'} · {m.time}</p><p className="mt-1">{m.text}</p>{m.providerBadge && <p className="mt-2 text-xs text-togg-turquoise">{m.providerBadge}</p>}</article>)}
-      </div>
+      {!c.active && conversationTranscript}
       <p className="text-xs">Acil Kriz Destek: <strong>112 Acil Çağrı</strong></p>
     </section>
-    {isParked && !demo && <section data-mental-history className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5">
+    {c.active && isParked && <section data-live-transcript className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5"><h2 className="font-bold">Görüşme Akışı</h2>{conversationTranscript}</section>}
+    {!c.active && isParked && !demo && <section data-mental-history className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5">
       <h2 className="font-bold">Stres Ağırlıkları Özeti</h2>
       <p className="text-xs text-slate-400">Bu grafik tanı veya ölçülmüş stres düzeyi değildir; tamamlanmış ve saklama izinli görüşmelerdeki tema paylarını gösterir.</p>
       {!stats.mentions ? <p>Henüz tema verisi yok. Eski kayıtların tamamlanma ve izin bilgisi doğrulanamadığı için grafiğe katılmaz.</p> : <>
@@ -75,7 +78,7 @@ export default function MentalPage() {
       <h2 className="font-bold">Kayıtlı Görüşme Özetleri</h2>
       <p>{c.history.length} kayıtlı görüşme</p>
       {c.active && <p className="text-xs text-slate-400">Bu görüşme bitmeden yeni özet veya geçmiş kaydı oluşturulmaz.</p>}
-      {c.summary && <div data-current-summary><h3 className="text-sm font-bold">Tamamlanan görüşmenin özeti</h3><p className="text-sm">{translateMood(c.summary.summaryText)}</p></div>}
+      {c.summary && <div data-current-summary><h3 className="text-sm font-bold">Tamamlanan görüşmenin özeti</h3><p className="text-sm">{translateMood(c.summary.summaryText)}</p><p data-summary-provider className="text-xs text-togg-turquoise">{c.summary.providerType === 'LIVE_OPENAI' ? 'LIVE_OPENAI — OpenAI özeti' : c.summary.providerType === 'LOCAL_DEMO_FALLBACK' ? 'LOCAL_DEMO_FALLBACK — sağlayıcıya ulaşılamadı, yerel özet' : c.summary.providerType === 'LOCAL_DEMO' ? 'LOCAL_DEMO — yerel özet' : 'Özet sağlayıcı bilgisi yok'}</p></div>}
       {!c.history.length && <p>Henüz kayıtlı görüşme yok. Yalnızca gerçekleştirdiğiniz ve kaydedilmesine izin verdiğiniz görüşmeler burada gösterilir.</p>}
       {[...c.history].reverse().map(h => <article key={h.id} data-history-id={h.id} className="border-t border-white/10 pt-3 text-sm"><time dateTime={h.date}>{new Date(h.date).toLocaleString('tr-TR')}</time><p>{translateMood(h.summaryText)}</p><p className="text-xs text-slate-400">{h.themes.join(' • ')}{h.moodTrend ? ` · ${translateMood(h.moodTrend)}` : ''}</p>{h.schemaVersion !== 2 && <p className="text-xs text-slate-400">Eski kayıt; tamamlanma ve izin bilgisi doğrulanamadı.</p>}</article>)}
       <p className="text-xs text-slate-400">Özet oluşturma ve kalıcı saklama ayrı işlemlerdir. Saklama izni Gizlilik & İzinler menüsünden yönetilir. Ham ses ve tam görüşme dökümü saklanmaz.</p>

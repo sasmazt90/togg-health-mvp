@@ -283,7 +283,8 @@ class LocalFallbackSessionAnalyzer(MentalSessionAnalyzer):
             "moodTrend": mood_trend,
             "professionalSupportSuggested": support_suggested,
             "professionalSupportReason": support_reason,
-            "analyzerType": "LOCAL_FALLBACK"
+            "analyzerType": "LOCAL_FALLBACK",
+            "providerType": "LOCAL_DEMO"
         }
 
 
@@ -324,11 +325,13 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
             )
             data = json.loads(resp.choices[0].message.content)
             data["analyzerType"] = "LIVE_LLM"
+            data["providerType"] = "LIVE_OPENAI"
             return data
         except Exception as e:
             fallback = LocalFallbackSessionAnalyzer()
             res = fallback.analyze_session(messages)
             res["fallbackReason"] = provider_error_category(e)
+            res["providerType"] = "LOCAL_DEMO_FALLBACK"
             return res
 
 

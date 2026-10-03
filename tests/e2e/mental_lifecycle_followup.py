@@ -47,6 +47,8 @@ with sync_playwright() as pw:
             page.on('request', lambda r: requests.append(r.post_data_json) if r.url.endswith('/mental/converse') else None)
             page.screenshot(path=str(OUT/'before-session.png'), full_page=True)
             text_start(page)
+            expect(page.locator('[data-live-transcript]')).to_be_visible()
+            assert page.locator('[data-live-transcript]').bounding_box()['x'] > page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).bounding_box()['x']
             for text in ['Bugün yeni bir kitap okudum.', 'Kitabın konusu arkadaşlık üzerineydi.', 'Arkadaşlarımla bu konuyu konuşmak iyi geldi.']:
                 send(page, text); assert storage(page) == []
             assert [len(r['history']) for r in requests] == [0, 2, 4], requests
@@ -184,6 +186,20 @@ with sync_playwright() as pw:
             return {'fullTranscriptPreserved':True,'readingPositionPreserved':True}
         finally:context.close()
     record('Reading earlier messages does not force scroll; all turns remain visible',reading_scroll)
+
+    def driving_during_summary():
+        context,page=fresh();pending=[]
+        try:
+            text_start(page);send(page,'Sentetik tamamlanmış kitap turu')
+            page.route('**/api/mental/analyze-session',lambda r:pending.append(r))
+            page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();page.wait_for_timeout(200);assert len(pending)==1
+            page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
+            expect(page.get_by_text('Sürüş geçişinde görüşme güvenle kapatıldı.',exact=False)).to_be_visible()
+            pending[0].fulfill(json={'summaryText':'GEÇ ÖZET','themes':['kitap'],'moodTrend':'NEUTRAL','providerType':'LOCAL_DEMO'})
+            page.wait_for_timeout(400);assert storage(page)==[] and 'GEÇ ÖZET' not in page.locator('body').inner_text()
+            return {'lateSummaryIgnoredAfterDriving':True}
+        finally:context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});context.close()
+    record('Driving during final analysis cancels the summary and prevents late storage',driving_during_summary)
     browser.close()
 
 (OUT/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')

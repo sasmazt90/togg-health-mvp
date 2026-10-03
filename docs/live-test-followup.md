@@ -1,58 +1,58 @@
-# Canlı test düzeltmeleri
+# CanlÄ± test dÃ¼zeltmeleri
 
-Başlangıç: main 7b3010ca5f03a55f0faa906296520d8097974acb; doğrulanmış Linux run 36955786226. Bu sonuçlar yeni değişikliklerin geçtiği anlamına gelmez.
+BaÅŸlangÄ±Ã§: main 7b3010ca5f03a55f0faa906296520d8097974acb; doÄŸrulanmÄ±ÅŸ Linux run 36955786226. Bu sonuÃ§lar yeni deÄŸiÅŸikliklerin geÃ§tiÄŸi anlamÄ±na gelmez.
 
-## Başlangıç sınıflandırması
+## BaÅŸlangÄ±Ã§ sÄ±nÄ±flandÄ±rmasÄ±
 
-| Belge konusu | Sınıf | Kaynak / sınır |
+| Belge konusu | SÄ±nÄ±f | Kaynak / sÄ±nÄ±r |
 |---|---|---|
-| Işık ve netlik etiketleri | Kodla doğrulanmış hata | Tüm kare ölçülüyordu; bilinmeyen durumda yeşil etiket. Kamera piksel kalitesi klinik yeterlilik değildir. |
-| Sağ/sol talimatı | Ek doğrulama gereken gözlem | Tek açıdaki talimat karşıya dönme isteğiydi; screenshot yaw işaretini kanıtlamaz. |
-| Üç ayrı açı | Yeni ürün gereksinimi | Başlangıçta tek karşı açı; üç açı mevcutmuş gibi gösterilmemeli. |
-| Siyah sonuç / bölge gösterimi | Kodla doğrulanmış hata | Durdurulan video; sabit demo mesh gerçek landmark gibi görünüyordu. |
-| İlk referans / bölgesel not | Kodla doğrulanmış hata | İlk taramada yüzde; tüm taramanın notu başka bölgeye aktarılıyordu. |
-| Aksiyon okları / hatırlatma | Hata ve yeni gereksinim | İşlevsiz oklar; kapalı uygulama bildirimi için tarayıcı timer uygun değil. |
-| Profilde ikinci gizlilik düğmesi | Tasarım gereksinimi | Üst menü izin denetimi korunmalı. |
-| Çok turlu görüşme / tüm mesajlar / bitişte özet | Kodla doğrulanmış hata ve yeni akış | Single-shot recognition; TTS sonrası başlamama; slice(-2); erken kayıt. |
-| Tekrarlayan cevap / robotik ses | Sağlayıcı ve ortam | Yerel sağlayıcı deterministik; yapılandırılmış anahtar başarılı istek demek değildir. |
-| Türkçe özet / grafik | Kodla doğrulanmış hata ve tasarım | Enum metni görünüyordu; taslak yüzdeleri gerçek veri değildir. |
-| Landolt boşluğu / yan yana düzen | Kodla doğrulanmış hata ve tasarım | Dash boşluğu kardinal açıyla uyuşmuyordu. Dört yön ve mm ölçüsü korunur. |
-| Seçmeli rapor / PDF | Kodla doğrulanmış hata ve yeni akış | Sadece alert; otomatik tüm kategoriler; örnek hasta kimliği. |
+| IÅŸÄ±k ve netlik etiketleri | Kodla doÄŸrulanmÄ±ÅŸ hata | TÃ¼m kare Ã¶lÃ§Ã¼lÃ¼yordu; bilinmeyen durumda yeÅŸil etiket. Kamera piksel kalitesi klinik yeterlilik deÄŸildir. |
+| SaÄŸ/sol talimatÄ± | Ek doÄŸrulama gereken gÃ¶zlem | Tek aÃ§Ä±daki talimat karÅŸÄ±ya dÃ¶nme isteÄŸiydi; screenshot yaw iÅŸaretini kanÄ±tlamaz. |
+| ÃœÃ§ ayrÄ± aÃ§Ä± | Yeni Ã¼rÃ¼n gereksinimi | BaÅŸlangÄ±Ã§ta tek karÅŸÄ± aÃ§Ä±; Ã¼Ã§ aÃ§Ä± mevcutmuÅŸ gibi gÃ¶sterilmemeli. |
+| Siyah sonuÃ§ / bÃ¶lge gÃ¶sterimi | Kodla doÄŸrulanmÄ±ÅŸ hata | Durdurulan video; sabit demo mesh gerÃ§ek landmark gibi gÃ¶rÃ¼nÃ¼yordu. |
+| Ä°lk referans / bÃ¶lgesel not | Kodla doÄŸrulanmÄ±ÅŸ hata | Ä°lk taramada yÃ¼zde; tÃ¼m taramanÄ±n notu baÅŸka bÃ¶lgeye aktarÄ±lÄ±yordu. |
+| Aksiyon oklarÄ± / hatÄ±rlatma | Hata ve yeni gereksinim | Ä°ÅŸlevsiz oklar; kapalÄ± uygulama bildirimi iÃ§in tarayÄ±cÄ± timer uygun deÄŸil. |
+| Profilde ikinci gizlilik dÃ¼ÄŸmesi | TasarÄ±m gereksinimi | Ãœst menÃ¼ izin denetimi korunmalÄ±. |
+| Ã‡ok turlu gÃ¶rÃ¼ÅŸme / tÃ¼m mesajlar / bitiÅŸte Ã¶zet | Kodla doÄŸrulanmÄ±ÅŸ hata ve yeni akÄ±ÅŸ | Single-shot recognition; TTS sonrasÄ± baÅŸlamama; slice(-2); erken kayÄ±t. |
+| Tekrarlayan cevap / robotik ses | SaÄŸlayÄ±cÄ± ve ortam | Yerel saÄŸlayÄ±cÄ± deterministik; yapÄ±landÄ±rÄ±lmÄ±ÅŸ anahtar baÅŸarÄ±lÄ± istek demek deÄŸildir. |
+| TÃ¼rkÃ§e Ã¶zet / grafik | Kodla doÄŸrulanmÄ±ÅŸ hata ve tasarÄ±m | Enum metni gÃ¶rÃ¼nÃ¼yordu; taslak yÃ¼zdeleri gerÃ§ek veri deÄŸildir. |
+| Landolt boÅŸluÄŸu / yan yana dÃ¼zen | Kodla doÄŸrulanmÄ±ÅŸ hata ve tasarÄ±m | Dash boÅŸluÄŸu kardinal aÃ§Ä±yla uyuÅŸmuyordu. DÃ¶rt yÃ¶n ve mm Ã¶lÃ§Ã¼sÃ¼ korunur. |
+| SeÃ§meli rapor / PDF | Kodla doÄŸrulanmÄ±ÅŸ hata ve yeni akÄ±ÅŸ | Sadece alert; otomatik tÃ¼m kategoriler; Ã¶rnek hasta kimliÄŸi. |
 
-## Değişiklik ve doğrulama notları
+## DeÄŸiÅŸiklik ve doÄŸrulama notlarÄ±
 
-- Landolt: dış çap 100, çizgi 20 ve boşluk 20 birim; sağda merkezlenmiş 20 birim açıklığı olan doğrudan yay path'i. Kalibre edilmiş küçük boyutlarda raster maske kullanılmaz. Rotasyon animasyonu yok. Dört yön gerçek tarayıcı pikselleriyle sınanır; motorun kalibre boyutu büyütülmez.
-- Paylaşım: başlangıçta tüm seçimler kapalı; veri olmayan kategoriler devre dışı. Tek seçilmiş veri modeli önizleme ve disposable yazdırma belgesine gider. Yazdırma/PDF kaydetme işletim sistemi penceresinde kullanıcı işlemi; dosya indirildi veya hekime gönderildi iddiası yok.
-- Cilt: yüz kutusu kalite bölgesi; 40–220 ve 4.0 eşikleri korunur. Boş ROI sayısal varsayılan üretmez. Sonuç açık etiketli anatomik şemadır; kamera kapalı, yüz fotoğrafı saklanmaz. Scan overlay gerçek landmark noktalarıdır, video object-contain ile aynı koordinat alanındadır.
-- Referans: ilk sayısal tarama, ayrı metadata; eski referans silinmez. Eski metadata yoksa veya ışık/netlik uyumsuzsa delta sunulmaz. Işık farkı 15 piksel birimi ve netlik oranı 2; yaw/pitch farkı .12, roll farkı .15 ve yüz ölçeği farkı .08, karşılaştırmayı engelleyen muhafazakâr MVP koşullarıdır; klinik doğrulanmış sınırlar değildir.
-- Trend: ilk referans sıfır değişim noktası sayılmaz; yalnızca karşılaştırılabilir takip deltasından grafik. Saat görünür, grafik ölçeği değerleri kapsar.
-- Hatırlatma: 28 takvim günü; aynı plan tek UID, düzenleme/iptal. Gerçek .ics dosyası DISPLAY alarm içerir, hassas sağlık başlığı içermez. İçe aktarım ve takvim bildirimi doğrulanamadığı açıkça gösterilir. Uygulama kapalıyken kendi servisleri çalıştırılmaz. Takvime aktarılmış kayıt uygulama içi iptal ile takvimden silinmez; kullanıcıya ayrıca silmesi gerektiği bildirilir.
+- Landolt: dÄ±ÅŸ Ã§ap 100, Ã§izgi 20 ve boÅŸluk 20 birim; saÄŸda merkezlenmiÅŸ 20 birim aÃ§Ä±klÄ±ÄŸÄ± olan doÄŸrudan yay path'i. Kalibre edilmiÅŸ kÃ¼Ã§Ã¼k boyutlarda raster maske kullanÄ±lmaz. Rotasyon animasyonu yok. DÃ¶rt yÃ¶n gerÃ§ek tarayÄ±cÄ± pikselleriyle sÄ±nanÄ±r; motorun kalibre boyutu bÃ¼yÃ¼tÃ¼lmez.
+- PaylaÅŸÄ±m: baÅŸlangÄ±Ã§ta tÃ¼m seÃ§imler kapalÄ±; veri olmayan kategoriler devre dÄ±ÅŸÄ±. Tek seÃ§ilmiÅŸ veri modeli Ã¶nizleme ve disposable yazdÄ±rma belgesine gider. YazdÄ±rma/PDF kaydetme iÅŸletim sistemi penceresinde kullanÄ±cÄ± iÅŸlemi; dosya indirildi veya hekime gÃ¶nderildi iddiasÄ± yok.
+- Cilt: yÃ¼z kutusu kalite bÃ¶lgesi; 40â€“220 ve 4.0 eÅŸikleri korunur. BoÅŸ ROI sayÄ±sal varsayÄ±lan Ã¼retmez. SonuÃ§ aÃ§Ä±k etiketli anatomik ÅŸemadÄ±r; kamera kapalÄ±, yÃ¼z fotoÄŸrafÄ± saklanmaz. Scan overlay gerÃ§ek landmark noktalarÄ±dÄ±r, video object-contain ile aynÄ± koordinat alanÄ±ndadÄ±r.
+- Referans: ilk sayÄ±sal tarama, ayrÄ± metadata; eski referans silinmez. Eski metadata yoksa veya Ä±ÅŸÄ±k/netlik uyumsuzsa delta sunulmaz. IÅŸÄ±k farkÄ± 15 piksel birimi ve netlik oranÄ± 2; yaw/pitch farkÄ± .12, roll farkÄ± .15 ve yÃ¼z Ã¶lÃ§eÄŸi farkÄ± .08, karÅŸÄ±laÅŸtÄ±rmayÄ± engelleyen muhafazakÃ¢r MVP koÅŸullarÄ±dÄ±r; klinik doÄŸrulanmÄ±ÅŸ sÄ±nÄ±rlar deÄŸildir.
+- Trend: ilk referans sÄ±fÄ±r deÄŸiÅŸim noktasÄ± sayÄ±lmaz; yalnÄ±zca karÅŸÄ±laÅŸtÄ±rÄ±labilir takip deltasÄ±ndan grafik. Saat gÃ¶rÃ¼nÃ¼r, grafik Ã¶lÃ§eÄŸi deÄŸerleri kapsar.
+- HatÄ±rlatma: 28 takvim gÃ¼nÃ¼; aynÄ± plan tek UID, dÃ¼zenleme/iptal. GerÃ§ek .ics dosyasÄ± DISPLAY alarm iÃ§erir, hassas saÄŸlÄ±k baÅŸlÄ±ÄŸÄ± iÃ§ermez. Ä°Ã§e aktarÄ±m ve takvim bildirimi doÄŸrulanamadÄ±ÄŸÄ± aÃ§Ä±kÃ§a gÃ¶sterilir. Uygulama kapalÄ±yken kendi servisleri Ã§alÄ±ÅŸtÄ±rÄ±lmaz. Takvime aktarÄ±lmÄ±ÅŸ kayÄ±t uygulama iÃ§i iptal ile takvimden silinmez; kullanÄ±cÄ±ya ayrÄ±ca silmesi gerektiÄŸi bildirilir.
 
-## Korunan doğrulamalar
+## Korunan doÄŸrulamalar
 
-Eski runner_v2 görme seçicisi `circle[stroke-dasharray]` yerine `svg[data-logmar]` kullanır; aynı üç doğru cevap sonrası gerçek boyut küçülme assertion korunur. Ek test dört yönün screenshot piksellerini doğrular.
+Eski runner_v2 gÃ¶rme seÃ§icisi `circle[stroke-dasharray]` yerine `svg[data-logmar]` kullanÄ±r; aynÄ± Ã¼Ã§ doÄŸru cevap sonrasÄ± gerÃ§ek boyut kÃ¼Ã§Ã¼lme assertion korunur. Ek test dÃ¶rt yÃ¶nÃ¼n screenshot piksellerini doÄŸrular.
 
-Test beklentisi değişikliği gerektiğinde eski güvenlik amacı kaldırılmaz. Örneğin yeni görüşme yaşam döngüsünde erken kayıt bekleyen test, bitiş öncesi sıfır ve bitiş sonrası tek kayıt doğrulamasına dönüşmelidir. Yeni kalıcı alanlar gizlilik silme listesine dahildir. Makineye özel dosya yolları ve gerçek yüz/ses verileri repoya veya CI artifact'ine eklenmez.
+Test beklentisi deÄŸiÅŸikliÄŸi gerektiÄŸinde eski gÃ¼venlik amacÄ± kaldÄ±rÄ±lmaz. Ã–rneÄŸin yeni gÃ¶rÃ¼ÅŸme yaÅŸam dÃ¶ngÃ¼sÃ¼nde erken kayÄ±t bekleyen test, bitiÅŸ Ã¶ncesi sÄ±fÄ±r ve bitiÅŸ sonrasÄ± tek kayÄ±t doÄŸrulamasÄ±na dÃ¶nÃ¼ÅŸmelidir. Yeni kalÄ±cÄ± alanlar gizlilik silme listesine dahildir. Makineye Ã¶zel dosya yollarÄ± ve gerÃ§ek yÃ¼z/ses verileri repoya veya CI artifact'ine eklenmez.
 
-Canlı sağlayıcı, gerçek Türkçe ses doğallığı, çok açılı fixture, Windows kısayol tanıtımı ve final Linux matrisi tamamlanmadan bütün kapsam tamamlandı denemez. Klinik doğruluk veya gerçek araç donanımı entegrasyonu iddiası yoktur.
+CanlÄ± saÄŸlayÄ±cÄ±, gerÃ§ek TÃ¼rkÃ§e ses doÄŸallÄ±ÄŸÄ±, Ã§ok aÃ§Ä±lÄ± fixture, Windows kÄ±sayol tanÄ±tÄ±mÄ± ve final Linux matrisi tamamlanmadan bÃ¼tÃ¼n kapsam tamamlandÄ± denemez. Klinik doÄŸruluk veya gerÃ§ek araÃ§ donanÄ±mÄ± entegrasyonu iddiasÄ± yoktur.
 
-## Ara doğrulama (Windows, anahtarsız yerel sağlayıcı)
+## Ara doÄŸrulama (Windows, anahtarsÄ±z yerel saÄŸlayÄ±cÄ±)
 
-- 114 birim testi geçti: başlangıçtaki 111 test korunur, 3 yeni test eklenir.
-- Typecheck, lint, fresh production build geçti. Lint önceki üç uyarıyı bildiriyor.
-- Tam ve production-only npm audit sıfır bulgu; bağımlılık manifest/lockfile değişmedi.
-- İlk/ikinci gerçek MediaPipe taraması UI üzerinden; altı bölge, kamera track sonlanması, metadata ve gerçek bölgesel delta doğrulandı.
-- Takvim dosyası gerçekten indirildi; UID tekrarsızlığı/iptal, depolama hatasının iletilmesi ve demo ayrımı doğrulandı.
-- Yerel gerçek print beforeprint olayında seçilen cilt belgesi incelendi; seçilmeyen kategoriler HTML ve metadata içinde yok. Bu kontrol Windows PDF kaydetme diyalog seçiminin tamamlandığını iddia etmez.
-- Yeni piksel testi PNG'yi tarayıcının yerel decoder'ıyla okur; Pillow ek bağımlılığı gerektirmez. Küçük ölçeklerde raster maskeyi kaldıran doğrudan Landolt yay path'i kullanılır.
-- Bu ara kanıt final Linux/Windows/ses/çok açı kabul matrisi yerine geçmez.
+- 114 birim testi geÃ§ti: baÅŸlangÄ±Ã§taki 111 test korunur, 3 yeni test eklenir.
+- Typecheck, lint, fresh production build geÃ§ti. Lint Ã¶nceki Ã¼Ã§ uyarÄ±yÄ± bildiriyor.
+- Tam ve production-only npm audit sÄ±fÄ±r bulgu; baÄŸÄ±mlÄ±lÄ±k manifest/lockfile deÄŸiÅŸmedi.
+- Ä°lk/ikinci gerÃ§ek MediaPipe taramasÄ± UI Ã¼zerinden; altÄ± bÃ¶lge, kamera track sonlanmasÄ±, metadata ve gerÃ§ek bÃ¶lgesel delta doÄŸrulandÄ±.
+- Takvim dosyasÄ± gerÃ§ekten indirildi; UID tekrarsÄ±zlÄ±ÄŸÄ±/iptal, depolama hatasÄ±nÄ±n iletilmesi ve demo ayrÄ±mÄ± doÄŸrulandÄ±.
+- Yerel gerÃ§ek print beforeprint olayÄ±nda seÃ§ilen cilt belgesi incelendi; seÃ§ilmeyen kategoriler HTML ve metadata iÃ§inde yok. Bu kontrol Windows PDF kaydetme diyalog seÃ§iminin tamamlandÄ±ÄŸÄ±nÄ± iddia etmez.
+- Yeni piksel testi PNG'yi tarayÄ±cÄ±nÄ±n yerel decoder'Ä±yla okur; Pillow ek baÄŸÄ±mlÄ±lÄ±ÄŸÄ± gerektirmez. KÃ¼Ã§Ã¼k Ã¶lÃ§eklerde raster maskeyi kaldÄ±ran doÄŸrudan Landolt yay path'i kullanÄ±lÄ±r.
+- Bu ara kanÄ±t final Linux/Windows/ses/Ã§ok aÃ§Ä± kabul matrisi yerine geÃ§mez.
 
-### SVG raster sınırı için teknik kanıt
+### SVG raster sÄ±nÄ±rÄ± iÃ§in teknik kanÄ±t
 
-Chromium `SVGRootPainter` açıklaması, SVG layout viewport'u kesirli kalırken root border box'ın paint sırasında piksele yuvarlandığını belirtir:
+Chromium `SVGRootPainter` aÃ§Ä±klamasÄ±, SVG layout viewport'u kesirli kalÄ±rken root border box'Ä±n paint sÄ±rasÄ±nda piksele yuvarlandÄ±ÄŸÄ±nÄ± belirtir:
 https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/core/paint/svg_root_painter.h
 
-Kesirli kare ölçüleri yatay/dikey farklı yuvarlanabiliyor. Dış SVG viewport'u tam piksel boyutunda ve minimum iki piksel boşlukludur; iç SVG'nin genişlik/yüksekliği mevcut kalibre `optotypeSizePx` değeridir. Görme sembolünün boyutu büyütülmez, logMAR hesabı değişmez. Runner/backlog rotasyon seçicileri dış SVG'nin gerçek dönüşümüne taşınır; fiziksel boyut assertion'ları içteki ölçülen simgede korunur. Yeni piksel testi dört yöne cevap doğruluğunu gerçek screenshot'ta denetler.
+Kesirli kare Ã¶lÃ§Ã¼leri yatay/dikey farklÄ± yuvarlanabiliyor. DÄ±ÅŸ SVG viewport'u tam piksel boyutunda ve minimum iki piksel boÅŸlukludur; iÃ§ SVG'nin geniÅŸlik/yÃ¼ksekliÄŸi mevcut kalibre `optotypeSizePx` deÄŸeridir. GÃ¶rme sembolÃ¼nÃ¼n boyutu bÃ¼yÃ¼tÃ¼lmez, logMAR hesabÄ± deÄŸiÅŸmez. Runner/backlog rotasyon seÃ§icileri dÄ±ÅŸ SVG'nin gerÃ§ek dÃ¶nÃ¼ÅŸÃ¼mÃ¼ne taÅŸÄ±nÄ±r; fiziksel boyut assertion'larÄ± iÃ§teki Ã¶lÃ§Ã¼len simgede korunur. Yeni piksel testi dÃ¶rt yÃ¶ne cevap doÄŸruluÄŸunu gerÃ§ek screenshot'ta denetler.
 
 
 ## Follow-up implementation
@@ -116,3 +116,19 @@ requirement, and continues the independently runnable browser/audio matrix.
 This acceptance item remains pending upstream remediation or an independently
 validated dependency migration.
 Source: https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+
+
+### Final lifecycle and evidence refinements
+
+The active conversation transcript occupies the right column, matching the supplied
+layout. Before/after the conversation the right column shows real analysis/history;
+the transcript remains available after completion. A driving transition during final
+summary analysis now also invalidates the pending result, verified by a new race test.
+Summary providerType is explicit, including LOCAL_DEMO_FALLBACK.
+
+The initial native three-turn Linux check accepted the first turn but not the second.
+Its next verification waits for the current recognition instance's audio-start state
+and captures actual native event diagnostics on failure. No transcript event or voice
+result is substituted. Acceptance remains pending until that real check succeeds.
+Multi-angle tests additionally verify cancellation and corrupt-reference preservation.
+Reminder and selected-preview screenshots are captured alongside existing behavior checks.

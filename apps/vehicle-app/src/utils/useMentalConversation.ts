@@ -213,10 +213,10 @@ export function useMentalConversation(parked: boolean) {
         body: JSON.stringify({ messages: completed.map(m => ({ role: m.sender === 'USER' ? 'user' : 'assistant', content: m.text })), cloudConsent: settings.current.cloudConsent }), signal: controller.signal });
       if (!response.ok) throw new Error('Summary service');
       const data = await response.json();
-      if (!r.mounted || r.epoch !== epoch) return;
+      if (!r.mounted || r.epoch !== epoch || !settings.current.parked) return;
       if (typeof data.summaryText !== 'string' || !Array.isArray(data.themes) || !data.themes.every((t: unknown) => typeof t === 'string')) throw new Error('Invalid summary');
       const item: MentalHistoryItem = { id: r.id, date: new Date().toISOString(), summaryText: data.summaryText, themes: data.themes,
-        moodTrend: data.moodTrend, schemaVersion: 2, completed: true, consented: false };
+        moodTrend: typeof data.moodTrend === 'string' ? data.moodTrend : undefined, providerType: data.providerType, schemaVersion: 2, completed: true, consented: false };
       setSummary(item); setPhase('completed');
       if (!isDemoMode() && isMentalSummarySavingAllowed()) {
         // This is the last operation before storage. Consent can change during analysis.
@@ -247,7 +247,7 @@ export function useMentalConversation(parked: boolean) {
     window.addEventListener('storage', revoke); window.addEventListener('attune-privacy', revoke);
     return () => { r.mounted = false; actions.current.cancel(); controller.abort(); window.speechSynthesis?.removeEventListener('voiceschanged', voices); window.removeEventListener('storage', revoke); window.removeEventListener('attune-privacy', revoke); };
   }, []);
-  useEffect(() => { if (!parked && runtime.current.active) actions.current.cancel('Sürüş geçişinde görüşme güvenle kapatıldı. Park ettiğinizde yeni görüşme başlatabilirsiniz.'); }, [parked]);
+  useEffect(() => { if (!parked && (runtime.current.active || phase === 'ending')) actions.current.cancel('Sürüş geçişinde görüşme güvenle kapatıldı. Park ettiğinizde yeni görüşme başlatabilirsiniz.'); }, [parked, phase]);
   useEffect(() => { if (!voiceEnabled) actions.current.audioOff(); }, [voiceEnabled]);
   function changeCloud(value: boolean) { if (!value && (runtime.current.active || phase === 'ending')) cancel('Bulut aktarım izni geri çekildi. Görüşme kapatıldı.'); setCloudConsent(value); }
   function changeSpeech(value: boolean) { if (!value && runtime.current.active) cancel('Ses aktarım izni geri çekildi. Görüşme kapatıldı.'); setSpeechConsent(value); }
