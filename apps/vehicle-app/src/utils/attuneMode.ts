@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
   LATEST_SKIN: 'togg_health_latest_skin',
   SKIN_BASELINE: 'togg_health_skin_baseline',
   SKIN_BASELINE_META: 'togg_health_skin_baseline_meta',
+  SKIN_MULTI_BASELINE: 'togg_health_skin_multi_baseline_v2',
   SKIN_REMINDER: 'togg_health_skin_reminder',
   SKIN_HISTORY: 'togg_health_skin_history',
   LATEST_VISION: 'togg_health_latest_vision',

@@ -20,6 +20,7 @@ import {
 } from '../../data/skinDemoFixture';
 import { isDemoMode, STORAGE_KEYS, isCameraAllowed } from '../../utils/attuneMode';
 import { SkinInference } from '../../utils/skinInference';
+import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
 import { SkinResultView } from '../../components/skin/SkinResultView';
@@ -35,6 +36,10 @@ export default function SkinPage() {
   const [scanState, setScanState] = useState<'READY' | 'CAMERA_ACTIVE' | 'COMPLETED' | 'ERROR'>('READY');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<number>(0);
+  const [multiAngle, setMultiAngle] = useState(true);
+  const [angleIndex, setAngleIndex] = useState(0);
+  const [completedAngles, setCompletedAngles] = useState<SkinAngle[]>([]);
+  const angleRuntime = useRef({ enabled: true, index: 0, captures: {} as Partial<Record<SkinAngle, AngleCapture>> });
   const [selectedRegionId, setSelectedRegionId] = useState<SkinRegionId>('rightCheek');
   const [activeModal, setActiveModal] = useState<'trend' | 'observation' | 'actions' | null>(null);
 
@@ -416,6 +421,40 @@ export default function SkinPage() {
   };
 
   // Real-time video işleme döngüsü (requestAnimationFrame)
+  const finishMultiScan = (captures: Record<SkinAngle, AngleCapture>) => {
+    const current: MultiAngleReference = { id: `skin-${Date.now()}`, timestamp: new Date().toISOString(), schemaVersion: 2, scope: 'three-angle-v2', captures };
+    try {
+      const prior: MultiAngleReference | null = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) || 'null');
+      const comparison = compareMultiAngle(current, prior);
+      const finalResult: SkinAnalysisResult = {
+        id: current.id, timestamp: current.timestamp, quality: captures.FRONT.quality, regions: comparison.regions,
+        usedMediaPipe: true, isBaseline: !prior, highestChangeRegion: comparison.highestChangeRegion,
+        highestChangePct: comparison.highestChangePct, referralSuggested: comparison.referralSuggested,
+        comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose, baselineId: prior?.id, baselineTimestamp: prior?.timestamp,
+        comparisonUnavailable: comparison.unavailable.length > 0,
+        clinicalNoteTr: !prior ? 'İlk üç açılı referans oluşturuldu. Eski tek açılı referansınız korunur ve bu taramayla karıştırılmaz.' : comparison.unavailable.length ? 'Bazı açılarda ışık/netlik/poz koşulları uyumsuz. İlgili açıların değişimi hesaplanmadı.' : 'Ön, anatomik sağ ve sol pozlar aynı açılardaki ilk referansla karşılaştırıldı. Klinik değerlendirme değildir.'
+      };
+      if (!SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
+      // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
+      const history = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_HISTORY) || '[]');
+      if (!Array.isArray(history)) throw new Error('Invalid history');
+      const keys = [STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.LATEST_SKIN, STORAGE_KEYS.SKIN_HISTORY];
+      const previous = keys.map(key => localStorage.getItem(key));
+      try {
+        localStorage.setItem(STORAGE_KEYS.LATEST_SKIN, JSON.stringify(finalResult));
+        localStorage.setItem(STORAGE_KEYS.SKIN_HISTORY, JSON.stringify([finalResult, ...history].slice(0, 10)));
+        if (!prior) localStorage.setItem(STORAGE_KEYS.SKIN_MULTI_BASELINE, JSON.stringify(current));
+      } catch (error) {
+        keys.forEach((key, i) => { try { if (previous[i] === null) localStorage.removeItem(key); else localStorage.setItem(key, previous[i]!); } catch {} });
+        throw error;
+      }
+      setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
+    } catch {
+      setErrorMessage('Üç açılı ölçüm veya referans kaydı doğrulanamadı. Eski tek açılı referansınız değiştirilmedi.'); setScanState('ERROR');
+    }
+  };
+  const finishMultiRef = useRef(finishMultiScan);
+  finishMultiRef.current = finishMultiScan;
   const finishRef = useRef(finishScan);
   finishRef.current = finishScan;
   useEffect(() => {
@@ -511,30 +550,47 @@ export default function SkinPage() {
           } else {
             // REAL MOD: Gerçek MediaPipe + Yüz Tespiti + Hizalama + Kalite Doğrulaması
             const isMPLoaded = isMediaPipeLoadedRef.current;
+            const captureState = angleRuntime.current;
+            const target = SKIN_ANGLES[captureState.index];
+            const aligned = captureState.enabled ? matchesSkinAngle(curAlign, target) : curAlign.isAligned;
             const isValid =
               isMPLoaded &&
               curAlign.faceDetected &&
               curAlign.isMediaPipeActive &&
-              curAlign.isAligned &&
+              aligned &&
               curQual.isValid;
 
             if (isValid) {
               consecutiveValidFramesRef.current += 1;
               const progress = Math.min(100, Math.round((consecutiveValidFramesRef.current / 15) * 100));
-              setScanProgress(progress);
+              setScanProgress(captureState.enabled ? Math.round((captureState.index * 100 + progress) / 3) : progress);
               setGuidanceText('Hizalama uygun. Lütfen sabit durun...');
 
               if (progress >= 100) {
+                if (captureState.enabled) {
+                  try {
+                    const capture = await captureSkinAngle(ctx, curAlign, curQual, target, captureState.captures);
+                    if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
+                    captureState.captures[target] = capture;
+                    setCompletedAngles([...SKIN_ANGLES.slice(0, captureState.index + 1)]);
+                    if (captureState.index === 2) { finishMultiRef.current(captureState.captures as Record<SkinAngle, AngleCapture>); return; }
+                    captureState.index++; setAngleIndex(captureState.index); consecutiveValidFramesRef.current = 0;
+                  } catch {
+                    consecutiveValidFramesRef.current = 0;
+                    setGuidanceText('Bu poz güvenilir ölçülemedi veya önceki kareyle aynı. İstenen açıyı yeniden deneyin.');
+                  }
+                  schedule(); return;
+                }
                 finishScan(false, curAlign, curQual);
                 return;
               }
             } else {
               // Koşullar bozulursa ilerlemeyi durdur veya geriye al
-              consecutiveValidFramesRef.current = Math.max(0, consecutiveValidFramesRef.current - 1);
+              consecutiveValidFramesRef.current = captureState.enabled ? 0 : Math.max(0, consecutiveValidFramesRef.current - 1);
               if (!curAlign.faceDetected) {
                 setGuidanceText('Yüz algılanamadı. Kameranın karşısına geçin.');
-              } else if (!curAlign.isAligned) {
-                setGuidanceText(curAlign.guidanceTextTr || 'Yüzünüzü kılavuz alana ortalayın.');
+              } else if (!aligned) {
+                setGuidanceText(captureState.enabled ? angleGuidance(curAlign, target) : curAlign.guidanceTextTr || 'Yüzünüzü kılavuz alana ortalayın.');
               } else if (!curQual.isValid) {
                 setGuidanceText(curQual.warningMessageTr || 'Ortam aydınlatmasını kontrol edin.');
               }
@@ -560,6 +616,8 @@ export default function SkinPage() {
     if (!isParked || scanState === 'CAMERA_ACTIVE') return;
     const acquisition = ++acquisitionRef.current;
     setErrorMessage(null);
+    angleRuntime.current = { enabled: multiAngle, index: 0, captures: {} };
+    setAngleIndex(0); setCompletedAngles([]);
 
     // 1. Gizlilik Tercihi Kontrolü
     if (!isCameraAllowed()) {
@@ -685,7 +743,7 @@ export default function SkinPage() {
   return (
     <div className="space-y-4 max-w-5xl mx-auto select-none">
       {/* Gizli kanvas (MediaPipe piksel analizi) */}
-      <canvas ref={canvasRef} className="hidden" data-mediapipe-ready={isMediaPipeLoaded} data-mediapipe-active={alignment.isMediaPipeActive} data-face-detected={alignment.faceDetected} data-landmark-count={alignment.landmarks?.length || 0} data-quality-status={quality.status} />
+      <canvas ref={canvasRef} className="hidden" data-mediapipe-ready={isMediaPipeLoaded} data-mediapipe-active={alignment.isMediaPipeActive} data-face-detected={alignment.faceDetected} data-landmark-count={alignment.landmarks?.length || 0} data-quality-status={quality.status} data-yaw={alignment.yaw} data-angle={SKIN_ANGLES[angleIndex]} data-completed-angles={completedAngles.join(',')} />
       {scanState === 'READY' && errorMessage && <p role="alert" className="text-amber-200">{errorMessage}</p>}
 
       {/* ============================================================ */}
@@ -730,27 +788,33 @@ export default function SkinPage() {
       {/* SCREEN 1: SKIN START VIEW (REFERANS 1 & 2)                  */}
       {/* ============================================================ */}
       {scanState === 'READY' && (
-        <SkinStartView onStart={startCamera} />
+        <><label className="flex gap-2 text-sm"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Üç açılı tarama: ön, anatomik sağ, anatomik sol. Kapalıyken eski tek karşı açı akışı kullanılır.</label><SkinStartView onStart={startCamera} /></>
       )}
 
       {/* ============================================================ */}
       {/* SCREEN 2: SKIN ACTIVE SCAN (REFERANS 1)                     */}
       {/* ============================================================ */}
       {scanState === 'CAMERA_ACTIVE' && (
+        <>
+        {multiAngle && !isDemoMode() && <div data-angle-progress className="space-y-2"><p>Aşama {angleIndex + 1}/3: {ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}</p><p className="text-xs">{SKIN_ANGLES.map(a => `${ANGLE_LABELS[a]}: ${completedAngles.includes(a) ? 'tamamlandı' : a === SKIN_ANGLES[angleIndex] ? 'bekleniyor' : 'sırada'}`).join(' • ')}</p><p className="text-xs text-slate-400">Önizleme aynasız ham kamera koordinatlarıyla gösterilir. Yönler sizin anatomik sağ ve solunuzdur. Yan pozda yalnızca görünen yanak ölçülür.</p><button onClick={() => { consecutiveValidFramesRef.current = 0; setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { setScanState('READY'); setMediaStream(null); }} className="text-sm underline ml-4">Taramayı İptal Et</button></div>}
         <SkinActiveScan
           scanProgress={scanProgress}
           videoRef={videoRef}
           isLiveVideo={isLiveVideo}
-          alignment={alignment}
+          alignment={multiAngle && !isDemoMode() ? { ...alignment, isAligned: matchesSkinAngle(alignment, SKIN_ANGLES[angleIndex]) } : alignment}
           quality={quality}
           guidanceText={guidanceText}
+          multiAngle={multiAngle && !isDemoMode()}
         />
+        </>
       )}
 
       {/* ============================================================ */}
       {/* SCREEN 3: SKIN RESULT VIEW (REFERANS 1, 2, 3, 4)            */}
       {/* ============================================================ */}
       {scanState === 'COMPLETED' && (isDemoMode() || !!analysisResult) && (
+        <>
+        <p className="text-xs text-slate-300">{analysisResult?.comparisonScope === 'three-angle-v2' ? 'Üç açılı tarama tamamlandı. Alın, burun, çene ve göz çevresi ön pozdan; yanaklar göründükleri yan pozdan ölçüldü.' : 'Tek karşı açı sonucu; üç açılı tarama değildir.'}</p>
         <SkinResultView
           currentRegion={currentRegionData}
           onPrev={handlePrevRegion}
@@ -764,6 +828,7 @@ export default function SkinPage() {
           baselineTimestamp={analysisResult?.baselineTimestamp}
           baselineId={analysisResult?.baselineId}
         />
+        </>
       )}
 
       {/* ============================================================ */}

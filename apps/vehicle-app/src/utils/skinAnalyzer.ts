@@ -441,7 +441,8 @@ export class SkinAnalyzer {
     ctx: CanvasRenderingContext2D,
     width: number,
     height: number,
-    alignment?: FaceAlignment
+    alignment?: FaceAlignment,
+    visibleRegionIds?: string[]
   ): Record<string, RegionMetrics> {
     const lms = alignment?.landmarks;
     const b = alignment?.box || { x: width * 0.25, y: height * 0.2, width: width * 0.5, height: height * 0.6 };
@@ -490,6 +491,7 @@ export class SkinAnalyzer {
     const results: Record<string, RegionMetrics> = {};
 
     for (const roi of roiDefinitions) {
+      if (visibleRegionIds && !visibleRegionIds.includes(roi.id)) continue;
       const rx = Math.max(0, Math.ceil(roi.x));
       const ry = Math.max(0, Math.ceil(roi.y));
       const rw = Math.min(width, Math.floor(roi.x + roi.w)) - rx;

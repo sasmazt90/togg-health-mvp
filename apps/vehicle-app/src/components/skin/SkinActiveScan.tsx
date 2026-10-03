@@ -14,6 +14,7 @@ interface SkinActiveScanProps {
   alignment?: FaceAlignment;
   quality?: ImageQuality;
   guidanceText?: string;
+  multiAngle?: boolean;
 }
 
 export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
@@ -22,7 +23,8 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
   isLiveVideo = false,
   alignment,
   quality,
-  guidanceText
+  guidanceText,
+  multiAngle = false
 }) => {
   const defaultRegion = getRegionData('forehead');
 
@@ -109,7 +111,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
             </div>
           </div>
 
-          <p className="text-xs text-slate-400">Yüz bölgesinin kamera parlaklığı ve piksel netliği kontrol edilir; lux, hareket veya klinik yeterlilik ölçümü değildir. Şu an tek karşı açı değerlendirilir.</p>
+          <p className="text-xs text-slate-400">Yüz bölgesinin kamera parlaklığı ve piksel netliği kontrol edilir; lux, hareket veya klinik yeterlilik ölçümü değildir. {multiAngle ? 'Üç ayrı poz sırayla doğrulanır.' : 'Şu an tek karşı açı değerlendirilir.'}</p>
           {/* 3 Durum Satırı (Yalnızca Temiz Rozetler) */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/90 text-sm">

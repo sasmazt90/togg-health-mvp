@@ -27,9 +27,12 @@ export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose 
       if (!raw) return [];
       const list = JSON.parse(raw);
       if (!Array.isArray(list) || list.length === 0) return [];
+      const latest = JSON.parse(localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) || 'null');
+      const scope = latest?.comparisonScope || 'single-front-v1';
+      const referenceId = latest?.baselineId || (latest?.isBaseline ? latest.id : undefined);
 
       // Ters kronolojik olarak saklandığı için grafikte soldan sağa kronolojik dizelim
-      return [...list].reverse().filter((item: any) => !item.isBaseline && !item.comparisonUnavailable && typeof item.regions?.[region.id]?.changeFromBaselinePct === 'number').map((item: any) => {
+      return [...list].reverse().filter((item: any) => (item.comparisonScope || 'single-front-v1') === scope && item.baselineId === referenceId && !item.isBaseline && !item.comparisonUnavailable && typeof item.regions?.[region.id]?.changeFromBaselinePct === 'number').map((item: any) => {
         const d = item.timestamp ? new Date(item.timestamp) : new Date();
         const dateStr = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
         const val = item.regions?.[region.id]?.changeFromBaselinePct ?? 0;
