@@ -101,3 +101,18 @@ preflight produced `not-allowed` with zero OpenAI requests. Windows native three
 input remains pending; it is never inferred from text/TTS or Linux native results.
 Any extra paid test requires additional bounded approval. Technical playback
 success does not prove Turkish voice naturalness or first audible sound.
+
+
+### Newly reviewed dependency advisory
+
+On the final fresh audit, GHSA-vfj7-8cjw-p6xm (updated 2 October 2026)
+reports braces <=3.0.3 as vulnerable; the upstream advisory lists no patched
+version and npm still publishes 3.0.3 as latest. The full development audit now
+has seven high findings propagated through Tailwind/ESLint glob dependencies.
+Production-only audit remains zero. Earlier zero counts are historical results.
+We do not suppress this advisory, rename/vendor a package to hide it, or claim
+zero findings. CI collects both audit reports, retains the failing zero-findings
+requirement, and continues the independently runnable browser/audio matrix.
+This acceptance item remains pending upstream remediation or an independently
+validated dependency migration.
+Source: https://github.com/advisories/GHSA-vfj7-8cjw-p6xm

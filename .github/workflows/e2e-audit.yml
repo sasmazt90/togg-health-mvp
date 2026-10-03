@@ -50,13 +50,21 @@ jobs:
         run: npm run build 2>&1 | tee audit-results/build.log
       - name: Security and environment reports
         run: |
+          set +e
+          status=0
           npm ls --all --json > audit-results/npm-ls.json
+          if [ "$?" -ne 0 ]; then status=1; fi
           npm ls next react react-dom postcss glob eslint-config-next --all > audit-results/dependency-versions.txt
+          if [ "$?" -ne 0 ]; then status=1; fi
           npm audit --json > audit-results/npm-audit.json
+          if [ "$?" -ne 0 ]; then status=1; fi
           npm audit --omit=dev --json > audit-results/npm-audit-production.json
+          if [ "$?" -ne 0 ]; then status=1; fi
           python -m bandit -r services -f json -o audit-results/bandit.json || true
           python -m pip freeze > audit-results/python-freeze.txt
+          test "$status" -eq 0
       - name: Controlled image and spoken Turkish fixtures plus OS microphone
+        if: ${{ !cancelled() }}
         run: |
           mkdir -p audit-fixtures
           ffmpeg -y -loop 1 -i apps/vehicle-app/public/images/demo-skin-face.jpg -vf 'scale=640:480:force_original_aspect_ratio=decrease,pad=640:480:(ow-iw)/2:(oh-ih)/2,setsar=1' -t 3 -r 15 -pix_fmt yuv420p audit-fixtures/face.y4m

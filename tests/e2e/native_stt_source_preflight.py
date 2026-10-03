@@ -34,4 +34,3 @@ with sync_playwright() as pw:
     context.close();browser.close()
 (OUT/'source-preflight.json').write_text(json.dumps(proof,indent=2),encoding='utf-8')
 print(json.dumps(proof))
-
