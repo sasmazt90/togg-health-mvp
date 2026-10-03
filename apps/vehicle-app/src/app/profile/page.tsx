@@ -273,6 +273,9 @@ export default function ProfilePage() {
             </div>
             <p className="text-xs text-slate-400">Klinik tanı değildir. Seçtiğiniz bilgiler bu cihazın yazdırma penceresine aktarılır; hekime otomatik gönderilmez. PDF kaydetme hedefini bu pencerede siz seçersiniz.</p>
             {shareError && <p role="alert">{shareError}</p>}
+            <p id="share-print-status" role="status" className="text-xs text-slate-300">
+              {!isParked ? 'Yazdırma yalnız PARK durumunda kullanılabilir.' : buildShareSections(selection, vision, skin, mental).length === 0 ? 'Yazdırmak için en az bir kayıtlı sonucu seçin.' : 'Yalnız seçtiğiniz kategoriler yazdırılır.'}
+            </p>
             <div className="flex justify-end gap-3 pt-2">
               <button
                 onClick={() => setShowShareModal(false)}
@@ -282,6 +285,7 @@ export default function ProfilePage() {
               </button>
               <button
                 disabled={!isParked || buildShareSections(selection, vision, skin, mental).length === 0}
+                aria-describedby="share-print-status"
                 onClick={() => {
                   setShareError(null);
                   try {
@@ -290,7 +294,7 @@ export default function ProfilePage() {
                     setShareError('Yazdırma penceresi açılamadı. Rapor indirilmedi veya gönderilmedi.');
                   }
                 }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-togg-turquoise hover:bg-[#33D0EE] text-togg-darkBlue rounded-xl text-xs font-bold shadow-md"
+                className="flex items-center gap-2 px-5 py-2.5 bg-togg-turquoise enabled:hover:bg-[#33D0EE] text-togg-darkBlue rounded-xl text-xs font-bold shadow-md disabled:bg-slate-800 disabled:text-slate-400 disabled:[box-shadow:none] disabled:cursor-not-allowed"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Yazdır / PDF olarak kaydet</span>

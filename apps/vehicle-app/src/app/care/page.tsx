@@ -287,7 +287,7 @@ function CareContent() {
             </h1>
 
             <p className="text-sm text-slate-300">
-              Kabin içi sağlık değerlendirmeleriniz, takviminiz ve araç rotanızla eşleştirilmiş uzman randevuları.
+              Branşınıza göre uzman seçeneklerini inceleyin. Güncel uygunluğu ve randevuyu sağlayıcının sayfasında doğrulayın.
             </p>
           </div>
 
@@ -296,6 +296,8 @@ function CareContent() {
             <span>Demo Takvim • Tahmini Ulaşım</span>
           </div>
         </div>
+
+        <p data-care-limits className="text-xs text-amber-200 leading-relaxed">Takvim ve ulaşım bilgileri örnektir. Kişisel takviminize veya canlı rota hesabına bağlı değildir. Burada randevu oluşturulmaz.</p>
 
         {/* AKTİF SEVK BAĞLAMI BİLDİRİMİ */}
         {referralContext && (
@@ -375,7 +377,7 @@ function CareContent() {
             <div className="space-y-3 max-w-2xl">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 text-[10px] font-semibold tracking-wider uppercase">
-                  Önerilen Eşleşme (%{featuredSlot.matchScore})
+                  Örnek eşleşme puanı: %{featuredSlot.matchScore}
                 </span>
                 <span className="px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-800 text-[10px] font-mono">
                   {featuredSlot.isOnline ? 'Online Görüşme' : 'Yüz Yüze Muayene'}
@@ -402,12 +404,12 @@ function CareContent() {
 
                 <span className="flex items-center gap-1.5">
                   <Car className="w-4 h-4 text-togg-turquoise" />
-                  <span>{featuredSlot.isOnline ? 'Ulaşım Gerektirmez' : `${featuredSlot.travelTimeMin} dk araçla`}</span>
+                  <span>{featuredSlot.isOnline ? 'Ulaşım gerektirmez (çevrimiçi)' : `Örnek ulaşım: ${featuredSlot.travelTimeMin} dk`}</span>
                 </span>
 
                 <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>Takviminizle Uyumlu</span>
+                  <span>{featuredSlot.dateTime ? (featuredSlot.calendarConflict ? 'Demo takvim: örnek çakışma' : 'Demo takvim: örnek çakışma yok') : 'Demo takvim: saat doğrulanmadı'}</span>
                 </span>
               </div>
             </div>
@@ -415,7 +417,7 @@ function CareContent() {
             {/* Sağ: Önerilen Saat ve Birincil CTA */}
             <div className="flex lg:flex-col items-center lg:items-end justify-between gap-4 shrink-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-white/10">
               <div className="text-left lg:text-right space-y-0.5">
-                <div className="text-[11px] text-slate-400 uppercase tracking-wider font-mono">Önerilen Saat</div>
+                <div className="text-[11px] text-slate-400 uppercase tracking-wider font-mono">Listelenen Saat</div>
                 <div className="text-lg md:text-xl font-bold text-white font-mono">{featuredSlot.displayTime}</div>
               </div>
 
@@ -447,7 +449,7 @@ function CareContent() {
       {secondarySlots.length > 0 && (
         <section className="space-y-3">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
-            Diğer Uygun Seçenekler
+            Diğer Uzman Seçenekleri
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -464,6 +466,7 @@ function CareContent() {
                     </span>
                   </div>
 
+                  <p className="text-[10px] text-slate-400">{slot.sourceBadge}</p>
                   <p className="text-xs text-slate-400 flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                     <span>{slot.clinicName} • {slot.locationLabel}</span>
@@ -472,7 +475,7 @@ function CareContent() {
                   <div className="flex items-center gap-3 text-xs text-slate-300 pt-1">
                     <span className="text-togg-turquoise font-mono font-bold">{slot.displayTime}</span>
                     <span className="text-slate-600">•</span>
-                    <span>{slot.isOnline ? 'Online' : `${slot.travelTimeMin} dk sürüş`}</span>
+                    <span>{slot.isOnline ? 'Online' : `Örnek ulaşım: ${slot.travelTimeMin} dk`}</span>
                   </div>
                 </div>
 
@@ -510,7 +513,7 @@ function CareContent() {
 
             <div className="space-y-3 text-xs text-slate-300 leading-relaxed">
               <p>
-                Attune.more açık onayınız olmadan dış hekim randevu portallarına adınıza kayıt oluşturmaz.
+                Bu adım yalnız yönlendirmeyi hazırlar. Randevu oluşturulmaz ve bilgileriniz sağlayıcıya gönderilmez.
               </p>
 
               <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 space-y-1">
