@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { AccessibleDialog } from '../../components/AccessibleDialog';
 import { useSearchParams } from 'next/navigation';
 import { useVehicle } from '../../context/VehicleContext';
 import { ReferralContext } from '@packages/health-profile/types';
@@ -50,6 +51,9 @@ function CareContent() {
   const [filterType, setFilterType] = useState<'ALL' | 'IN_PERSON' | 'ONLINE'>('ALL');
   const [slots, setSlots] = useState<CareSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
+  const searchGeneration = useRef(0);
+  const activeSearch = useRef<AbortController | null>(null);
 
   // Ortak Sevk Bağlamı
   const [referralContext, setReferralContext] = useState<ReferralContext | null>(null);
@@ -77,16 +81,16 @@ function CareContent() {
           setSelectedSpecialty(parsed.specialty);
         }
       }
-    } catch (e) {
-      console.warn(e);
-    }
+    } catch { /* Unreadable context is preserved, never exposed in logs. */ }
   }, [paramSpecialty]);
 
-  const fetchAppointments = async (specialty: string) => {
-    setLoading(true);
+  const fetchAppointments = async (specialty: string, controller: AbortController, generation: number) => {
+    setLoading(true); setSlots([]); setSearchNotice(null);
+    const deadline = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await fetch('http://localhost:8000/api/care/match', {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           specialty,
@@ -98,11 +102,14 @@ function CareContent() {
 
       if (res.ok) {
         const data = await res.json();
+        if (generation !== searchGeneration.current) return;
         setSlots(data.matchedSlots || []);
       } else {
         throw new Error('API Hatası');
       }
-    } catch (err) {
+    } catch {
+      if (generation !== searchGeneration.current) return;
+      setSearchNotice('Uzman arama hizmetine ulaşılamadı. Aşağıdaki seçenekler örnektir; güncel uygunluk veya randevu onayı değildir. Yeniden deneyebilirsiniz.');
       // Demo Hekim Verileri
       if (specialty === 'Dermatoloji') {
         setSlots([
@@ -220,12 +227,17 @@ function CareContent() {
         ]);
       }
     } finally {
-      setLoading(false);
+      clearTimeout(deadline);
+      if (generation === searchGeneration.current) setLoading(false);
     }
   };
 
+  const invalidateSearch = () => { searchGeneration.current++; activeSearch.current?.abort(); activeSearch.current = null; };
   useEffect(() => {
-    fetchAppointments(selectedSpecialty);
+    const controller = new AbortController(); activeSearch.current = controller;
+    const generation = ++searchGeneration.current;
+    void fetchAppointments(selectedSpecialty, controller, generation);
+    return () => { invalidateSearch(); controller.abort(); };
   }, [selectedSpecialty]);
 
   const filteredSlots = slots.filter((slot) => {
@@ -350,6 +362,9 @@ function CareContent() {
         </div>
       </section>
 
+      {loading && <p role="status" className="p-4 text-sm text-slate-300">Uzman seçenekleri hazırlanıyor…</p>}
+      {searchNotice && <div role="status" className="p-4 rounded-xl border border-amber-800 text-sm text-amber-200"><p>{searchNotice}</p><button className="underline mt-2" onClick={() => { invalidateSearch(); const controller = new AbortController(); activeSearch.current = controller; const generation = ++searchGeneration.current; void fetchAppointments(selectedSpecialty, controller, generation); }}>Yeniden ara</button></div>}
+      {!loading && !filteredSlots.length && <p role="status" className="p-4 text-sm">Bu filtre için uygun seçenek bulunamadı. Diğer görüşme türlerini inceleyebilirsiniz.</p>}
       {/* 2. ÖNE ÇIKAN UZMAN KARTI (FEATURED PROVIDER CARD) */}
       {featuredSlot && (
         <section className="bg-cockpit-surface border border-togg-turquoise/30 rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden group hover:border-togg-turquoise/60 transition-all">
@@ -478,8 +493,7 @@ function CareContent() {
 
       {/* AÇIK ONAY MODALI (CONSENT GATE) */}
       {confirmationStep === 'CONFIRM_MODAL' && selectedSlot && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-cockpit-surface border border-white/20 rounded-2xl max-w-lg w-full p-6 md:p-7 space-y-5 shadow-2xl animate-in fade-in">
+        <AccessibleDialog title="Kullanıcı Onayı ve Sevk Bağlamı" onClose={() => setConfirmationStep('SELECTING')} className="bg-cockpit-surface border border-white/20 rounded-2xl max-w-lg w-full p-6 md:p-7 space-y-5 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2 text-togg-turquoise font-bold text-base">
                 <ShieldCheck className="w-5 h-5" />
@@ -487,7 +501,8 @@ function CareContent() {
               </div>
               <button
                 onClick={() => setConfirmationStep('SELECTING')}
-                className="text-slate-400 hover:text-white text-xs"
+                aria-label="Pencereyi kapat"
+                className="w-11 shrink-0 text-slate-400 hover:text-white text-xs"
               >
                 ✕
               </button>
@@ -506,7 +521,7 @@ function CareContent() {
 
               {referralContext && (
                 <div className="bg-togg-darkBlue/40 border border-togg-turquoise/40 p-3 rounded-xl text-[11px] text-togg-turquoise">
-                  ℹ️ Randevu talebine <strong>{referralContext.specialty}</strong> ön değerlendirme özeti eklenecektir.
+                  ℹ️ Randevu talebine <strong>{referralContext.specialty}</strong> ön değerlendirme özeti bu cihazda hazırlanır. Harici sayfaya otomatik aktarılmaz.
                 </div>
               )}
 
@@ -543,8 +558,7 @@ function CareContent() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* BAŞARILI DEVİR EKRANI */}
@@ -556,7 +570,7 @@ function CareContent() {
 
           <h2 className="text-xl font-bold text-white">Randevu Yönlendirmesi Hazırlandı</h2>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Seçtiğiniz hekim için klinik dışı sevk bağlamınız oluşturuldu. Hekim sisteminde randevunuzu tamamlamak için harici sayfaya geçebilirsiniz.
+            Hekim sisteminde randevu oluşturulmadı ve bilgileriniz gönderilmedi. Harici sayfada uygunluğu kontrol edip işlemi kendiniz tamamlayabilirsiniz.
           </p>
 
           <div className="max-w-sm mx-auto bg-slate-950/80 border border-slate-800 p-4 rounded-xl text-xs text-left space-y-1">

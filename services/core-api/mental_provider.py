@@ -20,6 +20,7 @@ Oturum Özeti Analizcisi:
 """
 
 import os
+from openai_client import get_openai_client
 import unicodedata
 import re
 import json
@@ -168,8 +169,7 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
         driver_name: str = "Ahmet Bey"
     ) -> Dict[str, Any]:
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            client = get_openai_client(self.api_key, self.base_url)
 
             system_prompt = (
                 "Sen Togg araç içi Ruhsal İyi Oluş Asistanısın. Kullanıcı ile Türkçe, sıcak ve empatik konuşursun.\n"
@@ -188,8 +188,9 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
             )
 
             messages = [{"role": "system", "content": system_prompt}]
-            for h in history[-4:]:
-                messages.append({"role": h.get("role", "user"), "content": h.get("content", "")})
+            for h in history[-40:]:
+                if h.get("role") in ("user", "assistant"):
+                    messages.append({"role": h["role"], "content": h.get("content", "")})
             messages.append({"role": "user", "content": user_message})
 
             resp = client.chat.completions.create(
@@ -209,7 +210,7 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
         except Exception as e:
             fallback = LocalFallbackMentalProvider()
             result = fallback.generate_reply(user_message, is_driving, history, driver_name)
-            result["fallbackReason"] = str(e)
+            result["fallbackReason"] = provider_error_category(e)
             result["providerType"] = "LOCAL_DEMO_FALLBACK"
             return result
 
@@ -273,7 +274,7 @@ class LocalFallbackSessionAnalyzer(MentalSessionAnalyzer):
 
         summary_text = (
             f"Kullanıcı görüşmesinde öne çıkan konular: {', '.join(themes)}. "
-            f"Duygu seyri '{mood_trend}' olarak gözlendi."
+            f"Paylaşımlardaki duygu eğilimi: {MOOD_LABELS[mood_trend]}."
         )
 
         return {
@@ -282,7 +283,8 @@ class LocalFallbackSessionAnalyzer(MentalSessionAnalyzer):
             "moodTrend": mood_trend,
             "professionalSupportSuggested": support_suggested,
             "professionalSupportReason": support_reason,
-            "analyzerType": "LOCAL_FALLBACK"
+            "analyzerType": "LOCAL_FALLBACK",
+            "providerType": "LOCAL_DEMO"
         }
 
 
@@ -298,8 +300,7 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
 
     def analyze_session(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         try:
-            from openai import OpenAI
-            client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            client = get_openai_client(self.api_key, self.base_url)
 
             prompt = (
                 "Aşağıdaki kullanıcı-asistan araç içi konuşmasını analiz et ve kesinlikle geçerli tek bir JSON nesnesi üret.\n"
@@ -318,16 +319,19 @@ class OpenAICompatibleSessionAnalyzer(MentalSessionAnalyzer):
             resp = client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
+                max_tokens=400,
                 temperature=0.2,
                 response_format={"type": "json_object"}
             )
             data = json.loads(resp.choices[0].message.content)
             data["analyzerType"] = "LIVE_LLM"
+            data["providerType"] = "LIVE_OPENAI"
             return data
         except Exception as e:
             fallback = LocalFallbackSessionAnalyzer()
             res = fallback.analyze_session(messages)
-            res["fallbackReason"] = str(e)
+            res["fallbackReason"] = provider_error_category(e)
+            res["providerType"] = "LOCAL_DEMO_FALLBACK"
             return res
 
 
@@ -386,6 +390,23 @@ def check_mental_crisis(text: str, is_driving: bool, live_client: Optional[Any] 
         "needsEmergencyEscalation": False,
         "clinicalDisclaimer": "Bu güvenlik değerlendirmesi klinik olarak valide edilmiş bir tanı sistemi değildir."
     }
+
+
+MOOD_LABELS = {"STRESSED": "gergin", "TIRED": "yorgun", "RELAXED": "rahat", "NEUTRAL": "nötr"}
+
+
+def provider_error_category(error: Exception) -> str:
+    """Only fixed categories leave the backend; never include provider exception text."""
+    name = type(error).__name__
+    if name in ("AuthenticationError", "PermissionDeniedError"):
+        return "PROVIDER_AUTH"
+    if name == "RateLimitError":
+        return "PROVIDER_LIMIT"
+    if name in ("APITimeoutError", "TimeoutError"):
+        return "PROVIDER_TIMEOUT"
+    if name == "APIConnectionError":
+        return "PROVIDER_CONNECTION"
+    return "PROVIDER_UNAVAILABLE"
 
 
 def get_active_mental_provider() -> MentalConversationProvider:

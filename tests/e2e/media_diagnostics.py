@@ -78,7 +78,7 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
   try:
    # Feed a complete phrase only after the native capture device is listening.
    # Starting paplay before asynchronous Chrome capture clipped the first phrase.
-   p.get_by_role('button',name='MİKROFONU BAŞLAT',exact=True).click()
+   p.get_by_role('checkbox',name='Ses aktarımı onayı',exact=True).check();p.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click()
    p.wait_for_function('window.__audit.speech.some(e=>e.type==="audiostart") || window.__audit.speech.some(e=>e.type==="error")',timeout=10000)
    if p.evaluate('window.__audit.speech.some(e=>e.type==="audiostart")'):player,log=play_fixture()
    p.wait_for_timeout(18000);d=snap(p,'native-speech-'+str(headed))
@@ -104,12 +104,12 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
   voices=p.evaluate('speechSynthesis.getVoices().map(v=>({name:v.name,lang:v.lang,local:v.localService}))');save('tts-voices-'+str(headed),voices)
   require(any(v['lang'].lower().startswith('tr') for v in voices),'No Turkish voice available in native speech synthesis')
   # A recognition error now exposes the text input. Do not toggle it closed.
-  if not p.locator('input').is_visible():p.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
+  p.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
   # Do not let a previous recognition reply satisfy the typed-reply assertion.
   p.wait_for_function('!speechSynthesis.speaking && !speechSynthesis.pending',timeout=45000)
   first=p.evaluate('window.__audit.tts.length')
   with PulseOutput() as output:
-   p.locator('input').fill('Bugün yeni bir kitap okudum.');p.locator('input').press('Enter');p.wait_for_timeout(8000);d=snap(p,'native-tts-'+str(headed))
+   p.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');p.get_by_role('textbox',name='Görüşme mesajı').press('Enter');p.wait_for_timeout(8000);d=snap(p,'native-tts-'+str(headed))
    require(any(any(e['type']=='start' for e in t['events']) for t in d['tts'][first:]),'Speech synthesis called but no native start event')
    p.wait_for_function('(first)=>window.__audit.tts.slice(first).some(t=>t.events.some(e=>e.type==="end"))',arg=first,timeout=45000)
    d=snap(p,'native-tts-completed-'+str(headed))

@@ -282,6 +282,8 @@ export default function VisionPage() {
   const optotypeSizeMm = VisionStaircaseController.calculateOptotypeSizeMm(verifiedDistanceCm, currentLogMAR);
   const optotypeSizePx = VisionStaircaseController.mmToPixels(optotypeSizeMm, pixelsPerMm);
 
+  const optotypeViewportPx = Math.ceil(optotypeSizePx) + 2;
+
   const directionAngles: Record<OptotypeDirection, number> = {
     RIGHT: 0,
     DOWN: 90,
@@ -584,9 +586,9 @@ export default function VisionPage() {
       {(testStep === 'TESTING_RIGHT' || testStep === 'TESTING_LEFT' || testStep === 'TESTING_CONTRAST') && (
         <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 max-w-3xl mx-auto shadow-2xl">
           {/* Üst Bilgi: Sol Taraf Göz Talimatı, Sağ Taraf İlerleme Noktaları */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-togg-turquoise animate-pulse" />
+              <span className="w-2.5 h-2.5 shrink-0 rounded-full bg-togg-turquoise animate-pulse" />
               <h2 className="text-sm md:text-base font-bold text-white tracking-wide uppercase">
                 {testStep === 'TESTING_RIGHT' && 'SAĞ GÖZ • Sol gözünüzü kapatın'}
                 {testStep === 'TESTING_LEFT' && 'SOL GÖZ • Sağ gözünüzü kapatın'}
@@ -595,8 +597,8 @@ export default function VisionPage() {
             </div>
 
             {/* İlerleme Noktaları (Minimal Dots) */}
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-mono text-xs">
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="whitespace-nowrap text-slate-400 font-mono text-xs" data-vision-progress>
                 {trialIndex} / {testStep === 'TESTING_CONTRAST' ? '5' : '6'}
               </span>
               <div className="flex gap-1.5">
@@ -612,16 +614,17 @@ export default function VisionPage() {
             </div>
           </div>
 
-          {/* Merkez: Büyük Landolt C Görseli */}
-          <div className="py-8 flex flex-col items-center justify-center min-h-[260px] bg-slate-950/70 rounded-2xl border border-slate-900 shadow-inner">
-            <div className="text-xs text-slate-300 mb-6 font-medium">
+          <div className="grid grid-cols-2 gap-2 md:gap-5 items-center" data-vision-panels>
+          {/* Kalibre edilmiş sembol ve bağımsız dokunmatik cevap paneli */}
+          <div className="py-8 min-w-0 flex flex-col items-center justify-center min-h-[260px] bg-slate-950/70 rounded-2xl border border-slate-900 shadow-inner">
+            <div className="text-xs text-slate-300 mb-6 font-medium text-center px-1">
               {testStep === 'TESTING_CONTRAST'
                 ? `Kontrast Ön Değerlendirmesi — Boşluk hangi yönde?`
                 : 'Boşluk hangi yönde?'}
             </div>
 
             <div
-              className={`relative flex items-center justify-center transition-all duration-200 p-6 rounded-2xl ${
+              className={`relative flex items-center justify-center transition-all duration-200 p-2 sm:p-6 rounded-2xl ${
                 feedbackEffect === 'CORRECT'
                   ? 'ring-4 ring-emerald-400/80 bg-emerald-950/30'
                   : feedbackEffect === 'WRONG'
@@ -632,79 +635,73 @@ export default function VisionPage() {
                 opacity: testStep === 'TESTING_CONTRAST' ? contrastLevelPct / 100 : 1.0
               }}
             >
-              <svg
-                width={optotypeSizePx}
-                height={optotypeSizePx}
-                data-logmar={currentLogMAR}
-                role="img"
-                aria-label="Görme testi simgesi"
-                viewBox="0 0 100 100"
-                style={{
-                  transform: `rotate(${directionAngles[currentDirection]}deg)`,
-                  transition: 'transform 0.15s ease-out'
-                }}
-                className="shrink-0"
-              >
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="40"
-                  fill="none"
-                  stroke={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#00E5FF'}
-                  strokeWidth="20"
-                  strokeDasharray="231.32 20"
-                  strokeDashoffset="10"
-                />
+              {/* Integer outer viewport avoids Blink snapping the measured glyph non-uniformly.
+                  The nested measured symbol keeps the exact mm-to-px size. */}
+              <svg width={optotypeViewportPx} height={optotypeViewportPx}
+                viewBox={`0 0 ${optotypeViewportPx} ${optotypeViewportPx}`}
+                style={{ transform: `rotate(${directionAngles[currentDirection]}deg)`, transition: 'none' }}
+                className="shrink-0" role="presentation">
+                <svg x={(optotypeViewportPx - optotypeSizePx) / 2} y={(optotypeViewportPx - optotypeSizePx) / 2}
+                  width={optotypeSizePx} height={optotypeSizePx} viewBox="0 0 100 100"
+                  data-logmar={currentLogMAR} data-trial={trialIndex}
+                  role="img" aria-label="Görme testi simgesi">
+                  {/* Outer diameter 100, inner diameter 60, rectangular gap 20. */}
+                  <path
+                    d="M 98.9897948566 40 A 50 50 0 1 0 98.9897948566 60 L 78.2842712475 60 A 30 30 0 1 1 78.2842712475 40 Z"
+                    fill={testStep === 'TESTING_CONTRAST' ? '#cbd5e1' : '#00E5FF'}
+                  />
+                </svg>
               </svg>
             </div>
           </div>
 
           {/* Alt: 4 Büyük Dokunmatik Yön Butonu (100-120px Touch Targets) */}
-          <div className="max-w-xs mx-auto grid grid-cols-3 gap-3 pt-2">
+          <div className="w-full min-w-0 max-w-xs mx-auto grid grid-cols-3 gap-1 md:gap-3 pt-2">
             <div />
             <button
               onClick={() => handleAnswer('UP')}
-              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              className="h-16 md:h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
               title="Yukarı"
             >
               <span className="text-2xl leading-none group-hover:scale-110 transition-transform">▲</span>
-              <span className="text-[11px] tracking-wider font-semibold">YUKARI</span>
+              <span className="text-[10px] md:text-[11px] md:tracking-wider font-semibold">YUKARI</span>
             </button>
             <div />
 
             <button
               onClick={() => handleAnswer('LEFT')}
-              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              className="h-16 md:h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
               title="Sol"
             >
               <span className="text-2xl leading-none group-hover:scale-110 transition-transform">◄</span>
-              <span className="text-[11px] tracking-wider font-semibold">SOL</span>
+              <span className="text-[10px] md:text-[11px] md:tracking-wider font-semibold">SOL</span>
             </button>
 
-            <div className="flex flex-col items-center justify-center text-[10px] text-slate-500 font-mono tracking-widest text-center">
+            <div className="flex flex-col items-center justify-center text-[8px] md:text-[10px] text-slate-400 font-mono md:tracking-widest text-center break-all">
               <span>DOKUNMATİK</span>
               <span>YÖN</span>
             </div>
 
             <button
               onClick={() => handleAnswer('RIGHT')}
-              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              className="h-16 md:h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
               title="Sağ"
             >
               <span className="text-2xl leading-none group-hover:scale-110 transition-transform">►</span>
-              <span className="text-[11px] tracking-wider font-semibold">SAĞ</span>
+              <span className="text-[10px] md:text-[11px] md:tracking-wider font-semibold">SAĞ</span>
             </button>
 
             <div />
             <button
               onClick={() => handleAnswer('DOWN')}
-              className="h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
+              className="h-16 md:h-24 bg-slate-900/90 border border-slate-700 hover:bg-togg-turquoise hover:text-togg-darkBlue hover:border-togg-turquoise text-white rounded-2xl font-bold transition-all active:scale-95 shadow-lg flex flex-col items-center justify-center gap-1 group"
               title="Aşağı"
             >
               <span className="text-2xl leading-none group-hover:scale-110 transition-transform">▼</span>
-              <span className="text-[11px] tracking-wider font-semibold">AŞAĞI</span>
+              <span className="text-[10px] md:text-[11px] md:tracking-wider font-semibold">AŞAĞI</span>
             </button>
             <div />
+          </div>
           </div>
         </div>
       )}

@@ -14,6 +14,7 @@ interface SkinActiveScanProps {
   alignment?: FaceAlignment;
   quality?: ImageQuality;
   guidanceText?: string;
+  multiAngle?: boolean;
 }
 
 export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
@@ -22,15 +23,16 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
   isLiveVideo = false,
   alignment,
   quality,
-  guidanceText
+  guidanceText,
+  multiAngle = false
 }) => {
   const defaultRegion = getRegionData('forehead');
 
   // Dinamik durum rozetleri (Real telemetry vs Demo fallback)
-  let faceStatusText = 'İyi';
-  let faceStatusClass = 'text-emerald-400';
+  let faceStatusText = 'Ölçüm bekleniyor';
+  let faceStatusClass = 'text-slate-400';
   if (alignment) {
-    if (alignment.faceDetected && alignment.isAligned) {
+    if (alignment.isMediaPipeActive && alignment.faceDetected && alignment.isAligned) {
       faceStatusText = 'İyi';
       faceStatusClass = 'text-emerald-400';
     } else if (alignment.faceDetected) {
@@ -42,10 +44,10 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
     }
   }
 
-  let lightStatusText = 'İyi';
-  let lightStatusClass = 'text-emerald-400';
+  let lightStatusText = 'Ölçüm bekleniyor';
+  let lightStatusClass = 'text-slate-400';
   if (quality) {
-    if (quality.status === 'OPTIMAL') {
+    if (alignment?.isMediaPipeActive && alignment.faceDetected && quality.avgLuminance >= 40 && quality.avgLuminance <= 220) {
       lightStatusText = 'İyi';
       lightStatusClass = 'text-emerald-400';
     } else if (quality.status === 'TOO_DARK') {
@@ -57,14 +59,14 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
     }
   }
 
-  let clarityStatusText = 'İyi';
-  let clarityStatusClass = 'text-emerald-400';
+  let clarityStatusText = 'Ölçüm bekleniyor';
+  let clarityStatusClass = 'text-slate-400';
   if (quality) {
-    if (quality.isValid && quality.blurScore >= 4.0) {
+    if (alignment?.isMediaPipeActive && alignment.faceDetected && quality.blurScore >= 4.0) {
       clarityStatusText = 'İyi';
       clarityStatusClass = 'text-emerald-400';
     } else if (quality.status === 'BLURRY') {
-      clarityStatusText = 'Sabit Durun';
+      clarityStatusText = 'Bulanık — kameraya sabit bakın';
       clarityStatusClass = 'text-amber-400';
     }
   }
@@ -80,6 +82,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
             scanProgress={scanProgress}
             videoRef={videoRef}
             isLiveVideo={isLiveVideo}
+            landmarks={alignment?.landmarks}
           />
         </div>
 
@@ -108,6 +111,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
             </div>
           </div>
 
+          <p className="text-xs text-slate-400">Yüz bölgesinin kamera parlaklığı ve piksel netliği kontrol edilir; lux, hareket veya klinik yeterlilik ölçümü değildir. {multiAngle ? 'Üç ayrı poz sırayla doğrulanır.' : 'Şu an tek karşı açı değerlendirilir.'}</p>
           {/* 3 Durum Satırı (Yalnızca Temiz Rozetler) */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/90 text-sm">

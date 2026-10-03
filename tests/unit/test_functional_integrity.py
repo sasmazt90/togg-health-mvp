@@ -196,13 +196,13 @@ def test_camera_app_permission_false_blocks_skin_and_vision():
 # ---------------------------------------------------------------------------
 def test_microphone_app_permission_false_blocks_mental_mic():
     """Uygulama içi mikrofon izni kapalıysa Mental modülü ses tanımayı başlatmamalı ve metin girişini açmalıdır."""
-    mental_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "mental" / "page.tsx"
+    mental_page = root_dir / "apps" / "vehicle-app" / "src" / "utils" / "useMentalConversation.ts"
     content = mental_page.read_text(encoding="utf-8")
 
     assert "isMicrophoneAllowed()" in content
     assert "!isMicrophoneAllowed()" in content
-    assert "setMicNotice(" in content
-    assert "setShowTextInput(true)" in content
+    assert "setNotice(" in content
+    assert "setTextMode(true)" in content
 
 
 # ---------------------------------------------------------------------------
@@ -210,11 +210,11 @@ def test_microphone_app_permission_false_blocks_mental_mic():
 # ---------------------------------------------------------------------------
 def test_mental_summary_saving_false_prevents_session_persistence():
     """Seans özeti saklama kapalıysa mental oturum kaydedilmemelidir."""
-    mental_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "mental" / "page.tsx"
+    mental_page = root_dir / "apps" / "vehicle-app" / "src" / "utils" / "useMentalConversation.ts"
     content = mental_page.read_text(encoding="utf-8")
 
     assert "isMentalSummarySavingAllowed()" in content
-    assert "if (isMentalSummarySavingAllowed()) {" in content
+    assert "if (!isDemoMode() && isMentalSummarySavingAllowed()) {" in content
 
 
 # ---------------------------------------------------------------------------

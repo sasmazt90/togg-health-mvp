@@ -7,20 +7,41 @@ Lisans: UNLICENSED
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from contextlib import asynccontextmanager
 import os
+from time import perf_counter
+from openai_client import get_openai_client, close_openai_client
+from pathlib import Path
 
-from mental_provider import get_active_mental_provider, check_mental_crisis, get_active_session_analyzer
+# Backend-only local configuration. CI has no local file and remains keyless.
+_local_env = Path(__file__).resolve().parents[2] / '.env.local'
+if os.getenv('ATTUNE_LOAD_LOCAL_ENV') == '1' and _local_env.is_file():
+    for _line in _local_env.read_text(encoding='utf-8').splitlines():
+        _name, _separator, _value = _line.partition('=')
+        if _separator and _name.strip() in ('OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_TTS_MODEL'):
+            os.environ[_name.strip()] = _value.strip().strip('\"').strip("'")
+
+from mental_provider import (get_active_mental_provider, check_mental_crisis, get_active_session_analyzer,
+                             LocalFallbackMentalProvider, LocalFallbackSessionAnalyzer, provider_error_category)
 from session_memory import SessionMemoryManager
 from care_provider import BrowserCareSearchProvider, DemoCareSearchProvider, CalendarProvider, TravelTimeProvider
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        close_openai_client()
 
 app = FastAPI(
     title="Togg Health MVP Core API",
     description="Togg araç içi önleyici sağlık, görme, cilt, sesli asistan ve randevu orkestrasyonu.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
@@ -43,6 +64,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    expose_headers=["Server-Timing"],
 )
 
 
@@ -53,7 +75,14 @@ async def enforce_browser_origin(request: Request, call_next):
     # they can mutate local health data, including simple POSTs without preflight.
     if request.method != "OPTIONS" and origin is not None and origin not in trusted_origins:
         return JSONResponse(status_code=403, content={"detail": "Untrusted browser origin"})
-    return await call_next(request)
+    started = perf_counter()
+    response = await call_next(request)
+    if request.url.path.startswith("/api/mental/"):
+        existing = response.headers.get("Server-Timing")
+        timing = f"app;dur={(perf_counter() - started) * 1000:.1f}"
+        response.headers["Server-Timing"] = f"{existing}, {timing}" if existing else timing
+    return response
+
 
 # ---------------------------------------------------------------------------
 # In-Memory State & Mock Data (Local-First)
@@ -118,12 +147,18 @@ class SpeedUpdatePayload(BaseModel):
     speedKmH: float = Field(ge=0, allow_inf_nan=False)
 
 class ConversePayload(BaseModel):
-    userMessage: str
+    userMessage: str = Field(min_length=1, max_length=6000)
     sessionId: Optional[str] = None
     history: Optional[List[Dict[str, str]]] = None
+    cloudConsent: StrictBool = False
 
 class AnalyzeSessionPayload(BaseModel):
     messages: List[Dict[str, str]]
+    cloudConsent: StrictBool = False
+
+class SpeechPayload(BaseModel):
+    text: str = Field(min_length=1, max_length=4096)
+    cloudConsent: StrictBool = False
 
 class CreateSessionPayload(BaseModel):
     summaryText: str
@@ -241,7 +276,7 @@ def converse_mental_assistant(payload: ConversePayload):
         }
 
     # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
-    provider = get_active_mental_provider()
+    provider = get_active_mental_provider() if payload.cloudConsent else LocalFallbackMentalProvider()
     history = payload.history or []
     driver_name = vehicle_state.get("driverName", "Ahmet Bey")
 
@@ -256,8 +291,38 @@ def converse_mental_assistant(payload: ConversePayload):
 
 @app.post("/api/mental/analyze-session")
 def analyze_mental_session(payload: AnalyzeSessionPayload):
-    analyzer = get_active_session_analyzer()
+    if not any(m.get('role') == 'user' and m.get('content', '').strip() for m in payload.messages):
+        raise HTTPException(status_code=422, detail='EMPTY_SESSION')
+    analyzer = get_active_session_analyzer() if payload.cloudConsent else LocalFallbackSessionAnalyzer()
     return analyzer.analyze_session(payload.messages)
+
+@app.post('/api/mental/speech')
+def mental_speech(payload: SpeechPayload):
+    if not payload.cloudConsent:
+        raise HTTPException(status_code=403, detail='CLOUD_CONSENT_REQUIRED')
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    api_key = os.getenv('OPENAI_API_KEY', '').strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
+    try:
+        started = perf_counter()
+        client = get_openai_client(api_key)
+        connected = perf_counter()
+        with client.audio.speech.with_streaming_response.create(
+            model=os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'), voice='coral',
+            input=payload.text, response_format='mp3',
+            instructions='Türkçe konuş. Sakin, sıcak ve doğal bir sohbet tonu kullan. Abartılı vurgu yapma.'
+        ) as speech:
+            headers_ready = perf_counter()
+            audio = speech.read()
+        finished = perf_counter()
+        # Provider generation overlaps transfer; these are measured boundaries, not a claim
+        # that generation and network time can be separated without provider telemetry.
+        timing = f'sdk;dur={(connected-started)*1000:.1f}, tts_headers;dur={(headers_ready-connected)*1000:.1f}, tts_body;dur={(finished-headers_ready)*1000:.1f}'
+        return Response(content=audio, media_type='audio/mpeg', headers={'Cache-Control': 'no-store', 'Server-Timing': timing})
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=provider_error_category(error)) from None
 
 @app.get("/api/mental/sessions")
 def get_mental_sessions():

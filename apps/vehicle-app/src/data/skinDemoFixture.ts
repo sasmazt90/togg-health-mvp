@@ -528,16 +528,17 @@ export function buildSkinRegionViewModel(
 
   const rednessScore = typeof real.rednessScore === 'number' ? real.rednessScore : 0;
   const rednessStatus: 'amber' | 'cyan' | 'emerald' = rednessScore > 50 ? 'amber' : 'cyan';
-  const rednessDisplay = rednessScore > 50 ? 'Yüksek' : rednessScore > 35 ? 'Hafif Artış' : 'Stabil';
+  const rednessDisplay = rednessScore > 50 ? 'Yüksek' : rednessScore > 35 ? 'Orta piksel skoru' : 'Düşük piksel skoru';
 
   const lumScore = typeof real.luminanceScore === 'number' ? real.luminanceScore : 0;
   const lumDisplay = lumScore > 60 ? 'Optimal' : lumScore < 40 ? 'Düşük' : 'Dengeli';
 
   const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : 0;
   const textStatus: 'amber' | 'cyan' | 'emerald' = textScore > 40 ? 'amber' : 'cyan';
-  const textDisplay = textScore > 40 ? 'Artış' : 'Stabil';
+  const textDisplay = `${Math.round(textScore)} / 100 piksel skoru`;
 
-  const deltaDisplay = `${changePct > 0 ? '+' : ''}${changePct}%`;
+  const comparable = !analysisResult.isBaseline && !analysisResult.comparisonUnavailable && typeof real.changeFromBaselinePct === 'number';
+  const deltaDisplay = !comparable ? (analysisResult.isBaseline ? 'Referans oluşturuldu' : 'Karşılaştırılamadı') : `${changePct > 0 ? '+' : ''}${changePct}%`;
   const deltaStatus: 'amber' | 'cyan' | 'emerald' = isAttentionRequired ? 'amber' : 'emerald';
 
   return {
@@ -572,10 +573,9 @@ export function buildSkinRegionViewModel(
       }
     },
     observation: {
-      headline: isAttentionRequired
-        ? `${base.nameTr} bölgesinde baz çizgiye göre %${Math.abs(changePct)} görsel değişim izlendi.`
-        : `${base.nameTr} bölgesinde görsel telemetri referans bandında seyretmektedir.`,
-      details: analysisResult.clinicalNoteTr || base.observation.details
+      headline: `${base.nameTr} — ${deltaDisplay}`,
+      details: !comparable ? `${base.nameTr}: ${deltaDisplay}. İlk geçerli taramanızın sayısal metrikleri referanstır; bu sonuç tanı değildir.` :
+        `${base.nameTr} bölgesinin kızarıklık piksel göstergesinde ${changePct > 0 ? '+' : ''}${changePct}% fark ölçüldü. Işık ve poz bu göstergeleri etkileyebilir; klinik değişim veya tanı değildir.`
     }
   };
 }

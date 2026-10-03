@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { VehicleContextProvider } from '../context/VehicleContext';
+import { ReminderNotice } from '../components/ReminderNotice';
 import { CockpitHeader } from '../components/CockpitHeader';
 
 export const metadata: Metadata = {
@@ -19,10 +20,11 @@ export default function RootLayout({
         <VehicleContextProvider>
           <CockpitHeader />
           <main className="flex-1 w-full max-w-[1600px] mx-auto p-4 md:p-6 lg:p-8">
+            <ReminderNotice />
             {children}
           </main>
           <footer className="border-t border-cockpit-border/40 py-3 px-6 text-center text-xs text-slate-500 bg-cockpit-surface/50">
-            <div className="flex items-center justify-center gap-2 max-w-[1600px] mx-auto text-[11px]">
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 max-w-[1600px] mx-auto text-[11px]">
               <span className="font-semibold text-slate-300 tracking-wide">Attune<span className="text-togg-turquoise">.more</span></span>
               <span>•</span>
               <span className="text-slate-400">Togg Kişiselleştirilmiş Sağlık Deneyimi</span>

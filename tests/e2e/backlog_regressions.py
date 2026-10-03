@@ -30,13 +30,20 @@ def record(name, fn):
 
 
 def enter_text(page, text):
-    if page.locator('input').count() == 0:
-        page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
-    old_position = page.locator('[data-chat-author="AI"]').last.get_attribute('data-chat-position')
-    page.locator('input').fill(text)
-    page.locator('input').press('Enter')
-    expect(page.locator('[data-chat-author="AI"]').last).not_to_have_attribute('data-chat-position', old_position)
-    return page.locator('[data-chat-author="AI"] p').last.inner_text()
+    page.get_by_role('button', name='İsterseniz yazabilirsiniz', exact=True).click()
+    mute=page.get_by_role('button',name='Sesli yanıtı kapat',exact=True)
+    if mute.count(): mute.click()
+    old_count=page.locator('[data-chat-author="AI"]').count()
+    box=page.get_by_role('textbox',name='Görüşme mesajı')
+    expect(box).to_be_enabled(timeout=45000)
+    box.fill(text);box.press('Enter')
+    expect(page.locator('[data-chat-author="AI"]')).to_have_count(old_count+1)
+    return page.locator('[data-chat-author="AI"]').last.locator('p').nth(1).inner_text()
+
+
+def finish_conversation(page):
+    page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click()
+    expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
 
 
 with sync_playwright() as pw:
@@ -171,7 +178,7 @@ with sync_playwright() as pw:
                 for i in range(3):
                     page.wait_for_function('document.querySelector("svg[data-logmar]").getAnimations().length === 0')
                     observations.append(symbol.evaluate('(s)=>({width:s.getBoundingClientRect().width,logMAR:Number(s.dataset.logmar)})'))
-                    angle = symbol.evaluate("s=>parseFloat(s.style.transform.match(/rotate\(([-\\d.]+)deg\)/)[1])")
+                    angle = symbol.evaluate("s=>parseFloat(s.parentElement.style.transform.match(/rotate\(([-\\d.]+)deg\)/)[1])")
                     title = {0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle]
                     page.get_by_title(title,exact=True).click()
                 assert observations[-1]['width'] < observations[0]['width'], observations
@@ -198,14 +205,20 @@ with sync_playwright() as pw:
                 for invented in ['son konuşmalarımızdaki','4 Seans Analiz Edildi','%75','%60','Sabah saatlerinde odaklanma']:
                     assert invented not in body, body
                 enter_text(page,'Bugün çocukları okuldan aldım; ailece güzel zaman geçirdik.')
+                expect(panel).to_have_count(0)  # Active right column shows the full transcript.
+                assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
+                finish_conversation(page)
                 expect(panel).to_contain_text('1 kayıtlı görüşme')
                 expect(panel).to_contain_text('sosyal ilişkiler')
                 first_history = page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))')
                 assert len(first_history)==1
                 enter_text(page,'Ailemle konuşmak iyi geldi.')
-                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                expect(panel).to_have_count(0)
+                assert len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))'))==1
+                finish_conversation(page)
+                expect(panel).to_contain_text('2 kayıtlı görüşme')
                 page.reload()
-                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                expect(panel).to_contain_text('2 kayıtlı görüşme')
                 expect(panel).to_contain_text('sosyal ilişkiler')
                 saved = page.evaluate('localStorage.getItem("togg_health_mental_history")')
                 page.route('**/api/mental/converse',lambda route:route.abort())
@@ -240,6 +253,7 @@ with sync_playwright() as pw:
                     assert not errors,errors
                 page.goto(BASE+'/mental')
                 enter_text(page,'Ailemle bugün güzel vakit geçirdik.')
+                finish_conversation(page)
                 expect(page.locator('[data-mental-history]')).to_contain_text('1 kayıtlı görüşme')
                 for route in ['/','/profile']:
                     page.goto(BASE+route)
