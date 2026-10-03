@@ -42,12 +42,15 @@ Word'ün 38 paragrafı ve 18 gömülü görseli yeniden okunup açıldı. Görse
 - Backend/egress/browser zaman sınırları ayrı: provider generation aktarım ile örtüşür; saf üretim ve network süresi uydurulmaz. Anahtarsız construction benchmark canlı E2E iyileşmesi değildir.
 - Care yükleme görünmezdi: anlaşılır wait, 12s abort deadline, stale response guard, retry/unmount cleanup; kesintide örnek seçenek açıkça ayrılır. Ham exception loglanmaz.
 - Mobile görme yön paneli alta düşüyordu: iki kolon, en az 44px touch genişliği; optotype hesabı ve 2-down/1-up değiştirilmedi.
+- Mobil tur sayacı üç satıra bölünüyordu: başlık/ilerleme wrap ve kesintisiz sayaç; üç viewport'ta tek satır assertion, dört gerçek boyalı yön kontrolü.
 
 ## Otomatik ve görsel doğrulama
 
 Yeni `uat_ux_followup.py` gerçek keyless production UI/API ile explicit OFF/ON, başka sekmede last-write revoke, summary cancel, TTS failure/cancel, 7 route x 3 viewport, kısa dialog focus, loading/error/driving, gerçek uzun transcript ve CSS 200% reflow kontrollerini çalıştırır. Kapı açmak için kullanılan provider-status capability fixture açıkça fixture'dır; gerçek chat LOCAL_DEMO ve TTS 503'tür. Bu test canlı OpenAI/STT kanıtı değildir. Skin kısa-modal demo yalnız tasarım kontrolüdür; kabul baseline'ı `skin_followup`/`skin_multi_angle_followup` gerçek MediaPipe taramalarıdır.
 
 `skin_followup.py` gerçek UI taramasından altı bölge/not screenshot'ı ve default-28/edit/dedup/error/ICS/cancel üretir. `windows_pdf_followup.py` gerçek Windows Chrome 132 ile disposable test-profile preference kullanarak kiosk Save-as-PDF yapar, dosyayı gerçek Chrome viewer'da açar ve sayfayı render eder. Bu manuel OS dialog tıklama iddiası değildir; genel Chrome profili veya sistem printer ayarı değişmez.
+
+`windows_zoom_followup.py` disposable Chrome 132 profilinin partition zoom preference'ını kullanır; gerçek devicePixelRatio iki kat ve innerWidth yarıya iner. CSS zoom değildir; aynı üretim DOM'u gerçek browser media query reflow ile incelenir. Anahtarsızdır ve fiziksel capture girişimi 0 kalır. Global Chrome ayarı/profil değişmez.
 
 Tam final Actions artifact verifier: `scripts/verify-uat-delivery.py`; 39 broader, 14 focused, 5 lifecycle, 23 browser, 8 timing, 157 unit (150 eski + 7 yeni, skip 0), 54 safety, 5 dependency, 12 mental, actual-three-angle/reference, native üç tur, 10 yeni UAT; her sayı ve SHA bağımsız okunur. Windows launcher 9 ve gerçek normal `.lnk` ShellExecute kanıtı yerelde ayrıdır. Yakalanmış screenshot, açılıp incelenmiş screenshot değildir; son rapor gerçek açılan envanteri verir.
 

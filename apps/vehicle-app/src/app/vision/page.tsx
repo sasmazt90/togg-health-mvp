@@ -586,9 +586,9 @@ export default function VisionPage() {
       {(testStep === 'TESTING_RIGHT' || testStep === 'TESTING_LEFT' || testStep === 'TESTING_CONTRAST') && (
         <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-8 space-y-6 max-w-3xl mx-auto shadow-2xl">
           {/* Üst Bilgi: Sol Taraf Göz Talimatı, Sağ Taraf İlerleme Noktaları */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-togg-turquoise animate-pulse" />
+              <span className="w-2.5 h-2.5 shrink-0 rounded-full bg-togg-turquoise animate-pulse" />
               <h2 className="text-sm md:text-base font-bold text-white tracking-wide uppercase">
                 {testStep === 'TESTING_RIGHT' && 'SAĞ GÖZ • Sol gözünüzü kapatın'}
                 {testStep === 'TESTING_LEFT' && 'SOL GÖZ • Sağ gözünüzü kapatın'}
@@ -597,8 +597,8 @@ export default function VisionPage() {
             </div>
 
             {/* İlerleme Noktaları (Minimal Dots) */}
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400 font-mono text-xs">
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="whitespace-nowrap text-slate-400 font-mono text-xs" data-vision-progress>
                 {trialIndex} / {testStep === 'TESTING_CONTRAST' ? '5' : '6'}
               </span>
               <div className="flex gap-1.5">

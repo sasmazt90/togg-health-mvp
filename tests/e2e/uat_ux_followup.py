@@ -174,6 +174,8 @@ with sync_playwright() as pw:
     page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click();page.get_by_role('button',name='Doğrulandı, Testi Başlat',exact=True).click()
     panel=page.locator('[data-vision-panels]');children=panel.locator(':scope > div');left,right=children.nth(0).bounding_box(),children.nth(1).bounding_box();adjacent=right['x']>=left['x']+left['width']
     if not args.baseline:assert adjacent, {'width':width,'left':left,'right':right}
+    if not args.baseline:
+     progress=page.locator('[data-vision-progress]');expect(progress).to_have_text('1 / 6');assert progress.bounding_box()['height']<=22
     svg=page.locator('svg[data-logmar]');before=svg.bounding_box();logmar=svg.get_attribute('data-logmar');angle=svg.evaluate('s=>Number(s.parentElement.style.transform.match(/[-\d.]+/)[0])');direction={0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle]
     for button in ['Sağ','Sol','Yukarı','Aşağı']:
      rect=page.get_by_title(button,exact=True).bounding_box();assert rect['width']>=44 and rect['height']>=44, rect
