@@ -43,6 +43,7 @@ Word'ün 38 paragrafı ve 18 gömülü görseli yeniden okunup açıldı. Görse
 - Care yükleme görünmezdi: anlaşılır wait, 12s abort deadline, stale response guard, retry/unmount cleanup; kesintide örnek seçenek açıkça ayrılır. Ham exception loglanmaz.
 - Mobile görme yön paneli alta düşüyordu: iki kolon, en az 44px touch genişliği; optotype hesabı ve 2-down/1-up değiştirilmedi.
 - Mobil tur sayacı üç satıra bölünüyordu: başlık/ilerleme wrap ve kesintisiz sayaç; üç viewport'ta tek satır assertion, dört gerçek boyalı yön kontrolü.
+- Üç açılı referans sonucu eski sabit 'tek karşı açı' açıklamasını gösteriyordu: açıklama gerçek comparisonScope değerine bağlı; gerçek tek/üç açılı MediaPipe UI akışlarında metin ve scope birlikte doğrulanır.
 
 ## Otomatik ve görsel doğrulama
 

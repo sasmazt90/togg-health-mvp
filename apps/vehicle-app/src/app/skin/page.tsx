@@ -827,6 +827,7 @@ export default function SkinPage() {
           comparisonUnavailable={analysisResult?.comparisonUnavailable}
           baselineTimestamp={analysisResult?.baselineTimestamp}
           baselineId={analysisResult?.baselineId}
+          comparisonScope={analysisResult?.comparisonScope === 'three-angle-v2' ? 'three-angle-v2' : 'single-front-v1'}
         />
         </>
       )}

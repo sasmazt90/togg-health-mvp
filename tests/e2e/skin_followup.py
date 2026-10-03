@@ -24,6 +24,7 @@ with sync_playwright() as pw:
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
     first=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
     assert first['isBaseline'] is True and first['usedMediaPipe'] is True
+    scope=page.locator('[data-skin-comparison-scope]');expect(scope).to_have_attribute('data-skin-comparison-scope','single-front-v1');expect(scope).to_contain_text('Kapsam: tek karşı açı')
     assert first['quality']['blurScore']>=4 and 40<=first['quality']['avgLuminance']<=220
     expect(page.get_by_text('Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.',exact=True)).to_be_visible()
     assert page.locator('video').count()==0

@@ -17,6 +17,7 @@ interface SkinResultViewProps {
   comparisonUnavailable?: boolean;
   baselineTimestamp?: string;
   baselineId?: string;
+  comparisonScope?: 'single-front-v1' | 'three-angle-v2';
 }
 
 export const SkinResultView: React.FC<SkinResultViewProps> = ({
@@ -27,7 +28,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
   onNavigateToCare,
   videoRef,
   isLiveVideo = false,
-  isBaseline, comparisonUnavailable, baselineTimestamp, baselineId
+  isBaseline, comparisonUnavailable, baselineTimestamp, baselineId, comparisonScope = 'single-front-v1'
 }) => {
   return (
     <div className="bg-[#0c1424]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 w-full">
@@ -42,7 +43,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
               comparisonUnavailable ? 'Karşılaştırma yapılamadı: eski referansın kalite bilgisi yok veya ışık/netlik/poz koşulları uyuşmuyor. Referansınız korundu.' :
               `${currentRegion.nameTr}: kızarıklık piksel göstergesinde referansa göre ${currentRegion.changePct > 0 ? '+' : ''}${currentRegion.changePct}% değişim.`}
           </p>
-          <p className="text-xs text-slate-400">Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: tek karşı açı, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p>
+          <p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p>
         </div>
 
         <div>
