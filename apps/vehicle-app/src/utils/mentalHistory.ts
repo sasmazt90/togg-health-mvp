@@ -1,10 +1,34 @@
-import { STORAGE_KEYS } from './attuneMode';
+import { STORAGE_KEYS, isMentalSummarySavingAllowed } from './attuneMode';
 
 export interface MentalHistoryItem {
   id: string;
   date: string;
   summaryText: string;
   themes: string[];
+  schemaVersion?: 2;
+  completed?: boolean;
+  consented?: boolean;
+  moodTrend?: string;
+}
+
+const MOOD_LABELS: Record<string, string> = { STRESSED: 'Gergin', TIRED: 'Yorgun', RELAXED: 'Rahat', NEUTRAL: 'Nötr' };
+export function translateMood(text: string): string {
+  return text.replace(/\b(STRESSED|TIRED|RELAXED|NEUTRAL)\b/gi, code => MOOD_LABELS[code.toUpperCase()]);
+}
+
+export function mentalThemeStats(history: MentalHistoryItem[]) {
+  const completed = history.filter(item => item.schemaVersion === 2 && item.completed === true && item.consented === true);
+  const counts = new Map<string, number>();
+  for (const item of completed) for (const theme of new Set(item.themes.map(t => t.trim()).filter(Boolean))) {
+    counts.set(theme, (counts.get(theme) || 0) + 1);
+  }
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  // Largest remainders: rounded pie slices sum to 100; each session contributes once per unique theme.
+  const rows = [...counts].map(([theme, count]) => ({ theme, count, percent: Math.floor(count / total * 100), fraction: count / total * 100 % 1 }));
+  const order = [...rows].sort((a, b) => b.fraction - a.fraction || a.theme.localeCompare(b.theme));
+  const remainder = total ? 100 - rows.reduce((sum, r) => sum + r.percent, 0) : 0;
+  for (let i = 0; i < remainder; i++) order[i].percent++;
+  return { sessions: completed.length, mentions: total, rows };
 }
 
 export function readMentalHistory(): MentalHistoryItem[] {
@@ -21,15 +45,24 @@ export function readMentalHistory(): MentalHistoryItem[] {
 }
 
 export function saveMentalHistory(item: MentalHistoryItem): MentalHistoryItem[] {
+  if (!isMentalSummarySavingAllowed()) throw new Error('SUMMARY_CONSENT_REQUIRED');
   const history = readMentalHistory().filter(entry => entry.id !== item.id);
   history.push(item);
-  localStorage.setItem(STORAGE_KEYS.MENTAL_HISTORY, JSON.stringify(history));
-  localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, JSON.stringify({
+  const previousLatest = localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL);
+  const latest = JSON.stringify({
     dateTr: new Date(item.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }),
     primaryTheme: item.themes.join(' • ') || 'Günlük paylaşım',
     sessionCount: history.length,
     summaryText: item.summaryText,
     recommendation: 'Kayıtlı görüşme özeti'
-  }));
+  });
+  try {
+    localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, latest);
+    localStorage.setItem(STORAGE_KEYS.MENTAL_HISTORY, JSON.stringify(history));
+  } catch (error) {
+    if (previousLatest === null) localStorage.removeItem(STORAGE_KEYS.LATEST_MENTAL);
+    else localStorage.setItem(STORAGE_KEYS.LATEST_MENTAL, previousLatest);
+    throw error;
+  }
   return history;
 }

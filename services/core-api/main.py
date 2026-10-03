@@ -7,13 +7,23 @@ Lisans: UNLICENSED
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
+from pathlib import Path
 
-from mental_provider import get_active_mental_provider, check_mental_crisis, get_active_session_analyzer
+# Backend-only local configuration. CI has no local file and remains keyless.
+_local_env = Path(__file__).resolve().parents[2] / '.env.local'
+if os.getenv('ATTUNE_LOAD_LOCAL_ENV') == '1' and _local_env.is_file():
+    for _line in _local_env.read_text(encoding='utf-8').splitlines():
+        _name, _separator, _value = _line.partition('=')
+        if _separator and _name.strip() in ('OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_TTS_MODEL'):
+            os.environ[_name.strip()] = _value.strip().strip('\"').strip("'")
+
+from mental_provider import (get_active_mental_provider, check_mental_crisis, get_active_session_analyzer,
+                             LocalFallbackMentalProvider, LocalFallbackSessionAnalyzer, provider_error_category)
 from session_memory import SessionMemoryManager
 from care_provider import BrowserCareSearchProvider, DemoCareSearchProvider, CalendarProvider, TravelTimeProvider
 
@@ -118,12 +128,18 @@ class SpeedUpdatePayload(BaseModel):
     speedKmH: float = Field(ge=0, allow_inf_nan=False)
 
 class ConversePayload(BaseModel):
-    userMessage: str
+    userMessage: str = Field(min_length=1, max_length=6000)
     sessionId: Optional[str] = None
     history: Optional[List[Dict[str, str]]] = None
+    cloudConsent: StrictBool = False
 
 class AnalyzeSessionPayload(BaseModel):
     messages: List[Dict[str, str]]
+    cloudConsent: StrictBool = False
+
+class SpeechPayload(BaseModel):
+    text: str = Field(min_length=1, max_length=4096)
+    cloudConsent: StrictBool = False
 
 class CreateSessionPayload(BaseModel):
     summaryText: str
@@ -241,7 +257,7 @@ def converse_mental_assistant(payload: ConversePayload):
         }
 
     # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
-    provider = get_active_mental_provider()
+    provider = get_active_mental_provider() if payload.cloudConsent else LocalFallbackMentalProvider()
     history = payload.history or []
     driver_name = vehicle_state.get("driverName", "Ahmet Bey")
 
@@ -256,8 +272,31 @@ def converse_mental_assistant(payload: ConversePayload):
 
 @app.post("/api/mental/analyze-session")
 def analyze_mental_session(payload: AnalyzeSessionPayload):
-    analyzer = get_active_session_analyzer()
+    if not any(m.get('role') == 'user' and m.get('content', '').strip() for m in payload.messages):
+        raise HTTPException(status_code=422, detail='EMPTY_SESSION')
+    analyzer = get_active_session_analyzer() if payload.cloudConsent else LocalFallbackSessionAnalyzer()
     return analyzer.analyze_session(payload.messages)
+
+@app.post('/api/mental/speech')
+def mental_speech(payload: SpeechPayload):
+    if not payload.cloudConsent:
+        raise HTTPException(status_code=403, detail='CLOUD_CONSENT_REQUIRED')
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    api_key = os.getenv('OPENAI_API_KEY', '').strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, timeout=25, max_retries=0)
+        speech = client.audio.speech.create(
+            model=os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'), voice='coral',
+            input=payload.text, response_format='mp3',
+            instructions='Türkçe konuş. Sakin, sıcak ve doğal bir sohbet tonu kullan. Abartılı vurgu yapma.'
+        )
+        return Response(content=speech.content, media_type='audio/mpeg', headers={'Cache-Control': 'no-store'})
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=provider_error_category(error)) from None
 
 @app.get("/api/mental/sessions")
 def get_mental_sessions():
