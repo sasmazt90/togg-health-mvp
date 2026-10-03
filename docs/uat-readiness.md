@@ -29,7 +29,7 @@ Sınıflar: U = uygulama, A = otomatik doğrulama, G = açılarak görsel incele
 | 19. Dört yönlü Landolt | U/A/G | Gerçek boyalı dört piksel yönü; mm/px/mesafe/logMAR aynı. Mobil 390, ara 820, desktop 1280 yan yana paneller; 2-down/1-up ölçüm kuralı korunur. |
 | 20. Yalnız seçilen paylaşım | U/A/G/W | Başlangıçta seçilmemiş; mevcut olmayan kayıt disabled; aynı preview/print modeli. Gerçek Windows Chrome PDF Save/Open; hariç kategoriler ve örnek kimlik PDF/metadata'da yok. |
 
-Word'ün 38 paragrafı ve 18 gömülü görseli yeniden okunup açıldı. Görseller 1-2 tarama; 3-8 altı bölge; 9 not; 10 trend; 11 aksiyon; 12 paylaşım; 13-14 eski mental; 15 başlangıç tasarımı; 16 aktif tasarım; 17 görme; 18 seçimli paylaşım ile eşleştirildi. Kaynaktaki yüz içeren türetilmiş PNG'ler inceleme sonrası silindi; orijinal Word değiştirilmedi ve CI/Git'e konulmadı. Örnek kimlik/sayım hasta verisi olarak kullanılmaz.
+Word'ün 34 paragraf öğesi (25 metin içeren paragraf) ve 18 gömülü görseli yeniden okunup açıldı. Görseller 1-2 tarama; 3-8 altı bölge; 9 not; 10 trend; 11 aksiyon; 12 paylaşım; 13-14 eski mental; 15 başlangıç tasarımı; 16 aktif tasarım; 17 görme; 18 seçimli paylaşım ile eşleştirildi. Kaynaktaki yüz içeren türetilmiş PNG'ler inceleme sonrası silindi; orijinal Word değiştirilmedi ve CI/Git'e konulmadı. Örnek kimlik/sayım hasta verisi olarak kullanılmaz.
 
 ## Bu turun kök neden düzeltmeleri
 
