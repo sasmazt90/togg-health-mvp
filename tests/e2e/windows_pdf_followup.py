@@ -5,7 +5,7 @@ import json,os,tempfile,time
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 assert os.name=='nt' and not os.getenv('OPENAI_API_KEY') and os.getenv('ATTUNE_LOAD_LOCAL_ENV')=='0'
-OUT=Path('audit-results/uat-20261003/windows-pdf').resolve();OUT.mkdir(parents=True,exist_ok=True)
+OUT=Path(os.getenv('ATTUNE_WINDOWS_PDF_OUTPUT','audit-results/uat-20261003/windows-pdf')).resolve();OUT.mkdir(parents=True,exist_ok=True)
 INIT="window.captureAttempts=0;const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR)SR.prototype.start=()=>{window.captureAttempts++;throw new DOMException('Denied','NotAllowedError')};navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;return Promise.reject(new DOMException('Denied','NotAllowedError'))}"
 with tempfile.TemporaryDirectory(prefix='attune-uat-pdf-') as profile, sync_playwright() as pw:
  default=Path(profile)/'Default';default.mkdir()

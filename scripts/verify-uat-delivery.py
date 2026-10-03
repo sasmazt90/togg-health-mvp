@@ -24,6 +24,8 @@ full=load('npm-audit.json')['metadata']['vulnerabilities'];prod=load('npm-audit-
 job=meta['jobs'][0];failed=[s['name'] for s in job['steps'] if s['conclusion']=='failure'];assert failed==['Security and environment reports']
 assert all(s['conclusion']=='success' for s in job['steps'] if 5<=s['number']<=25 and s['name']!='Security and environment reports')
 uat=load('uat-20261003/after/results.json');assert len(uat['results'])==10 and all(x['status']=='PASS' for x in uat['results'])
+truth=load('uat-truthfulness/results.json');assert truth['sourceHead']==sha and not truth['beforeObservationOnly'] and truth['physicalCaptureAttempts']==0
+assert len(truth['results'])==3 and all(x['status']=='PASS' and x['captureAttempts']==0 and x['printCalls']==1 for x in truth['results']) and len(truth['screenshots'])==30
 assert load('live-followup/skin.json')['reminderEditDedupErrorCancel'] is True
 prep=load('live-harness-preparation.json');assert prep['status']=='PASS' and not prep['liveAcceptance'] and len(prep['entrypointsAndDualGates'])==2 and prep['sdkRetries']==0 and prep['previousLedgersUnchanged'] and prep['ownedPortsFree']
 summary={'head':sha,'runId':run,'jobId':job['databaseId'],'overall':meta['conclusion'],'onlyFailedStep':failed,'matrix':{'broader':39,'focused':14,'mediaLifecycle':5,'browserRegressions':23,'timing':8,'unit':157,'unitSkipped':0,'safety':54,'dependency':5,'mentalLifecycle':12,'nativeVoiceTurns':3,'multiAngleCompletedScans':2},'fullAudit':full,'productionAudit':prod,'nativeResumeAfterTTSEndMs':resume,'nativeSTTTranscripts':[s['transcript'] for s in spoken]}
@@ -31,6 +33,6 @@ summary={'head':sha,'runId':run,'jobId':job['databaseId'],'overall':meta['conclu
 
 negative=load('live-harness-fail-closed.json');assert len(negative)==3 and all(x['status']=='PASS' and x['providerRequests']==0 and x['forwardedBackendRequests']==0 for x in negative)
 ordering=load('live-harness-order.json');assert ordering['status']=='PASS' and ordering['realOpenAIRequests']==0 and ordering['realOpenAITTSRequests']==0
-summary['matrix'].update(liveAdmissionUnit=30,failClosedUI=3,keylessOrdering=1,newSDKPoolUnit=5,uatUX=10,reminderCalendarDays=28)
+summary['matrix'].update(liveAdmissionUnit=30,failClosedUI=3,keylessOrdering=1,newSDKPoolUnit=5,uatUX=10,truthfulnessUX=3,reminderCalendarDays=28)
 (out/f'ci-{run}-matrix-proof.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
 print(json.dumps(summary,ensure_ascii=False))

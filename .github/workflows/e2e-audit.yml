@@ -141,7 +141,9 @@ jobs:
         run: python -u tests/e2e/mental_lifecycle_followup.py 2>&1 | tee audit-results/mental-lifecycle-followup.log
       - name: UAT actual UI consent, short modals, waiting faults and responsive routes
         if: ${{ !cancelled() }}
-        run: python -u tests/e2e/uat_ux_followup.py 2>&1 | tee audit-results/uat-ux-followup.log
+        run: |
+          python -u tests/e2e/uat_ux_followup.py 2>&1 | tee audit-results/uat-ux-followup.log
+          python -u tests/e2e/uat_truthfulness_followup.py 2>&1 | tee audit-results/uat-truthfulness-followup.log
       - name: Live harness rejects unverified source and contaminated input before dispatch
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/live_harness_fail_closed.py 2>&1 | tee audit-results/live-harness-fail-closed.log
