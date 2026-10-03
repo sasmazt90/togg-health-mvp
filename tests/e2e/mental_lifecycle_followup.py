@@ -200,6 +200,21 @@ with sync_playwright() as pw:
             return {'lateSummaryIgnoredAfterDriving':True}
         finally:context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});context.close()
     record('Driving during final analysis cancels the summary and prevents late storage',driving_during_summary)
+
+    def corrupt_history():
+        context,page=fresh()
+        try:
+            text_start(page);send(page,'Sentetik ilk kitap görüşmesi');finish(page)
+            latest=page.evaluate('localStorage.getItem("togg_health_latest_mental")')
+            page.evaluate('localStorage.setItem("togg_health_mental_history","invalid-history-json")')
+            text_start(page);send(page,'Sentetik ikinci kitap görüşmesi')
+            page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click()
+            expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','error')
+            assert page.evaluate('localStorage.getItem("togg_health_mental_history")')=='invalid-history-json'
+            assert page.evaluate('localStorage.getItem("togg_health_latest_mental")')==latest
+            return {'unreadableHistoryPreserved':True,'previousLatestPreserved':True}
+        finally:context.close()
+    record('Unreadable existing history is never silently overwritten by a new summary',corrupt_history)
     browser.close()
 
 (OUT/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')

@@ -47,7 +47,14 @@ export function readMentalHistory(): MentalHistoryItem[] {
 
 export function saveMentalHistory(item: MentalHistoryItem): MentalHistoryItem[] {
   if (!isMentalSummarySavingAllowed()) throw new Error('SUMMARY_CONSENT_REQUIRED');
-  const history = readMentalHistory().filter(entry => entry.id !== item.id);
+  const existing = localStorage.getItem(STORAGE_KEYS.MENTAL_HISTORY);
+  const readable = readMentalHistory();
+  if (existing !== null) {
+    const parsed = JSON.parse(existing);
+    // Refuse to replace unreadable user records with a seemingly empty new history.
+    if (!Array.isArray(parsed) || parsed.length !== readable.length) throw new Error('EXISTING_HISTORY_UNREADABLE');
+  }
+  const history = readable.filter(entry => entry.id !== item.id);
   history.push(item);
   const previousLatest = localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL);
   const latest = JSON.stringify({

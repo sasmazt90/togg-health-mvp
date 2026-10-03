@@ -214,7 +214,7 @@ export function useMentalConversation(parked: boolean) {
       if (!response.ok) throw new Error('Summary service');
       const data = await response.json();
       if (!r.mounted || r.epoch !== epoch || !settings.current.parked) return;
-      if (typeof data.summaryText !== 'string' || !Array.isArray(data.themes) || !data.themes.every((t: unknown) => typeof t === 'string')) throw new Error('Invalid summary');
+      if (typeof data.summaryText !== 'string' || !data.summaryText.trim() || !Array.isArray(data.themes) || !data.themes.every((t: unknown) => typeof t === 'string')) throw new Error('Invalid summary');
       const item: MentalHistoryItem = { id: r.id, date: new Date().toISOString(), summaryText: data.summaryText, themes: data.themes,
         moodTrend: typeof data.moodTrend === 'string' ? data.moodTrend : undefined, providerType: data.providerType, schemaVersion: 2, completed: true, consented: false };
       setSummary(item); setPhase('completed');
