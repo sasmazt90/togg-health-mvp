@@ -1,7 +1,7 @@
 name: Attune browser audit
 on:
   push:
-    branches: ['audit/e2e-2026-09-30', 'fix/attune-audit-remediation']
+    branches: ['audit/e2e-2026-09-30', 'fix/attune-audit-remediation', 'fix/live-test-followup']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       OPENAI_API_KEY: ''
+      ATTUNE_LOAD_LOCAL_ENV: '0'
     defaults:
       run:
         shell: bash
@@ -75,6 +76,7 @@ jobs:
           speech-dispatcher --spawn > audit-results/speech-dispatcher.log 2>&1
           python tests/e2e/native_audio_preflight.py
       - name: Original app focused diagnostics with actual MediaPipe and OS audio
+        if: ${{ !cancelled() }}
         env:
           PULSE_SOURCE: audit_input
           PULSE_SINK: audit_output
@@ -93,8 +95,13 @@ jobs:
           regression_status=${PIPESTATUS[0]}
           test "$focused_status" -eq 0 && test "$regression_status" -eq 0
       - name: Bounded dependency security regressions
+        if: ${{ !cancelled() }}
         run: node tests/security/dependency-regressions.cjs 2>&1 | tee audit-results/dependency-security.log
+      - name: Licensed three-pose fixture admitted by actual production MediaPipe
+        if: ${{ !cancelled() }}
+        run: python -u tests/e2e/prepare_multi_angle_fixture.py 2>&1 | tee audit-results/multi-angle-fixture.log
       - name: Broader E2E with valid real skin flow and native spoken PCM
+        if: ${{ !cancelled() }}
         env:
           PULSE_SOURCE: audit_input
           PULSE_SINK: audit_output
@@ -111,11 +118,25 @@ jobs:
           done
           test "$status" -eq 0
       - name: Controlled skin timing with tracing enabled and disabled
+        if: ${{ !cancelled() }}
         run: python -u tests/e2e/skin_timing.py 2>&1 | tee audit-results/skin-timing.log
       - name: Live-test geometry anatomy reminder and selected print regressions
+        if: ${{ !cancelled() }}
         run: |
           python -u tests/e2e/live_followup.py 2>&1 | tee audit-results/live-followup-geometry.log
           python -u tests/e2e/skin_followup.py 2>&1 | tee audit-results/live-followup-skin.log
+      - name: Conversation lifecycle with actual keyless backend and bounded race controls
+        if: ${{ !cancelled() }}
+        run: python -u tests/e2e/mental_lifecycle_followup.py 2>&1 | tee audit-results/mental-lifecycle-followup.log
+      - name: Three actual poses and compatible versioned reference
+        if: ${{ !cancelled() }}
+        run: python -u tests/e2e/skin_multi_angle_followup.py 2>&1 | tee audit-results/skin-multi-angle-followup.log
+      - name: One start and three native Turkish voice turns with isolated OS PCM
+        if: ${{ !cancelled() }}
+        env:
+          PULSE_SOURCE: audit_input
+          PULSE_SINK: audit_output
+        run: xvfb-run -a python -u tests/e2e/native_three_turn_followup.py 2>&1 | tee audit-results/native-three-turn-followup.log
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

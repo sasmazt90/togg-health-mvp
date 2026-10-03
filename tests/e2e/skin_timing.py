@@ -26,7 +26,7 @@ with sync_playwright() as pw:
                 page.goto(BASE+('/skin?demo=1' if kind=='demo' else '/skin'))
                 expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_be_enabled()
                 t0=time.perf_counter()
-                page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+                page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
                 try:
                     if kind=='demo':
                         page.wait_for_function('localStorage.getItem("attune_demo_skin_result")!==null',timeout=12000)

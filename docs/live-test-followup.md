@@ -53,3 +53,51 @@ Chromium `SVGRootPainter` açıklaması, SVG layout viewport'u kesirli kalırken
 https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/core/paint/svg_root_painter.h
 
 Kesirli kare ölçüleri yatay/dikey farklı yuvarlanabiliyor. Dış SVG viewport'u tam piksel boyutunda ve minimum iki piksel boşlukludur; iç SVG'nin genişlik/yüksekliği mevcut kalibre `optotypeSizePx` değeridir. Görme sembolünün boyutu büyütülmez, logMAR hesabı değişmez. Runner/backlog rotasyon seçicileri dış SVG'nin gerçek dönüşümüne taşınır; fiziksel boyut assertion'ları içteki ölçülen simgede korunur. Yeni piksel testi dört yöne cevap doğruluğunu gerçek screenshot'ta denetler.
+
+
+## Follow-up implementation
+
+Mental conversation state now lives in `useMentalConversation`: epoch and native
+recognition identity gates invalidate late callbacks; only final paired messages
+are summarized at finish. A separate explicit cloud checkbox controls OpenAI text
+and speech requests. The browser STT checkbox explains its possible cloud transfer.
+Storage consent is checked again immediately before persistence. Full transcript,
+two columns, Turkish moods and real completed/consented v2 theme counts replace
+early session writes and fabricated statistics. Old records remain readable and
+are excluded from theme percentages when their provenance cannot be confirmed.
+
+Configured credentials are distinct from each response's providerType. The backend
+uses bounded SDK requests without automatic retries, safe failure categories and
+explicit TTS consent/park checks. CI never loads the local key. No Realtime/WebRTC
+architecture was introduced.
+
+Skin now defaults to FRONT, anatomical RIGHT and LEFT stages. The preview uses raw
+unmirrored coordinates; positive raw yaw corresponds to anatomical LEFT. Side
+poses measure only the exposed opposite cheek. SHA-256 frame tokens reject reuse
+between angles. A separate v2 reference preserves old single-front storage, and
+trend points are restricted to the current scope/reference. Quality and comparison
+thresholds remain unchanged. Fixture attribution: [test-fixture-provenance.md](test-fixture-provenance.md).
+
+Test expectation changes: new start/end buttons and explicit speech consent replace
+single-shot microphone controls; expected early summary writes become zero before
+finish and exactly one after finish. Old single-front regression tests explicitly
+choose the retained single-angle mode. New three-angle tests use three distinct
+licensed video frames and actual production MediaPipe, not mocked poses.
+
+Windows launcher source is kept under `scripts/windows-launcher`. The inherited
+key environment is scrubbed. Only backend normal launches load the approved local
+file. The Job Object still owns only the dedicated TOGG descendants; normal
+launches expose no debugging port. The repeat-launch file-lock read bug is fixed.
+The verified-mode profile and all runtime files remain separate from normal data.
+
+## Execution evidence policy
+
+The final execution report is generated locally under `audit-results/final-report.md`
+after inspecting Actions on the exact final HEAD. Runtime artifacts and credentials
+are ignored and do not enter Git. A failed Windows synthetic voice-input run was
+invalidated because Chrome did not consume the specified WAV; unexpected raw
+transcripts and screenshots were removed. Physical-microphone-denied explicit-track
+preflight produced `not-allowed` with zero OpenAI requests. Windows native three-turn
+input remains pending; it is never inferred from text/TTS or Linux native results.
+Any extra paid test requires additional bounded approval. Technical playback
+success does not prove Turkish voice naturalness or first audible sound.

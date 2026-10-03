@@ -109,7 +109,7 @@ with sync_playwright() as pw:
 
     c,page=new()
     def skin_real():
-        go(page,'/skin');page.wait_for_timeout(9000);page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+        go(page,'/skin');page.wait_for_timeout(9000);page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
         try:page.wait_for_function('localStorage.getItem("togg_health_latest_skin")!==null',timeout=30000)
         finally:snap(page,'skin-real')
         record=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
@@ -122,7 +122,7 @@ with sync_playwright() as pw:
     def skin_second():
         previous=page.evaluate('localStorage.getItem("togg_health_latest_skin")')
         require(previous,'Baseline prerequisite not met')
-        go(page,'/skin');page.wait_for_timeout(4000);page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+        go(page,'/skin');page.wait_for_timeout(4000);page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
         page.wait_for_function('(prev)=>localStorage.getItem("togg_health_latest_skin")!==prev',arg=previous,timeout=30000)
         record=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))');snap(page,'skin-repeat');require(record.get('isBaseline') is False,'Second scan still baseline')
         require(len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_history"))'))==2,'Skin history not retained')
@@ -134,7 +134,7 @@ with sync_playwright() as pw:
         return record
     check('skin second scan actual baseline comparison',skin_second)
     def skin_demo():
-        before=page.evaluate('localStorage.getItem("togg_health_latest_skin")');go(page,'/skin?demo=1');page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+        before=page.evaluate('localStorage.getItem("togg_health_latest_skin")');go(page,'/skin?demo=1');page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click()
         page.wait_for_function('localStorage.getItem("attune_demo_skin_result")!==null',timeout=12000);snap(page,'skin-demo')
         require(page.evaluate('localStorage.getItem("togg_health_latest_skin")')==before,'Demo overwrote real result')
         require(page.evaluate('JSON.parse(localStorage.getItem("attune_demo_skin_result")).usedMediaPipe') is False,'Demo incorrectly claims MediaPipe measurement')
@@ -143,7 +143,7 @@ with sync_playwright() as pw:
 
     c,page=new()
     def skin_stop():
-        go(page,'/skin');page.get_by_role('button',name='Analizi Başlat',exact=True).click();page.wait_for_timeout(500);click_toggle(page);snap(page,'skin-driving')
+        go(page,'/skin');page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click();page.wait_for_timeout(500);click_toggle(page);snap(page,'skin-driving')
         require(page.get_by_text('Cilt Kontrolü Kilitlendi').is_visible(),'No skin driving lock')
         require(not page.evaluate('window.__audit.streams.some(s=>s.getTracks().some(t=>t.readyState==="live"))'),'Skin camera remains LIVE during driving')
     check('skin driving lock stops camera',skin_stop);close(c,'skin-driving')
@@ -151,7 +151,7 @@ with sync_playwright() as pw:
     c,page=new()
     def privacy_camera():
         go(page,'/privacy');page.get_by_role('button',name='Erişimi Kapat',exact=True).first.click();require(page.evaluate('localStorage.getItem("attune_privacy_camera_allowed")')=='false','Camera preference not stored')
-        page.get_by_role('link',name='Cilt Kontrolü',exact=True).click();page.wait_for_timeout(400);page.get_by_role('button',name='Analizi Başlat',exact=True).click();snap(page,'privacy-camera-off');require('Gizlilik' in page.locator('body').inner_text(),'Missing privacy error')
+        page.get_by_role('link',name='Cilt Kontrolü',exact=True).click();page.wait_for_timeout(400);page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click();snap(page,'privacy-camera-off');require('Gizlilik' in page.locator('body').inner_text(),'Missing privacy error')
         require(page.evaluate('window.__audit.streams.length')==0,'Camera acquired despite app refusal')
     check('privacy camera off prevents capture',privacy_camera);close(c,'privacy-camera')
 
@@ -164,7 +164,7 @@ with sync_playwright() as pw:
         require(page.evaluate('navigator.permissions.query({name:"camera"}).then(p=>p.state)')=='denied','Native camera permission was not denied')
         rejection=page.evaluate('async()=>{try{const s=await navigator.mediaDevices.getUserMedia({video:true});s.getTracks().forEach(t=>t.stop());return "unexpected acquisition";}catch(e){return e.name;}}')
         require(rejection=='NotAllowedError','Genuine browser denial missing: '+rejection)
-        go(page,'/skin');page.wait_for_timeout(3000);page.get_by_role('button',name='Analizi Başlat',exact=True).click();page.wait_for_timeout(1000);snap(page,'camera-browser-denied');require(not page.evaluate('localStorage.getItem("togg_health_latest_skin")'),'Result fabricated after denied camera')
+        go(page,'/skin');page.wait_for_timeout(3000);page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();page.get_by_role('button',name='Analizi Başlat',exact=True).click();page.wait_for_timeout(1000);snap(page,'camera-browser-denied');require(not page.evaluate('localStorage.getItem("togg_health_latest_skin")'),'Result fabricated after denied camera')
         require('erişimi sağlanamadı' in page.locator('body').inner_text().lower() or 'motoru kullanılamıyor' in page.locator('body').inner_text().lower(),'No clear permission/model error')
     check('browser camera denial safe failure',camera_denied);close(c,'browser-denial')
 
@@ -173,10 +173,12 @@ with sync_playwright() as pw:
         go(page,'/mental');snap(page,'mental-first-visit');require('son konuşmalarımızdaki' not in page.locator('body').inner_text().lower(),'First-time user is told fabricated past sleep history')
     check('mental first visit does not invent history',mental_greeting)
     def text_input(message):
-        if page.locator('input').count()==0:page.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
-        old_position=page.locator('[data-chat-author="AI"]').last.get_attribute('data-chat-position')
-        page.locator('input').fill(message);page.locator('input').press('Enter')
-        expect(page.locator('[data-chat-author="AI"]').last).not_to_have_attribute('data-chat-position',old_position)
+        page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+        old_count=page.locator('[data-chat-author="AI"]').count()
+        box=page.get_by_role('textbox',name='Görüşme mesajı')
+        expect(box).to_be_enabled(timeout=45000)
+        box.fill(message);box.press('Enter')
+        expect(page.locator('[data-chat-author="AI"]')).to_have_count(old_count+1)
         page.wait_for_timeout(1000)
     def mental_chat():
         text_input('Bugün yeni bir kitap okudum.');snap(page,'mental-text');require('Bugün yeni bir kitap okudum.' in page.locator('body').inner_text(),'Message missing')
