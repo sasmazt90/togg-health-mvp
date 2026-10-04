@@ -46,12 +46,14 @@ def test_provider_error_categories_never_echo_secrets():
 
 
 def test_tts_driving_and_no_configuration(monkeypatch):
+    import vision_speech,time
+    monkeypatch.setattr(vision_speech,'_catalogue',(time.monotonic(),frozenset(['unrelated-voice'])))
     client = TestClient(main.app)
     monkeypatch.setitem(main.vehicle_state, 'vehicleMoving', True)
     assert client.post('/api/mental/speech', json={'text': 'Merhaba', 'cloudConsent': True}).status_code == 409
     monkeypatch.setitem(main.vehicle_state, 'vehicleMoving', False)
     monkeypatch.setenv('OPENAI_API_KEY', '')
-    assert client.post('/api/mental/speech', json={'text': 'Merhaba', 'cloudConsent': True}).json()['detail'] == 'PROVIDER_NOT_CONFIGURED'
+    assert client.post('/api/mental/speech', json={'text': 'Merhaba', 'cloudConsent': True}).json()['detail'] == 'EXACT_MICROSOFT_VOICE_UNAVAILABLE:en-US-AvaMultilingualNeural'
 
 
 def test_production_theme_math_and_versioned_multiview_rules(tmp_path):

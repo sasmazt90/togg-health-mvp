@@ -156,7 +156,7 @@ jobs:
       - name: Three actual poses and compatible versioned reference
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/skin_multi_angle_followup.py 2>&1 | tee audit-results/skin-multi-angle-followup.log
-      - name: One start and three native Turkish voice turns with isolated OS PCM
+      - name: Three native Turkish STT turns and MPEG lifecycle with isolated OS PCM
         if: ${{ !cancelled() }}
         env:
           PULSE_SOURCE: audit_input
@@ -165,7 +165,7 @@ jobs:
       - name: Final service consent and durable per-record deletion
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/final_user_flow.py 2>&1 | tee audit-results/final-user-flow.log
-      - name: Continuous selector, opt-in transcript and real MPEG streaming regressions
+      - name: Spoken letter, separate accuracy, layout and MPEG streaming regressions
         if: ${{ !cancelled() }}
         run: |
           python -u tests/e2e/vision_camera_followup.py 2>&1 | tee audit-results/vision-camera.log
@@ -173,6 +173,8 @@ jobs:
           python -u tests/e2e/continuous_vision_contract.py 2>&1 | tee audit-results/continuous-vision.log
           python -u tests/e2e/mental_sessions_followup.py 2>&1 | tee audit-results/mental-sessions.log
           python -u tests/e2e/stream_speech_followup.py 2>&1 | tee audit-results/stream-speech.log
+          python -u tests/e2e/spoken_letter_render_followup.py 2>&1 | tee audit-results/spoken-letter-render.log
+          python -u tests/e2e/product_layout_followup.py 2>&1 | tee audit-results/product-layout.log
           python -u tests/e2e/uat_visuals.py 2>&1 | tee audit-results/uat-visuals.log
       - name: Upload evidence
         if: always()

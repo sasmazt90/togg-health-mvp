@@ -15,6 +15,7 @@ with sync_playwright() as pw:
         for text in ['Bugün yeni bir kitap okudum.','Bugün yeni bir film izledim.']:
             page.get_by_role('textbox',name='Görüşme mesajı').fill(text);page.get_by_role('button',name='Gönder',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready')
         page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
+        page.get_by_role('dialog',name='Görüşme tamamlandı',exact=True).get_by_role('button',name='Tamam',exact=True).click()
         stored=page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))');record=stored[-1];assert record['schemaVersion']==3 and record['startedAt']<record['completedAt']
         assert ('transcript' in record)==enabled
         if enabled:

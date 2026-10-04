@@ -19,6 +19,7 @@ parser.add_argument('--fixture', choices=['success','failure'])
 args = parser.parse_args()
 if not args.approved_additional_text_run:
     raise SystemExit('No authorization: no server or provider request')
+if not args.fixture:raise SystemExit('Historical OpenAI TTS harness superseded by Edge-only product; zero dispatch')
 RUN_ID = args.run_id
 ROOT = Path(__file__).resolve().parents[2]
 OUT = live_run_output(ROOT,args.run_id)
@@ -111,4 +112,21 @@ def send(self, request, *send_args, **kwargs):
 httpx.Client.send = send
 save()
 sys.path.insert(0, str(ROOT/'services/core-api'))
-uvicorn.run('main:app', host='127.0.0.1', port=8000, access_log=True)
+import main
+async def historical_fixture_speech(text,moving):
+    assert args.fixture and os.getenv('ATTUNE_LOAD_LOCAL_ENV')=='0'
+    from speech_stream import ProviderSpeechResponse,close_once
+    try:
+        context=main.get_openai_client(os.environ['OPENAI_API_KEY']).audio.speech.with_streaming_response.create(model=os.getenv('OPENAI_TTS_MODEL','gpt-4o-mini-tts'),voice='coral',input=text,response_format='mp3')
+        speech=context.__enter__();close=close_once(context)
+    except Exception as error:
+        raise main.HTTPException(status_code=503,detail=main.provider_error_category(error)) from None
+    def chunks():
+        try:
+            for part in speech.iter_bytes(chunk_size=None):
+                if moving():return
+                yield part
+        finally:close()
+    return ProviderSpeechResponse(chunks(),close,media_type='audio/mpeg')
+main.edge_mental_speech=historical_fixture_speech
+uvicorn.run(main.app, host='127.0.0.1', port=8000, access_log=True)

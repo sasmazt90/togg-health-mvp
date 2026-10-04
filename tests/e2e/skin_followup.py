@@ -35,11 +35,11 @@ with sync_playwright() as pw:
         graphic=page.locator('[data-skin-snapshot]')
         label=graphic.get_attribute('aria-label')
         assert graphic.locator('[data-skin-roi]').count()==6
-        assert graphic.locator('[data-skin-roi][fill-opacity=".32"]').count()==1
-        assert len(set(graphic.locator('[data-skin-roi]').evaluate_all('(elements)=>elements.map(e=>e.getAttribute("fill"))')))==6
+        assert graphic.locator('[data-skin-roi][opacity="1"]').count()==1
+        assert len(set(graphic.locator('[data-skin-roi]').evaluate_all('(elements)=>elements.map(e=>e.getAttribute("stroke"))')))==6
         page.get_by_role('button',name='Gözlem Notu',exact=True).click()
         selected=label.replace(' kabul edilmiş tarama görüntüsü','')
-        note=page.get_by_text(selected+' — Referans oluşturuldu',exact=True)
+        note=page.get_by_text(selected+' — İlk tarama',exact=True)
         expect(note).to_be_visible()
         page.keyboard.press('Escape')
         page.get_by_role('button',name='Sonraki Bölge',exact=True).click()
@@ -52,7 +52,7 @@ with sync_playwright() as pw:
     for region_index in range(6):
         graphic=page.locator('[data-skin-snapshot]');selected=graphic.get_attribute('aria-label').replace(' kabul edilmiş tarama görüntüsü','')
         page.evaluate('scrollTo(0,0)');page.screenshot(path=str(visual/f'actual-region-{region_index}.png'),full_page=True)
-        page.get_by_role('button',name='Gözlem Notu',exact=True).click();expect(page.get_by_text(selected+' — Referans oluşturuldu',exact=True)).to_be_visible()
+        page.get_by_role('button',name='Gözlem Notu',exact=True).click();expect(page.get_by_text(selected+' — İlk tarama',exact=True)).to_be_visible()
         page.screenshot(path=str(visual/f'actual-region-note-{region_index}.png'));page.keyboard.press('Escape');page.get_by_role('button',name='Sonraki Bölge',exact=True).click()
     page.screenshot(path=str(OUT/'skin-baseline-snapshot.png'))
     page.get_by_role('button',name='Önerilen Aksiyonlar',exact=True).click()

@@ -1,18 +1,33 @@
-"""Actual production MediaPipe on licensed recorded frames; no physical camera or scored result."""
+"""Actual MediaPipe/pixel evidence on licensed virtual camera, no fake transcript.
+Negative-path stale, permission, route and driving lifecycle. Positive eye/voice
+personal acceptance is deliberately reported pending, not fabricated.
+"""
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 OUT=Path('audit-results/vision-camera');OUT.mkdir(parents=True,exist_ok=True)
 with sync_playwright() as pw:
-    browser=pw.chromium.launch(channel='chromium',headless=True,args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(Path('audit-fixtures/valid-face.y4m').resolve()),'--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
-    context=browser.new_context(permissions=['camera'],viewport={'width':1280,'height':900});context.add_init_script("window.actualStreams=[];const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...args)=>{const stream=await original(...args);window.actualStreams.push(stream);return stream;};")
-    context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto('http://localhost:3000/vision');page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click();expect(page.get_by_text('Kamera: açık · Yüz değerlendirmesi: çalışıyor',exact=True)).to_be_visible(timeout=45000);page.wait_for_timeout(2500)
-    expect(page.get_by_role('button',name='Alıştırma ve denemelere geç',exact=True)).to_be_disabled();assert page.evaluate('window.actualStreams.some(s=>s.getTracks().some(t=>t.readyState==="live"))');page.screenshot(path=str(OUT/'actual-prepare.png'),full_page=True)
-    page.get_by_role('button',name='Alıştırmayla devam et',exact=True).click();assert page.locator('video').count()==1 and page.evaluate('window.actualStreams.some(s=>s.getTracks().some(t=>t.readyState==="live"))');assert page.evaluate('localStorage.getItem("togg_health_latest_vision")') is None
-    page.get_by_role('button',name='BOŞLUĞU GÖREMİYORUM',exact=True).click();expect(page.get_by_text('1 alıştırma yanıtı',exact=False)).to_be_visible();page.screenshot(path=str(OUT/'actual-practice-camera.png'),full_page=True)
-    context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':30});expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_disabled(timeout=10000);page.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))');assert page.evaluate('localStorage.getItem("togg_health_latest_vision")') is None
-    context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_enabled(timeout=10000);page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click();expect(page.get_by_text('Kamera: açık · Yüz değerlendirmesi: çalışıyor',exact=True)).to_be_visible(timeout=45000)
-    page.evaluate('localStorage.setItem("attune_privacy_camera_allowed","false");window.dispatchEvent(new Event("attune-privacy"))');page.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))');assert not errors,errors
-    proof={'status':'PASS','actualProductionMediaPipe':True,'physicalCamera':False,'fixture':'licensed recorded face video','cameraContinuesThroughPractice':True,'assessmentBlockedWithoutCalibration':True,'drivingAndPermissionRevokeEndAllTracks':True,'scoredRecords':0};(OUT/'proof.json').write_text(json.dumps(proof,indent=2),encoding='utf-8');context.close();browser.close()
+    b=pw.chromium.launch(channel='chromium',headless=True,args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(Path('audit-fixtures/valid-face.y4m').resolve()),'--enable-unsafe-swiftshader'])
+    c=b.new_context(permissions=['camera']);p=c.new_page();c.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
+    c.add_init_script("window.actualStreams=[];window.physicalAttempts=0;const gum=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...args)=>{if(args[0]?.audio){window.physicalAttempts++;throw Error('Physical microphone forbidden')}const s=await gum(...args);window.actualStreams.push(s);return s};")
+    # Explicit transport outage: no substituted audio and no external TTS dispatch.
+    c.route('**/api/vision/speech',lambda route:route.abort())
+    def start():
+        p.goto('http://localhost:3000/vision');expect(p.get_by_role('button',name='Başlat',exact=True)).to_be_enabled();p.get_by_role('button',name='Başlat',exact=True).click()
+        try:p.wait_for_function('window.actualStreams.some(s=>s.getTracks().some(t=>t.readyState==="live"))',timeout=15000)
+        except Exception:
+            (OUT/'startup-failure.json').write_text(json.dumps({'body':p.locator('body').inner_text(),'tracks':p.evaluate('window.actualStreams.map(s=>s.getTracks().map(t=>t.readyState))'),'errors':errors},ensure_ascii=False,indent=2),encoding='utf8');p.screenshot(path=str(OUT/'startup-failure.png'),full_page=True);raise
+        p.wait_for_timeout(5000)
+    start();p.wait_for_function('document.querySelector("canvas").dataset.visionModelActive==="true"&&document.querySelector("canvas").dataset.visionFaceCount==="1"');expect(p.locator('p[role=alert]')).to_contain_text('GiuseppeMultilingual');expect(p.locator('[data-letter-optotype]')).to_have_count(0)
+    p.locator('video').evaluate('v=>v.pause()');p.wait_for_timeout(1000);expect(p.locator('[data-letter-condition]')).to_have_attribute('data-letter-condition','camera')
+    assert p.evaluate('localStorage.getItem("togg_health_latest_vision")') is None
+    p.locator('video').evaluate('v=>v.play()');p.wait_for_timeout(1200)
+    p.get_by_role('button',name='Bitir',exact=True).click();expect(p.get_by_role('dialog')).to_contain_text('Tamamlanmamış sonuç kaydedilmedi');p.get_by_role('button',name='Tamam',exact=True).click()
+    p.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
+    start();p.goto('http://localhost:3000/privacy');p.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
+    start();p.evaluate('localStorage.setItem("attune_privacy_camera_allowed","false");window.dispatchEvent(new Event("attune-privacy"))');p.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))');expect(p.locator('p[role=alert]')).to_contain_text('tercihi kapalı')
+    p.evaluate('localStorage.removeItem("attune_privacy_camera_allowed")');start();c.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':75});p.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))');expect(p.get_by_role('button',name='Başlat',exact=True)).to_have_count(0)
+    assert p.evaluate('window.physicalAttempts')==0 and not errors,errors
+    proof={'status':'PASS','virtualCamera':True,'actualProductionMediaPipe':True,'staleFrameBlocked':True,'voiceFailureDoesNotAdvance':True,'routePrivacyDrivingEndTracks':True,'scoredRecords':0,'fakeSTTEvents':0,'physicalCapture':0,'paidCalls':0,'positiveEyeAndSpokenAcceptance':'user manual test pending'}
+    (OUT/'proof.json').write_text(json.dumps(proof,indent=2));c.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});c.close();b.close()
 print(json.dumps(proof))

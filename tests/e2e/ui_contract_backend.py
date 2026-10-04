@@ -2,7 +2,7 @@
 
 Real API validation, consent, crisis, driving and storage code still run.
 Only generation is replaced with deterministic synthetic replies. Normal speech
-is deliberately unavailable; native audio suites use the explicit demo route.
+is deliberately unavailable; audio lifecycle suites explicitly supply their transport fixture.
 """
 import os
 import sys
@@ -34,6 +34,13 @@ def forbidden_client(*_args, **_kwargs):
     raise RuntimeError('Network provider dispatch forbidden in keyless UI fixture')
 
 main.get_openai_client = forbidden_client
+
+async def speech_unavailable(*_args, **_kwargs):
+    from fastapi import HTTPException
+    raise HTTPException(status_code=503, detail='KEYLESS_AUDIO_FIXTURE_UNAVAILABLE')
+
+main.edge_mental_speech = speech_unavailable
+main.fixed_vision_speech = speech_unavailable
 
 if __name__ == '__main__':
     import uvicorn

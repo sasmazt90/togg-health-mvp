@@ -58,6 +58,7 @@ def main():
     assert re.fullmatch(r'(prep-guided|guided-final)-[a-z0-9-]{3,48}',args.run_id),'New distinct authorization identity required'
     out=ROOT/'audit-results/live-provider'/args.run_id
     assert not any((out/n).exists() for n in ('launch-consumed.json','run-consumed.json')),'Consumed run immutable; no retry'
+    if not args.prepare_only and not args.fixture:raise SystemExit('Historical OpenAI TTS acceptance superseded by Edge-only product; zero dispatch')
     if not args.prepare_only and not args.fixture and not args.approved_final_run:raise SystemExit('No new approval: zero provider dispatch')
     assert not args.fixture or args.run_id.startswith('prep-guided-')
     before=historical_hashes();out.mkdir(parents=True,exist_ok=True);prepare(out)

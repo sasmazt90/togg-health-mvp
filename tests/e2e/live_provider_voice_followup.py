@@ -7,6 +7,7 @@ from playwright.sync_api import sync_playwright,expect
 from live_provider_admission import LiveAdmission,TEXTS,forward_admitted_response,live_run_output
 parser=argparse.ArgumentParser();parser.add_argument('--approved-additional-text-run',action='store_true');parser.add_argument('--run-id');parser.add_argument('--fixture',choices=['success','failure']);args=parser.parse_args()
 if not args.approved_additional_text_run:raise SystemExit('No authorization: zero provider requests')
+if not args.fixture:raise SystemExit('Historical paid TTS harness superseded; zero dispatch')
 OUT=live_run_output(Path.cwd(),args.run_id);OUT.mkdir(parents=True,exist_ok=True)
 INIT=r'''(()=>{window.audioProof=[];window.captureAttempts=0;
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prototype.start=function(){window.captureAttempts++;throw new DOMException('Capture forbidden in text-only audit','NotAllowedError');};}

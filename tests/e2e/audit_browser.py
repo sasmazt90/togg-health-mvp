@@ -77,16 +77,16 @@ with sync_playwright() as pw:
 
     c,page=new()
     def vision_setup():
-        go(page,'/vision');page.get_by_role('button',name='Hazırlığı Başlat').click();page.wait_for_timeout(1600);snap(page,'vision-camera')
+        go(page,'/vision');page.get_by_role('button',name='Başlat').click();page.wait_for_timeout(1600);snap(page,'vision-camera')
         live=page.evaluate('window.__audit.streams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
         require(live,'Application did not acquire a live video track')
         require(page.locator('video').evaluate('(v)=>v.videoWidth>0 && v.readyState>=2'),'Camera preview has no decoded frames')
         return 'Actual getUserMedia video track and decoded preview frames'
     check('vision camera acquisition and preview',vision_setup)
     def vision_complete():
-        require(page.get_by_role('button',name='Alıştırma ve denemelere geç',exact=True).is_disabled(),'Invalid camera or calibration permits assessment')
+        require(page.locator('[data-letter-optotype]').count()==0,'Unverified eye conditions permit presentation')
         require(not page.evaluate('localStorage.getItem("togg_health_latest_vision")'),'Unverified camera produced a result')
-        return selector_contract(page,OUT,'vision-continuous-practice')
+        page.goto(BASE+'/vision');return selector_contract(page,OUT,'vision-spoken-ui')
     check('vision continuous selector; unverified occlusion blocks measurement/persistence',vision_complete)
     def vision_profile():
         page.get_by_role('link',name='Sağlık Geçmişim').click();page.wait_for_timeout(600);snap(page,'vision-profile');require('Henüz tamamlanmış görme değerlendirmesi' in page.locator('body').inner_text(),'Practice falsely reported as a measured result')
@@ -95,8 +95,8 @@ with sync_playwright() as pw:
 
     c,page=new()
     def vision_stop():
-        go(page,'/vision');page.get_by_role('button',name='Hazırlığı Başlat').click();page.wait_for_timeout(900);click_toggle(page);snap(page,'vision-driving')
-        require(page.get_by_role('button',name='Hazırlığı Başlat').is_disabled(),'No driving lock')
+        go(page,'/vision');page.get_by_role('button',name='Başlat').click();page.wait_for_timeout(900);click_toggle(page);snap(page,'vision-driving')
+        require(page.get_by_role('button',name='Başlat').count()==0,'No driving lock')
         require(not page.evaluate('window.__audit.streams.some(s=>s.getTracks().some(t=>t.readyState==="live"))'),'Camera remains LIVE after driving lock')
     check('vision driving lock stops active camera',vision_stop)
     def driving_sync():

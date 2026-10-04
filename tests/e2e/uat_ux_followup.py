@@ -34,6 +34,7 @@ with sync_playwright() as pw:
   expect(page.locator('[data-chat-author="AI"]')).to_have_count(old+1);expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready')
  def finish(page):
   page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
+  page.get_by_role('dialog',name='Görüşme tamamlandı',exact=True).get_by_role('button',name='Tamam',exact=True).click()
  def history(page):return page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history")||"[]")')
  def modal_checks(page,caller,title,name):
   caller.click();dialog=page.get_by_role('dialog',name=title,exact=True)
@@ -91,6 +92,7 @@ with sync_playwright() as pw:
    page.route('**/api/mental/analyze-session',lambda route:pending.append(route));page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();page.wait_for_timeout(100);assert len(pending)==1
    other=c.new_page();other.goto(BASE+'/privacy');other.get_by_role('button',name='Devre Dışı Bırak',exact=True).click()
    response=pending[0].fetch();pending[0].fulfill(response=response);expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed');assert history(page)==[]
+   page.get_by_role('dialog',name='Görüşme tamamlandı',exact=True).get_by_role('button',name='Tamam',exact=True).click()
    snap(page,'mental-ui-revoked-before-save');return {'lateUIRevocationPreventedStorage':True,'summaryActualBackend':True}
   finally:c.close()
  record('Privacy UI in another tab revokes saving while actual summary is pending',revoke)
@@ -174,7 +176,7 @@ with sync_playwright() as pw:
     page.set_viewport_size({'width':width,'height':844 if width==390 else 900})
     result=selector_contract(page,OUT,f'vision-active-{width}')
     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-    layouts.append({'width':width,'actualPaintedContinuousGap':True,'singleDragArrow':True,'practiceNotPersisted':True})
+    layouts.append({'width':width,'spokenLetterUI':result['spokenLetterUI'],'manualCardRemoved':result['manualCardRemoved'],'scoresCreated':result['scoresCreated']})
    page.set_viewport_size({'width':1280,'height':900});page.goto(BASE+'/mental');start(page)
    text='Sentetik uzun görüşme kontrolü. '+('Ailemle bir kitap okuduk ve günümüzü konuştuk. '*18)
    for i in range(4):send(page,text+str(i))

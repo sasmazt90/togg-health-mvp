@@ -46,6 +46,7 @@ def enter_text(page, text):
 def finish_conversation(page):
     page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click()
     expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
+    page.get_by_role('dialog',name='Görüşme tamamlandı',exact=True).get_by_role('button',name='Tamam',exact=True).click()
 
 
 with sync_playwright() as pw:
@@ -124,11 +125,11 @@ with sync_playwright() as pw:
                 page.goto(BASE+'/vision')
                 toggle = vehicle_status(page)
                 expect(toggle).to_contain_text('PARK')
-                page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click()
+                page.get_by_role('button',name='Başlat',exact=True).click()
                 page.wait_for_function('window.cameraStreams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
                 toggle_vehicle(page)
                 expect(toggle).to_contain_text('SÜRÜŞ')
-                expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_disabled()
+                expect(page.get_by_role('button',name='Başlat',exact=True)).to_have_count(0)
                 assert page.evaluate('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
                 driving = context.request.get(API+'/api/vehicle/state').json()
                 assert driving['vehicleMoving'] is True and driving['currentSpeed'] == 75
@@ -138,8 +139,8 @@ with sync_playwright() as pw:
                 expect(toggle).to_contain_text('PARK')
                 parked = context.request.get(API+'/api/vehicle/state').json()
                 assert parked['vehicleMoving'] is False and parked['currentSpeed'] == 0
-                expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_enabled()
-                page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click()
+                expect(page.get_by_role('button',name='Başlat',exact=True)).to_be_enabled()
+                page.get_by_role('button',name='Başlat',exact=True).click()
                 page.wait_for_function('window.cameraStreams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
                 page.get_by_role('link',name='Gizlilik & İzinler',exact=True).click()
                 page.wait_for_function('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
@@ -158,7 +159,7 @@ with sync_playwright() as pw:
                 page.goto(BASE+'/vision')
                 notice = page.get_by_role('alert').filter(has_text='Araç durumu doğrulanamıyor')
                 expect(notice).to_be_visible()
-                expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_disabled()
+                expect(page.get_by_role('button',name='Başlat',exact=True)).to_have_count(0)
                 return {'actualSafetyNotice':notice.inner_text()}
             finally:
                 context.close()
@@ -183,7 +184,7 @@ with sync_playwright() as pw:
                 page = context.new_page()
                 page.goto(BASE+'/mental')
                 panel = page.locator('[data-mental-history]')
-                expect(panel).to_contain_text('0 kayıtlı görüşme')
+                expect(page.locator('[data-mental-record-panel]')).to_contain_text('0 kayıtlı görüşme')
                 body = page.locator('body').inner_text()
                 for invented in ['son konuşmalarımızdaki','4 Seans Analiz Edildi','%75','%60','Sabah saatlerinde odaklanma']:
                     assert invented not in body, body
@@ -191,7 +192,7 @@ with sync_playwright() as pw:
                 expect(panel).to_have_count(0)  # Active right column shows the full transcript.
                 assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
                 finish_conversation(page)
-                expect(panel).to_contain_text('1 kayıtlı görüşme')
+                expect(page.locator('[data-mental-record-panel]')).to_contain_text('1 kayıtlı görüşme')
                 expect(panel).to_contain_text('sosyal ilişkiler')
                 first_history = page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))')
                 assert len(first_history)==1
@@ -199,9 +200,9 @@ with sync_playwright() as pw:
                 expect(panel).to_have_count(0)
                 assert len(page.evaluate('JSON.parse(localStorage.getItem("togg_health_mental_history"))'))==1
                 finish_conversation(page)
-                expect(panel).to_contain_text('2 kayıtlı görüşme')
+                expect(page.locator('[data-mental-record-panel]')).to_contain_text('2 kayıtlı görüşme')
                 page.reload()
-                expect(panel).to_contain_text('2 kayıtlı görüşme')
+                expect(page.locator('[data-mental-record-panel]')).to_contain_text('2 kayıtlı görüşme')
                 expect(panel).to_contain_text('sosyal ilişkiler')
                 saved = page.evaluate('localStorage.getItem("togg_health_mental_history")')
                 page.route('**/api/mental/converse',lambda route:route.abort())
@@ -215,7 +216,7 @@ with sync_playwright() as pw:
                 fresh=context.browser.new_context()
                 try:
                     another=fresh.new_page();another.goto(BASE+'/mental')
-                    expect(another.locator('[data-mental-history]')).to_contain_text('0 kayıtlı görüşme')
+                    expect(another.locator('[data-mental-record-panel]')).to_contain_text('0 kayıtlı görüşme')
                 finally:
                     fresh.close()
                 return {'storedRealSummaries':json.loads(saved),'outageReply':reply,'demoSeparated':True,'newBrowserHasNoHistory':True}
@@ -237,7 +238,7 @@ with sync_playwright() as pw:
                 page.goto(BASE+'/mental')
                 enter_text(page,'Ailemle bugün güzel vakit geçirdik.')
                 finish_conversation(page)
-                expect(page.locator('[data-mental-history]')).to_contain_text('1 kayıtlı görüşme')
+                expect(page.locator('[data-mental-record-panel]')).to_contain_text('1 kayıtlı görüşme')
                 for route in ['/','/profile']:
                     page.goto(BASE+route)
                     expect(page.get_by_text('sosyal ilişkiler',exact=True).first).to_be_visible()

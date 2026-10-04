@@ -27,6 +27,6 @@ with sync_playwright() as pw:
     assert page.get_by_role('checkbox').evaluate_all('(items)=>items.every(i=>!i.checked && i.disabled)')
     assert 'Ahmet Yılmaz' not in page.locator('[data-share-preview]').inner_text()
     page.screenshot(path=str(OUT/'profile-empty.png'))
-    (OUT/'first-group.json').write_text(json.dumps({'actualPaintedContinuousGap':sorted(seen),'emptyShareBlocked':True,'noAutomaticMentalSelection':True},ensure_ascii=False,indent=2),encoding='utf-8')
+    (OUT/'first-group.json').write_text(json.dumps({'spokenLetterEntryAndPrivacy':sorted(seen),'emptyShareBlocked':True,'noAutomaticMentalSelection':True},ensure_ascii=False,indent=2),encoding='utf-8')
     context.close();browser.close()
-print('PASS: continuous selector, actual manual scale; empty/unselected sharing; legacy math retained in unit suite')
+print('PASS: spoken letter entry, automatic conditions/privacy, no manual scale; empty/unselected sharing; legacy math retained in unit suite')

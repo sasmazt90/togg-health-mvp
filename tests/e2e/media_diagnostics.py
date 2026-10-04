@@ -46,7 +46,7 @@ class PulseOutput:
   self.process.terminate();self.process.wait(timeout=5);self.thread.join(timeout=5);self.log.close()
 
 def run_native_audio(pw,headed,new,go,snap,browser_environment):
- names=['native PulseAudio spoken input amplitude headed='+str(headed),'original app actual Turkish speech recognition headed='+str(headed),'original app speech synthesis emits native start event headed='+str(headed)]
+ names=['native PulseAudio spoken input amplitude headed='+str(headed),'original app actual Turkish speech recognition headed='+str(headed),'production MPEG native events and PCM (explicit tone fixture) headed='+str(headed)]
  if platform.system()!='Linux':
   def unsupported():raise UnsupportedCapability('The native PulseAudio/Speech Dispatcher diagnostic requires Linux; no personal microphone captured on this host.')
   for name in names:record(name,unsupported)
@@ -100,22 +100,17 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
    if player is not None:stop_fixture(player,log)
  record(names[1],speech)
  def tts():
-  p.wait_for_function('speechSynthesis.getVoices().length>0',timeout=10000)
-  voices=p.evaluate('speechSynthesis.getVoices().map(v=>({name:v.name,lang:v.lang,local:v.localService}))');save('tts-voices-'+str(headed),voices)
-  require(any(v['lang'].lower().startswith('tr') for v in voices),'No Turkish voice available in native speech synthesis')
-  # A recognition error now exposes the text input. Do not toggle it closed.
+  # Explicit transport fixture, not an alternate production voice or pronunciation test.
+  p.route('**/api/mental/speech',lambda r:r.fulfill(content_type='audio/mpeg',body=pathlib.Path('tests/fixtures/synthetic-tone.mp3').read_bytes()))
+  p.evaluate("window.mpegEvents=[];const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){for(const type of ['playing','ended','error'])this.addEventListener(type,()=>window.mpegEvents.push({type,time:performance.now()}));return play.call(this)}")
   p.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
-  # Do not let a previous recognition reply satisfy the typed-reply assertion.
-  p.wait_for_function('!speechSynthesis.speaking && !speechSynthesis.pending',timeout=45000)
-  first=p.evaluate('window.__audit.tts.length')
   with PulseOutput() as output:
-   p.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');p.get_by_role('textbox',name='Görüşme mesajı').press('Enter');p.wait_for_timeout(8000);d=snap(p,'native-tts-'+str(headed))
-   require(any(any(e['type']=='start' for e in t['events']) for t in d['tts'][first:]),'Speech synthesis called but no native start event')
-   p.wait_for_function('(first)=>window.__audit.tts.slice(first).some(t=>t.events.some(e=>e.type==="end"))',arg=first,timeout=45000)
-   d=snap(p,'native-tts-completed-'+str(headed))
-  evidence={'tts':d['tts'][first:],'priorTtsCount':first,'voices':voices,'outputPeak':output.peak,'outputSamples':output.samples};save('native-tts-output-'+str(headed),evidence)
-  require(output.peak>.001,'Native TTS events emitted but no PCM output reached PulseAudio')
-  require(not any(e['type']=='error' for t in d['tts'][first:] for e in t['events']),'Native TTS error event emitted')
+   p.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');p.get_by_role('textbox',name='Görüşme mesajı').press('Enter')
+   p.wait_for_function('window.mpegEvents.some(e=>e.type==="playing")')
+   p.wait_for_function('window.mpegEvents.some(e=>e.type==="ended")',timeout=45000)
+  events=p.evaluate('window.mpegEvents');evidence={'events':events,'transportFixture':'synthetic-tone','exactVoiceAcceptance':False,'outputPeak':output.peak,'outputSamples':output.samples};save('native-mpeg-output-'+str(headed),evidence)
+  require(output.peak>.001,'Native MPEG events emitted but no PCM reached PulseAudio')
+  require(not any(e['type']=='error' for e in events),'Native MPEG error event emitted')
   return evidence
  record(names[2],tts)
  c.close();b.close()

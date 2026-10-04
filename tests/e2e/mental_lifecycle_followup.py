@@ -41,6 +41,7 @@ with sync_playwright() as pw:
     def finish(page):
         page.get_by_role('button', name='Görüşmeyi Bitir', exact=True).click()
         expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase', 'completed')
+        page.get_by_role('dialog',name='Görüşme tamamlandı',exact=True).get_by_role('button',name='Tamam',exact=True).click()
 
     def three_text_turns():
         context, page = fresh(); requests = []
@@ -64,7 +65,7 @@ with sync_playwright() as pw:
             page.keyboard.press('Escape')
             assert page.locator('[data-current-summary]').count()==0
             page.screenshot(path=str(OUT/'after-session.png'), full_page=True)
-            page.reload(); expect(page.locator('[data-mental-history]')).to_contain_text('1 kayıtlı görüşme')
+            page.reload(); expect(page.locator('[data-mental-record-panel]')).to_contain_text('1 kayıtlı görüşme')
             return {'turns': 3, 'historyLengths': [0,2,4], 'records': 1, 'nativeAudioClaim': False}
         finally: context.close()
     record('Three synthetic fixture text turns preserve history; one summary only at finish', three_text_turns)
@@ -91,6 +92,7 @@ with sync_playwright() as pw:
             page.evaluate('localStorage.setItem("togg_privacy_mental_summary_allowed","false");window.dispatchEvent(new Event("attune-privacy"))')
             response = pending[0].fetch(); pending[0].fulfill(response=response)
             expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
+            page.get_by_role('dialog',name='Görüşme tamamlandı',exact=True).get_by_role('button',name='Tamam',exact=True).click()
             assert storage(page) == []; return {'lateSaveBlocked': True}
         finally: context.close()
     record('Revocation while analysis is pending blocks persistence', revoke_during_summary)
@@ -232,7 +234,7 @@ with sync_playwright() as pw:
             page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
             box=page.get_by_role('textbox',name='Görüşme mesajı');box.fill('Bugün yeni bir kitap okudum.');box.press('Enter')
             expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','failed')
-            warning=page.get_by_text('Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True);expect(warning).to_be_visible()
+            warning=page.get_by_text('Microsoft en-US-AvaMultilingualNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True);expect(warning).to_be_visible()
             mode[0]='tone';box.fill('Bugün yeni bir film izledim.');box.press('Enter')
             page.wait_for_function('window.nativePlayback.includes("playing")');expect(warning).not_to_be_visible()
             expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready',timeout=15000)

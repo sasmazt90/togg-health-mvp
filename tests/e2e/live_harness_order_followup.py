@@ -1,5 +1,5 @@
 """Keyless real UI/backend: deliver verified response before admitting next TTS.
-No real OpenAI/TTS acceptance claimed; missing key intentionally makes speech 503.
+No real OpenAI/TTS acceptance claimed; keyless speech fixture deliberately makes speech 503; old paid admission harness is historical.
 """
 import json
 from pathlib import Path
@@ -18,7 +18,7 @@ with sync_playwright() as pw:
  try:
   page.goto('http://localhost:3000/mental');page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
   page.get_by_role('textbox',name='Görüşme mesajı').fill(TEXTS[0]);page.get_by_role('button',name='Gönder',exact=True).click()
-  expect(page.get_by_text('Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True)).to_be_visible()
+  expect(page.get_by_text('Microsoft en-US-AvaMultilingualNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True)).to_be_visible()
   assert gate.counts=={'conversation':1,'tts':1,'summary':0}
   assert gate.blocked==['PROVIDER_FAILED_NO_RETRY'] and records==[{'kind':'conversation','httpStatus':200,'providerType':'LIVE_OPENAI'},{'kind':'tts','httpStatus':503,'providerType':None}]
   assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
