@@ -317,7 +317,8 @@ def mental_speech(payload: SpeechPayload):
         context = client.audio.speech.with_streaming_response.create(
             model=os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'), voice='coral',
             input=payload.text, response_format='mp3',
-            instructions='Türkçe konuş. Sakin, sıcak ve doğal bir sohbet tonu kullan. Abartılı vurgu yapma.'
+            speed=0.95,
+            instructions='Doğal Türkçe konuş. Sakin, sıcak bir sohbet tonu kullan; reklam veya haber sunucusu gibi konuşma. Cümle sonlarında kısa doğal duraklar ver; abartılı vurgu, coşku ve uzatılmış hecelerden kaçın. Metni değiştirme, ek söz söyleme.'
         )
         speech = context.__enter__()
         close = close_once(context)
@@ -326,7 +327,9 @@ def mental_speech(payload: SpeechPayload):
         # the SDK stream on body completion/disconnect, without reading it upfront.
         def chunks():
             try:
-                for chunk in speech.iter_bytes(chunk_size=4096):
+                # Preserve actual decoded transport chunks; avoid accumulating
+                # an artificial 4096-byte SDK block before the first yield.
+                for chunk in speech.iter_bytes(chunk_size=None):
                     if vehicle_state['vehicleMoving']:
                         return
                     yield chunk
