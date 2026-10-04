@@ -11,7 +11,7 @@ OUT=Path('audit-results/final-user-flow-20261003/windows-200');OUT.mkdir(parents
 DENIED="navigator.mediaDevices.getUserMedia=()=>{throw Error('Physical capture forbidden')};const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR)SR.prototype.start=()=>{throw Error('Physical capture forbidden')};"
 with tempfile.TemporaryDirectory(prefix='attune-final-zoom-') as profile, sync_playwright() as pw:
  def launch():
-  context=pw.chromium.launch_persistent_context(profile,channel='chrome',headless=False,viewport=None,args=['--window-size=1280,900']);context.add_init_script(DENIED);return context
+  context=pw.chromium.launch_persistent_context(profile,channel='chrome',headless=False,no_viewport=True,args=['--window-size=1280,900']);context.add_init_script(DENIED);return context
  c=launch();p=c.pages[0];p.goto('http://localhost:3000');original=p.evaluate('({width:innerWidth,dpr:devicePixelRatio})');c.close()
  preferences=Path(profile)/'Default/Preferences';settings=json.loads(preferences.read_text(encoding='utf-8'));settings.setdefault('partition',{})['default_zoom_level']={'x':math.log(2)/math.log(1.2)};preferences.write_text(json.dumps(settings),encoding='utf-8')
  c=launch();p=c.pages[0];c.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0});p.goto('http://localhost:3000');zoom=p.evaluate('({width:innerWidth,dpr:devicePixelRatio})');assert zoom['dpr']/original['dpr']>=1.99 and zoom['width']<original['width']*.55
