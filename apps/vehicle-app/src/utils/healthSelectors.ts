@@ -93,6 +93,7 @@ export function getVisionSummary(demoMode: boolean = isDemoMode()): VisionSummar
     const parsed = JSON.parse(raw);
     const dateObj = parsed.date ? new Date(parsed.date) : new Date();
     const dateTr = dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (parsed.protocolVersion === 'landolt-orientation-continuous-v1') return { hasData:true,isDemo:false,dateTr,acuitySummary:'Görme keskinliği bu protokolle hesaplanmadı',contrastSummary:`${parsed.validTrials || 0} geçerli deneme · ${parsed.notVisible || 0} göremedi`,referralRecommended:false,rawRecord:parsed };
     const right = parsed.acuityRightSnellen || '—';
     const left = parsed.acuityLeftSnellen || '—';
     const acuitySummary = (right === '—' && left === '—') ? '—' : `${right} • ${left}`;
