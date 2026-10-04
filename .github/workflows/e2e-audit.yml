@@ -33,7 +33,7 @@ jobs:
       - name: Install application browsers native audio and diagnostics
         run: |
           npm ci
-          python -m pip install -r services/core-api/requirements.txt bandit
+          python -m pip install -r services/core-api/requirements.txt bandit pillow
           python -m playwright install --with-deps chromium
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg espeak-ng xvfb pulseaudio pulseaudio-utils speech-dispatcher speech-dispatcher-espeak-ng libspeechd2

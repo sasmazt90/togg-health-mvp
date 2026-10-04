@@ -55,7 +55,7 @@ class MentalConversationProvider(ABC):
         user_message: str,
         is_driving: bool,
         history: List[Dict[str, str]],
-        driver_name: str = "Ahmet Bey"
+        driver_name: str = ""
     ) -> Dict[str, Any]:
         pass
 
@@ -77,7 +77,7 @@ class LocalFallbackMentalProvider(MentalConversationProvider):
         user_message: str,
         is_driving: bool,
         history: List[Dict[str, str]],
-        driver_name: str = "Ahmet Bey"
+        driver_name: str = ""
     ) -> Dict[str, Any]:
         msg_lower = user_message.lower()
 
@@ -85,7 +85,7 @@ class LocalFallbackMentalProvider(MentalConversationProvider):
         if is_driving:
             if any(w in msg_lower for w in ["stres", "yoğun", "yorgun", "bunal", "sıkıntı"]):
                 reply = (
-                    f"Sizi dinliyorum {driver_name}. Trafikte derin bir nefes alın ve dikkatinizi yola odaklayın. "
+                    f"Sizi dinliyorum. Trafikte derin bir nefes alın ve dikkatinizi yola odaklayın. "
                     "Bu konuyu araç güvenle park edildiğinde daha ayrıntılı konuşabiliriz."
                 )
             elif any(w in msg_lower for w in ["uyku", "uyuyamıyorum", "gece", "dinlenemiyorum"]):
@@ -95,7 +95,7 @@ class LocalFallbackMentalProvider(MentalConversationProvider):
                 )
             else:
                 reply = (
-                    f"Anlıyorum {driver_name}. Şu an araç hareket halinde olduğu için dikkatinizi yoldan ayırmamanız çok önemli. "
+                    f"Anlıyorum. Şu an araç hareket halinde olduğu için dikkatinizi yoldan ayırmamanız çok önemli. "
                     "Park ettiğinizde konuşmaya devam edebiliriz."
                 )
             return {
@@ -117,20 +117,20 @@ class LocalFallbackMentalProvider(MentalConversationProvider):
 
         if "uyku düzensizliği" in detected_themes or "iş stresi" in detected_themes:
             reply = (
-                f"Paylaştığınız için teşekkür ederim {driver_name}. Bu mesajda paylaştığınız konuları dinliyorum. "
+                f"Paylaştığınız için teşekkür ederim. Bu mesajda paylaştığınız konuları dinliyorum. "
                 "Bu durum sizi zorlamaya devam ediyorsa, süreci bir uzman klinik psikologla "
                 "değerlendirmek iyi gelebilir. İsterseniz uygun uzman seçeneklerini bulabilirim."
             )
             escalation = True
         elif detected_themes:
             reply = (
-                f"Gününüzün temposunu paylaştığınız için teşekkürler {driver_name}. Kendinize biraz mola ve dinlenme alanı açmak "
+                f"Gününüzün temposunu paylaştığınız için teşekkürler. Kendinize biraz mola ve dinlenme alanı açmak "
                 "iyi bir başlangıç olabilir. Bu hissi daha önce ne zamanlar yaşadığınızı fark ediyor musunuz?"
             )
             escalation = False
         else:
             reply = (
-                f"Sizi dinliyorum {driver_name}. Paylaşmak istediğiniz duyguları veya gününüzün nasıl geçtiğini "
+                f"Sizi dinliyorum. Paylaşmak istediğiniz duyguları veya gününüzün nasıl geçtiğini "
                 "anlatabilirsiniz. Ben sizi yargılamadan dinlemek için buradayım."
             )
             escalation = False
@@ -167,7 +167,7 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
         user_message: str,
         is_driving: bool,
         history: List[Dict[str, str]],
-        driver_name: str = "Ahmet Bey"
+        driver_name: str = ""
     ) -> Dict[str, Any]:
         try:
             client = get_openai_client(self.api_key, self.base_url)

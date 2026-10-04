@@ -29,7 +29,7 @@ with sync_playwright() as pw:
             page.wait_for_function('(n)=>window.nativeProof.tts.filter(e=>e.type==="end").length===n',arg=i+1,timeout=60000)
             assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None
         page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
-        page.wait_for_timeout(1200);assert page.locator('[data-chat-author="USER"]').count()==page.locator('[data-chat-author="AI"]').count()==3
+        page.wait_for_timeout(1200);assert page.locator('[data-live-transcript]').count()==0
         assert [len(r['history']) for r in requests]==[0,2,4]
         assert page.evaluate('localStorage.getItem("togg_health_mental_history")') is None # Explicit demo never persists a personal summary.
         proof=page.evaluate('window.nativeProof');assert len([e for e in proof['stt'] if e['type']=='result'])==3

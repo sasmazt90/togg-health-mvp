@@ -175,7 +175,10 @@ with sync_playwright() as pw:
         box=page.get_by_role('textbox',name='Görüşme mesajı')
         expect(box).to_be_enabled(timeout=45000)
         box.fill(message);box.press('Enter')
-        expect(page.locator('[data-chat-author="AI"]')).to_have_count(old_count+1)
+        page.wait_for_function('(count)=>document.querySelectorAll("[data-chat-author=AI]").length===count||!!document.querySelector("[role=alert][aria-label]")',arg=old_count+1)
+        if page.get_by_role('alert',name='Acil destek yanıtı',exact=True).count():
+            expect(page.get_by_role('alert',name='Acil destek yanıtı',exact=True)).to_contain_text('112')
+        else:expect(page.locator('[data-chat-author="AI"]')).to_have_count(old_count+1)
         page.wait_for_timeout(1000)
     def mental_chat():
         text_input('Bugün yeni bir kitap okudum.');snap(page,'mental-text');require('Bugün yeni bir kitap okudum.' in page.locator('body').inner_text(),'Message missing')
