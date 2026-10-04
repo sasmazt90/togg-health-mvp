@@ -75,7 +75,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
       luminance: {
         label: 'Ton / Parlaklık',
         score: 68,
-        displayValue: 'Optimal',
+        displayValue: 'Yüksek parlaklık',
         status: 'cyan'
       },
       texture: {
@@ -207,7 +207,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
       luminance: {
         label: 'Ton / Parlaklık',
         score: 64,
-        displayValue: 'Optimal',
+        displayValue: 'Yüksek parlaklık',
         status: 'cyan'
       },
       texture: {
@@ -273,7 +273,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
       luminance: {
         label: 'Ton / Parlaklık',
         score: 60,
-        displayValue: 'Optimal',
+        displayValue: 'Yüksek parlaklık',
         status: 'cyan'
       },
       texture: {
@@ -338,7 +338,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
       luminance: {
         label: 'Ton / Parlaklık',
         score: 65,
-        displayValue: 'Optimal',
+        displayValue: 'Yüksek parlaklık',
         status: 'cyan'
       },
       texture: {
@@ -528,17 +528,17 @@ export function buildSkinRegionViewModel(
 
   const rednessScore = typeof real.rednessScore === 'number' ? real.rednessScore : 0;
   const rednessStatus: 'amber' | 'cyan' | 'emerald' = rednessScore > 50 ? 'amber' : 'cyan';
-  const rednessDisplay = rednessScore > 50 ? 'Yüksek' : rednessScore > 35 ? 'Orta piksel skoru' : 'Düşük piksel skoru';
+  const rednessDisplay = rednessScore > 50 ? 'Yüksek' : rednessScore > 35 ? 'Orta' : 'Düşük';
 
   const lumScore = typeof real.luminanceScore === 'number' ? real.luminanceScore : 0;
-  const lumDisplay = lumScore > 60 ? 'Optimal' : lumScore < 40 ? 'Düşük' : 'Dengeli';
+  const lumDisplay = lumScore > 60 ? 'Yüksek parlaklık' : lumScore < 40 ? 'Düşük' : 'Dengeli';
 
   const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : 0;
   const textStatus: 'amber' | 'cyan' | 'emerald' = textScore > 40 ? 'amber' : 'cyan';
-  const textDisplay = `${Math.round(textScore)} / 100 piksel skoru`;
+  const textDisplay = textScore > 40 ? 'Belirgin doku farklılığı' : textScore > 20 ? 'Orta doku farklılığı' : 'Düşük doku farklılığı';
 
   const comparable = !analysisResult.isBaseline && !analysisResult.comparisonUnavailable && typeof real.changeFromBaselinePct === 'number';
-  const deltaDisplay = !comparable ? (analysisResult.isBaseline ? 'Referans oluşturuldu' : 'Karşılaştırılamadı') : `${changePct > 0 ? '+' : ''}${changePct}%`;
+  const deltaDisplay = !comparable ? (analysisResult.isBaseline ? 'İlk tarama' : 'Karşılaştırılamadı') : `${changePct > 0 ? '+' : ''}${changePct}%`;
   const deltaStatus: 'amber' | 'cyan' | 'emerald' = isAttentionRequired ? 'amber' : 'emerald';
 
   return {

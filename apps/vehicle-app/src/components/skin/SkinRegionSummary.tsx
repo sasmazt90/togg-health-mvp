@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { InformationButton } from '../InformationButton';
 import { TrendingUp, FileText, Lightbulb, ArrowRight } from 'lucide-react';
 import { SkinRegionData } from '../../data/skinDemoFixture';
 
@@ -104,7 +105,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
                 className={`font-semibold font-mono ${
                   metrics.baselineChange.status === 'amber'
                     ? 'text-amber-400 font-bold'
-                    : 'text-emerald-400'
+                    : 'text-slate-300'
                 }`}
               >
                 {metrics.baselineChange.displayValue}
@@ -115,7 +116,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
                 className={`h-full rounded-full transition-all duration-300 ${
                   metrics.baselineChange.status === 'amber'
                     ? 'bg-amber-400'
-                    : 'bg-emerald-400'
+                    : 'bg-sky-400'
                 }`}
                 style={{ width: `${metrics.baselineChange.score}%` }}
               />
@@ -124,6 +125,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         </div>
       </div>
 
+      <InformationButton title="Görüntü göstergeleri"><p>Renk yoğunluğu: yüksek değer görüntüde daha belirgin kırmızı renk bileşenidir. Parlaklık: yüksek değer daha aydınlık görüntüdür. Doku: yüksek değer komşu görüntü noktalarının daha farklı olmasıdır. Işık, poz ve kamera bu kategorileri etkiler; sağlıklı veya hastalıklı cilt sınıflaması değildir. Referans farkı yalnız uyumlu sonraki taramalarda hesaplanır.</p></InformationButton>
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button
