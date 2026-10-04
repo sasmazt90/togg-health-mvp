@@ -102,7 +102,7 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
  def tts():
   # Explicit transport fixture, not an alternate production voice or pronunciation test.
   p.route('**/api/mental/speech',lambda r:r.fulfill(content_type='audio/mpeg',body=pathlib.Path('tests/fixtures/synthetic-tone.mp3').read_bytes()))
-  p.evaluate("window.mpegEvents=[];const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){for(const type of ['playing','ended','error'])this.addEventListener(type,()=>window.mpegEvents.push({type,time:performance.now()}));return play.call(this)}")
+  p.evaluate("()=>{window.mpegEvents=[];const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){for(const type of ['playing','ended','error'])this.addEventListener(type,()=>window.mpegEvents.push({type,time:performance.now()}));return play.call(this)};}")
   p.get_by_role('button',name='İsterseniz yazabilirsiniz').click()
   with PulseOutput() as output:
    p.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');p.get_by_role('textbox',name='Görüşme mesajı').press('Enter')
