@@ -33,13 +33,13 @@ export function useMentalConversation(parked: boolean) {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [cloudConsent, setCloudConsent] = useState(false);
   const [speechConsent, setSpeechConsent] = useState(false);
-  const speechSource = isDemoMode() ? 'native' as const : 'openai' as const;
+  const speechSource = 'microsoft' as const;
   const [history, setHistory] = useState<MentalHistoryItem[]>([]);
   const [summary, setSummary] = useState<MentalHistoryItem | null>(null);
   const [provider, setProvider] = useState({ apiKeyConfigured: false, providerName: 'Yerel Kural Motoru (Demo)' });
   const runtime = useRef({ mounted: false, active: false, epoch: 0, turn: 0, busy: false, failed: false,
     id: '', startedAt: '', transcript: [] as ConversationMessage[], recognition: null as any,
-    utterance: null as SpeechSynthesisUtterance | null, audio: null as HTMLAudioElement | null,
+    audio: null as HTMLAudioElement | null,
     audioUrl: null as string | null, streamCancel: null as (()=>void) | null, controller: null as AbortController | null,
     restart: null as ReturnType<typeof setTimeout> | null, audioEpoch: 0, voiceWaiting: false });
   const settings = useRef({ parked, textMode, voiceEnabled, cloudConsent, speechConsent, speechSource });
@@ -58,8 +58,6 @@ export function useMentalConversation(parked: boolean) {
     const r = runtime.current;
     r.audioEpoch++;
     r.streamCancel?.(); r.streamCancel = null;
-    r.utterance = null;
-    window.speechSynthesis?.cancel();
     if (r.audio) { r.audio.onplaying = r.audio.onended = r.audio.onerror = null; r.audio.pause(); r.audio.removeAttribute('src'); r.audio.load(); r.audio = null; }
     if (r.audioUrl) { URL.revokeObjectURL(r.audioUrl); r.audioUrl = null; }
     r.voiceWaiting = false;timing('cleanup');
@@ -132,10 +130,10 @@ export function useMentalConversation(parked: boolean) {
     const current = () => valid(epoch) && r.audioEpoch === audioEpoch;
     r.voiceWaiting = true;
     const end = () => { if (!current()) return; timing('ended');stopAudio(); setVoiceState('ready'); if (!crisis) resume(epoch); else { r.active = false; setActive(false); setPhase('error'); } };
-    const fail = () => { if (!current()) return; timing('audio-error');stopAudio(); setVoiceState('failed'); setVoiceNotice('Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
-    setVoiceState(settings.current.speechSource === 'openai' ? 'loadingSpeech' : 'starting');
-    if (settings.current.speechSource === 'openai') {
-      if (!settings.current.cloudConsent) { fail(); return; }
+    const fail = () => { if (!current()) return; timing('audio-error');stopAudio(); setVoiceState('failed'); setVoiceNotice('Microsoft en-US-AvaMultilingualNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
+    setVoiceState('loadingSpeech');
+    {
+      if (!settings.current.speechConsent) { fail(); return; }
       const controller = new AbortController(); r.controller = controller;
       const deadline = setTimeout(() => controller.abort(), 30000);
       try {
@@ -143,7 +141,7 @@ export function useMentalConversation(parked: boolean) {
         const response = await fetch(API + '/speech', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, cloudConsent: true }), signal: controller.signal });
         timing('tts-headers');
-        if (!response.ok) throw new Error('Speech service');
+        if (!response.ok) throw new Error('Microsoft exact voice unavailable');
         if (!current()) { await response.body?.cancel(); return; }
         setVoiceState('starting');
         const audio = new Audio(); r.audio = audio;
@@ -156,14 +154,8 @@ export function useMentalConversation(parked: boolean) {
       finally { clearTimeout(deadline); if (r.controller === controller) r.controller = null; }
       return;
     }
-    const voice = window.speechSynthesis?.getVoices().find(v => v.lang.toLowerCase().startsWith('tr'));
-    if (!voice) { if (current()) { stopAudio(); setVoiceState('unavailable'); setVoiceNotice('Türkçe ses bulunamadı. Yanıtı metin olarak okuyabilirsiniz.'); if (crisis) { r.active = false; setActive(false); setPhase('error'); } else resume(epoch); } return; }
-    const u = new SpeechSynthesisUtterance(text); r.utterance = u;
-    u.lang = 'tr-TR'; u.voice = voice; u.rate = 0.95;
-    u.onstart = () => { if (current()) { setVoiceState('speaking'); setPhase('speaking'); } };
-    u.onend = end; u.onerror = fail;
-    try { window.speechSynthesis.speak(u); } catch { fail(); }
   }
+
   function append(message: ConversationMessage) {
     runtime.current.transcript = [...runtime.current.transcript, message];
     setMessages(runtime.current.transcript);
@@ -259,8 +251,7 @@ export function useMentalConversation(parked: boolean) {
     fetch(API + '/provider-status', { signal: controller.signal }).then(res => res.json()).then(data => {
       if (r.mounted) setProvider(data);
     }).catch(() => {});
-    const voices = () => { if (r.mounted && !r.voiceWaiting) setVoiceState(!isDemoMode() || window.speechSynthesis?.getVoices().some(v => v.lang.toLowerCase().startsWith('tr')) ? 'ready' : 'unavailable'); };
-    voices(); window.speechSynthesis?.addEventListener('voiceschanged', voices);
+    setVoiceState('ready'); // Availability is verified by the exact Edge request.
     const revoke = () => {
       if (r.active && !isMicrophoneAllowed() && !settings.current.textMode) actions.current.cancel('Mikrofon izni geri çekildi. Görüşme kapatıldı; yazarak yeni görüşme başlatabilirsiniz.');
       void prepareHealthRecords('mental').then(() => {
@@ -270,7 +261,7 @@ export function useMentalConversation(parked: boolean) {
       }).catch(() => { if (r.mounted) setNotice('Kayıtlı görüşmeler okunamadı; veriler değiştirilmedi.'); });
     };
     window.addEventListener('storage', revoke); window.addEventListener('attune-privacy', revoke); window.addEventListener('attune-records', revoke);
-    return () => { r.mounted = false; actions.current.cancel(); controller.abort(); window.speechSynthesis?.removeEventListener('voiceschanged', voices); window.removeEventListener('storage', revoke); window.removeEventListener('attune-privacy', revoke); window.removeEventListener('attune-records', revoke); };
+    return () => { r.mounted = false; actions.current.cancel(); controller.abort(); window.removeEventListener('storage', revoke); window.removeEventListener('attune-privacy', revoke); window.removeEventListener('attune-records', revoke); };
   }, []);
   useEffect(() => { if (!parked && (runtime.current.active || phase === 'ending')) actions.current.cancel('Sürüş geçişinde görüşme güvenle kapatıldı. Park ettiğinizde yeni görüşme başlatabilirsiniz.'); }, [parked, phase]);
   useEffect(() => { if (!voiceEnabled) actions.current.audioOff(); }, [voiceEnabled]);

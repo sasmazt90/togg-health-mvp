@@ -1,1 +1,1 @@
-export { default } from './ContinuousPage';
+export { default } from './SpokenLetterPage';

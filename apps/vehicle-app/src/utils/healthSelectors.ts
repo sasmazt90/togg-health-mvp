@@ -93,6 +93,7 @@ export function getVisionSummary(demoMode: boolean = isDemoMode()): VisionSummar
     const parsed = JSON.parse(raw);
     const dateObj = parsed.date ? new Date(parsed.date) : new Date();
     const dateTr = dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (parsed.protocolVersion==='spoken-letter-v1') return {hasData:true,isDemo:false,dateTr,acuitySummary:'Cihaz koşullarında harf tanıma; klinik keskinlik hesaplanmadı',contrastSummary:`${parsed.trials?.filter((t:any)=>t.valid).length||0} geçerli deneme · Boyut bazında harf/yön/birleşik sonuç`,referralRecommended:false,rawRecord:parsed};
     if (['landolt-orientation-continuous-v1','landolt-orientation-guided-v2'].includes(parsed.protocolVersion)) return { hasData:true,isDemo:false,dateTr,acuitySummary:'Görme keskinliği bu protokolle hesaplanmadı',contrastSummary:`${parsed.validTrials || 0} geçerli deneme · ${parsed.notVisible || 0} göremedi`,referralRecommended:false,rawRecord:parsed };
     const right = parsed.acuityRightSnellen || '—';
     const left = parsed.acuityLeftSnellen || '—';
@@ -280,7 +281,7 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
       dateTr: vision.dateTr,
       moduleName: 'Görme Kontrolü',
       badgeClass: 'bg-cyan-950/60 text-togg-turquoise border-cyan-800/60',
-      description: vision.rawRecord.protocolVersion==='landolt-orientation-guided-v2' ? `Yön hizalama ön değerlendirmesi · ${vision.contrastSummary}. ${vision.acuitySummary}.` : `Görme keskinliği ${vision.acuitySummary}. Kontrast hassasiyeti ${vision.contrastSummary}.`,
+      description: ['landolt-orientation-guided-v2','spoken-letter-v1'].includes(vision.rawRecord.protocolVersion) ? `Cihaz koşullarında görev · ${vision.contrastSummary}. ${vision.acuitySummary}.` : `Görme keskinliği ${vision.acuitySummary}. Kontrast hassasiyeti ${vision.contrastSummary}.`,
       isDemo: false
     });
   }

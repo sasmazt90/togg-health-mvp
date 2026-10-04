@@ -118,11 +118,11 @@ export default function ProfilePage() {
 
           <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
             <div className="flex justify-between items-start gap-3 text-xs">
-              <span className="text-slate-400">{vision.rawRecord?.protocolVersion==='landolt-orientation-guided-v2'?'Ölçüm kapsamı':'Son Keskinlik'}</span>
+              <span className="text-slate-400">{['landolt-orientation-guided-v2','spoken-letter-v1'].includes(vision.rawRecord?.protocolVersion)?'Ölçüm kapsamı':'Son Keskinlik'}</span>
               <span className="font-mono text-white font-bold text-right min-w-0">{vision.acuitySummary}</span>
             </div>
             <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
-              <span className="text-amber-400">{vision.rawRecord?.protocolVersion==='landolt-orientation-guided-v2'?'Denemeler':'Kontrast'}</span>
+              <span className="text-amber-400">{['landolt-orientation-guided-v2','spoken-letter-v1'].includes(vision.rawRecord?.protocolVersion)?'Denemeler':'Kontrast'}</span>
               <span className="font-mono text-slate-300 text-right min-w-0">{vision.contrastSummary}</span>
             </div>
           </div>

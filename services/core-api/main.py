@@ -301,46 +301,24 @@ def analyze_mental_session(payload: AnalyzeSessionPayload):
     analyzer = get_active_session_analyzer() if payload.cloudConsent else LocalFallbackSessionAnalyzer()
     return analyzer.analyze_session(payload.messages)
 
+from vision_speech import response as fixed_vision_speech
+from vision_speech import mental_response as edge_mental_speech
+
 @app.post('/api/mental/speech')
-def mental_speech(payload: SpeechPayload):
+async def mental_speech(payload: SpeechPayload):
     if not payload.cloudConsent:
         raise HTTPException(status_code=403, detail='CLOUD_CONSENT_REQUIRED')
     if vehicle_state['vehicleMoving']:
         raise HTTPException(status_code=409, detail='PARK_REQUIRED')
-    api_key = os.getenv('OPENAI_API_KEY', '').strip()
-    if not api_key:
-        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
-    try:
-        started = perf_counter()
-        client = get_openai_client(api_key)
-        connected = perf_counter()
-        context = client.audio.speech.with_streaming_response.create(
-            model=os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'), voice='coral',
-            input=payload.text, response_format='mp3',
-            speed=0.95,
-            instructions='Doğal Türkçe konuş. Sakin, sıcak bir sohbet tonu kullan; reklam veya haber sunucusu gibi konuşma. Cümle sonlarında kısa doğal duraklar ver; abartılı vurgu, coşku ve uzatılmış hecelerden kaçın. Metni değiştirme, ek söz söyleme.'
-        )
-        speech = context.__enter__()
-        close = close_once(context)
-        headers_ready = perf_counter()
-        # A synchronous iterator runs in Starlette's threadpool. Its finally closes
-        # the SDK stream on body completion/disconnect, without reading it upfront.
-        def chunks():
-            try:
-                # Preserve actual decoded transport chunks; avoid accumulating
-                # an artificial 4096-byte SDK block before the first yield.
-                for chunk in speech.iter_bytes(chunk_size=None):
-                    if vehicle_state['vehicleMoving']:
-                        return
-                    yield chunk
-            finally:
-                close()
-        timing = f'sdk;dur={(connected-started)*1000:.1f}, tts_headers;dur={(headers_ready-connected)*1000:.1f}'
-        return ProviderSpeechResponse(chunks(), close, media_type='audio/mpeg', headers={
-            'Cache-Control': 'no-store', 'Server-Timing': timing, 'X-Content-Type-Options': 'nosniff'
-        })
-    except Exception as error:
-        raise HTTPException(status_code=503, detail=provider_error_category(error)) from None
+    return await edge_mental_speech(payload.text, lambda: vehicle_state['vehicleMoving'])
+
+@app.post('/api/vision/speech')
+async def vision_speech(payload: SpeechPayload):
+    if not payload.cloudConsent:
+        raise HTTPException(status_code=403, detail='CLOUD_CONSENT_REQUIRED')
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    return await fixed_vision_speech(payload.text, lambda: vehicle_state['vehicleMoving'])
 
 @app.get("/api/mental/sessions")
 def get_mental_sessions():
