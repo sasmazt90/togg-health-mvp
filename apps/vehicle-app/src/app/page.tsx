@@ -131,7 +131,7 @@ export default function CockpitDashboard() {
                 Görme Kontrolü
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Keskinlik ve kontrast ön değerlendirmesi.
+                Kesintisiz yön eşleştirme alıştırması.
               </p>
             </div>
 

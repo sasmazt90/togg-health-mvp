@@ -34,7 +34,7 @@ export const CockpitHeader: React.FC = () => {
   ];
 
   return (
-    <header className="border-b border-white/10 bg-[#050b14]/95 backdrop-blur-md sticky top-0 z-50">
+    <header data-cockpit-header className="border-b border-white/10 bg-[#050b14]/95 backdrop-blur-md sticky top-0 z-50">
       {/* Üst Telemetri ve Güvenlik Durum Çubuğu */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-2 border-b border-white/5 text-xs">
         <div className="flex items-center gap-4">

@@ -43,6 +43,11 @@ button, select { min-height: 44px; }
 }
 main p, main article { overflow-wrap: anywhere; }
 
+/* At high browser zoom, let navigation scroll away so controls remain usable. */
+@media (max-height: 600px) {
+  [data-cockpit-header] { position: static; }
+}
+
 /* Keep the title and close control reachable while a short dialog scrolls. */
 [role="dialog"] > :first-child {
   position: sticky; top: 0; z-index: 1; background-color: inherit;

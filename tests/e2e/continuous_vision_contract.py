@@ -16,6 +16,8 @@ def selector_contract(page,out=None,tag='continuous'):
     assert page.get_by_title('Yukarı',exact=True).count()==0
     for direction in ['Sağ','Sol','Aşağı']:assert page.get_by_title(direction,exact=True).count()==0
     before=page.locator('[data-continuous-optotype] g').get_attribute('transform')
+    selector.evaluate('e=>e.scrollIntoView({block:"center"})')
+    page.wait_for_timeout(50)
     rect=selector.bounding_box();cx=rect['x']+rect['width']/2;cy=rect['y']+rect['height']/2
     angle=37.35;x=cx+rect['width']*.4*math.cos(math.radians(angle));y=cy+rect['height']*.4*math.sin(math.radians(angle))
     page.mouse.move(x,y);page.mouse.down();page.mouse.move(x+.01,y+.01);page.mouse.up()
@@ -71,5 +73,14 @@ if __name__=='__main__':
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True);context=browser.new_context();page=context.new_page();context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
         proof={'selector':selector_contract(page,out),'calibration':manual_calibration_contract(page)}
+        page.set_viewport_size({'width':633,'height':266})
+        proof['shortViewportSelector']=selector_contract(page,out,'short-viewport-continuous')
+        selector=page.locator('[data-continuous-selector]')
+        selector.evaluate('e=>e.scrollIntoView({block:"center"})')
+        rect=selector.bounding_box()
+        assert rect['y']>=0 and rect['y']+rect['height']<=page.evaluate('innerHeight')
+        assert page.locator('[data-cockpit-header]').evaluate('e=>getComputedStyle(e).position')=='static'
+        assert selector.evaluate('e=>{const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.left+r.width/2,r.top+8))}')
+        proof['shortViewportEntireRingVisibleAndHitTested']=True
         (out/'proof.json').write_text(json.dumps(proof,indent=2),encoding='utf-8');context.close();browser.close()
     print('PASS: continuous targets/responses, isolated practice, honest manual calibration')
