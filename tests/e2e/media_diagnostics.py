@@ -53,7 +53,8 @@ def run_native_audio(pw,headed,new,go,snap,browser_environment):
   return
  native_args=['--autoplay-policy=no-user-gesture-required','--use-fake-ui-for-media-stream','--enable-speech-dispatcher','--enable-logging=stderr','--vmodule=*speech*=2,*audio*=1','--log-net-log='+str((OUT/('chrome-netlog-'+str(headed)+'.json')).resolve())]
  try:
-  b=pw.chromium.launch(channel='chrome',headless=not headed,args=native_args)
+  # PulseOutput must receive real PCM; Playwright otherwise mutes headless audio.
+  b=pw.chromium.launch(channel='chrome',headless=not headed,args=native_args,ignore_default_args=['--mute-audio'])
  except Exception as error:
   message=str(error)
   def unavailable():raise UnsupportedCapability('Native Chrome could not launch: '+message)
