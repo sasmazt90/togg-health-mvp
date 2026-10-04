@@ -1,13 +1,16 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 
 /** A bounded, keyboard accessible dialog. Restore the caller and background on close. */
 export function AccessibleDialog({ title, onClose, children, className }: {
   title: string; onClose: () => void; children: ReactNode; className: string;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose); close.current = onClose;
   useEffect(() => {
@@ -52,11 +55,11 @@ export function AccessibleDialog({ title, onClose, children, className }: {
       document.body.style.overflow = overflow;
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
-  }, []);
-  return <div onClick={onClose} style={{ margin: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+  }, [mounted]);
+  return mounted ? createPortal(<div onClick={onClose} style={{ margin: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
     <div ref={panel} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
       onClick={event => event.stopPropagation()} className={`max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain ${className}`}>
       {children}
     </div>
-  </div>;
+  </div>, document.body) : null;
 }

@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from speech_stream import ProviderSpeechResponse, close_once
 from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -313,18 +314,28 @@ def mental_speech(payload: SpeechPayload):
         started = perf_counter()
         client = get_openai_client(api_key)
         connected = perf_counter()
-        with client.audio.speech.with_streaming_response.create(
+        context = client.audio.speech.with_streaming_response.create(
             model=os.getenv('OPENAI_TTS_MODEL', 'gpt-4o-mini-tts'), voice='coral',
             input=payload.text, response_format='mp3',
             instructions='Türkçe konuş. Sakin, sıcak ve doğal bir sohbet tonu kullan. Abartılı vurgu yapma.'
-        ) as speech:
-            headers_ready = perf_counter()
-            audio = speech.read()
-        finished = perf_counter()
-        # Provider generation overlaps transfer; these are measured boundaries, not a claim
-        # that generation and network time can be separated without provider telemetry.
-        timing = f'sdk;dur={(connected-started)*1000:.1f}, tts_headers;dur={(headers_ready-connected)*1000:.1f}, tts_body;dur={(finished-headers_ready)*1000:.1f}'
-        return Response(content=audio, media_type='audio/mpeg', headers={'Cache-Control': 'no-store', 'Server-Timing': timing})
+        )
+        speech = context.__enter__()
+        close = close_once(context)
+        headers_ready = perf_counter()
+        # A synchronous iterator runs in Starlette's threadpool. Its finally closes
+        # the SDK stream on body completion/disconnect, without reading it upfront.
+        def chunks():
+            try:
+                for chunk in speech.iter_bytes(chunk_size=4096):
+                    if vehicle_state['vehicleMoving']:
+                        return
+                    yield chunk
+            finally:
+                close()
+        timing = f'sdk;dur={(connected-started)*1000:.1f}, tts_headers;dur={(headers_ready-connected)*1000:.1f}'
+        return ProviderSpeechResponse(chunks(), close, media_type='audio/mpeg', headers={
+            'Cache-Control': 'no-store', 'Server-Timing': timing, 'X-Content-Type-Options': 'nosniff'
+        })
     except Exception as error:
         raise HTTPException(status_code=503, detail=provider_error_category(error)) from None
 

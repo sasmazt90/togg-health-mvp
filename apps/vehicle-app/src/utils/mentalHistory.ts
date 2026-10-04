@@ -1,12 +1,16 @@
 import { appendHealthRecord, readHealthRecords, prepareHealthRecords } from './healthRecords';
-import { STORAGE_KEYS, isMentalSummarySavingAllowed } from './attuneMode';
+import { STORAGE_KEYS, isMentalSummarySavingAllowed, isMentalTranscriptSavingAllowed } from './attuneMode';
 
 export interface MentalHistoryItem {
   id: string;
   date: string;
   summaryText: string;
   themes: string[];
-  schemaVersion?: 2;
+  schemaVersion?: 2 | 3;
+  startedAt?: string;
+  completedAt?: string;
+  transcriptConsented?: boolean;
+  transcript?: { id:string;turn:number;sender:'USER'|'AI';text:string;timestamp?:string }[];
   completed?: boolean;
   consented?: boolean;
   moodTrend?: string;
@@ -19,7 +23,7 @@ export function translateMood(text: string): string {
 }
 
 export function mentalThemeStats(history: MentalHistoryItem[]) {
-  const completed = history.filter(item => item.schemaVersion === 2 && item.completed === true && item.consented === true);
+  const completed = history.filter(item => [2,3].includes(item.schemaVersion || 0) && item.completed === true && item.consented === true);
   const counts = new Map<string, number>();
   for (const item of completed) for (const theme of new Set(item.themes.map(t => t.trim()).filter(Boolean))) {
     counts.set(theme, (counts.get(theme) || 0) + 1);
@@ -49,6 +53,7 @@ export function readMentalHistory(): MentalHistoryItem[] {
 export async function saveMentalHistory(item: MentalHistoryItem, beforeWrite: () => boolean = () => true): Promise<MentalHistoryItem[]> {
   await prepareHealthRecords('mental');
   if (!isMentalSummarySavingAllowed()) throw new Error('SUMMARY_CONSENT_REQUIRED');
+  if (item.transcript && (!item.transcriptConsented || !isMentalTranscriptSavingAllowed())) throw new Error('TRANSCRIPT_CONSENT_REQUIRED');
   const existing = localStorage.getItem(STORAGE_KEYS.MENTAL_HISTORY);
   const readable = readMentalHistory();
   if (existing !== null) {
@@ -56,5 +61,5 @@ export async function saveMentalHistory(item: MentalHistoryItem, beforeWrite: ()
     // Refuse to replace unreadable user records with a seemingly empty new history.
     if (!Array.isArray(parsed) || parsed.length !== readable.length) throw new Error('EXISTING_HISTORY_UNREADABLE');
   }
-  return await appendHealthRecord('mental', item, {}, () => beforeWrite() && isMentalSummarySavingAllowed()) as unknown as MentalHistoryItem[];
+  return await appendHealthRecord('mental', item, {}, () => beforeWrite() && isMentalSummarySavingAllowed() && (!item.transcript || (item.transcriptConsented === true && isMentalTranscriptSavingAllowed()))) as unknown as MentalHistoryItem[];
 }

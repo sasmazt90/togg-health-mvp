@@ -1,15 +1,18 @@
 'use client';
 
+import { spokenText } from './spokenText';
+import { streamSpeech } from './streamSpeech';
+
 import { useEffect, useRef, useState } from 'react';
 import { checkCrisisTrigger } from '@packages/safety/crisisDetector';
-import { isMicrophoneAllowed, isMentalSummarySavingAllowed, isDemoMode } from './attuneMode';
+import { isMicrophoneAllowed, isMentalSummarySavingAllowed, isMentalTranscriptSavingAllowed, isDemoMode } from './attuneMode';
 import { MentalHistoryItem, readMentalHistory, saveMentalHistory } from './mentalHistory';
 import { prepareHealthRecords } from './healthRecords';
 
 export type ConversationPhase = 'ready' | 'permission' | 'listening' | 'preparing' | 'speaking' | 'ending' | 'completed' | 'error';
 export interface ConversationMessage {
   id: string; turn: number; sender: 'USER' | 'AI'; text: string; time: string;
-  completed: boolean; isCrisis?: boolean; providerBadge?: string;
+  timestamp?: string; completed: boolean; isCrisis?: boolean; providerBadge?: string;
 }
 const API = 'http://localhost:8000/api/mental';
 const LABELS: Record<string, string> = {
@@ -35,9 +38,9 @@ export function useMentalConversation(parked: boolean) {
   const [summary, setSummary] = useState<MentalHistoryItem | null>(null);
   const [provider, setProvider] = useState({ apiKeyConfigured: false, providerName: 'Yerel Kural Motoru (Demo)' });
   const runtime = useRef({ mounted: false, active: false, epoch: 0, turn: 0, busy: false, failed: false,
-    id: '', transcript: [] as ConversationMessage[], recognition: null as any,
+    id: '', startedAt: '', transcript: [] as ConversationMessage[], recognition: null as any,
     utterance: null as SpeechSynthesisUtterance | null, audio: null as HTMLAudioElement | null,
-    audioUrl: null as string | null, controller: null as AbortController | null,
+    audioUrl: null as string | null, streamCancel: null as (()=>void) | null, controller: null as AbortController | null,
     restart: null as ReturnType<typeof setTimeout> | null, audioEpoch: 0, voiceWaiting: false });
   const settings = useRef({ parked, textMode, voiceEnabled, cloudConsent, speechConsent, speechSource });
   settings.current = { parked, textMode, voiceEnabled, cloudConsent, speechConsent, speechSource };
@@ -52,6 +55,7 @@ export function useMentalConversation(parked: boolean) {
   function stopAudio() {
     const r = runtime.current;
     r.audioEpoch++;
+    r.streamCancel?.(); r.streamCancel = null;
     r.utterance = null;
     window.speechSynthesis?.cancel();
     if (r.audio) { r.audio.onplaying = r.audio.onended = r.audio.onerror = null; r.audio.pause(); r.audio.removeAttribute('src'); r.audio.load(); r.audio = null; }
@@ -135,14 +139,14 @@ export function useMentalConversation(parked: boolean) {
         const response = await fetch(API + '/speech', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text, cloudConsent: true }), signal: controller.signal });
         if (!response.ok) throw new Error('Speech service');
-        const blob = await response.blob();
-        if (!current()) return;
+        if (!current()) { await response.body?.cancel(); return; }
         setVoiceState('starting');
-        const url = URL.createObjectURL(blob); r.audioUrl = url;
-        const audio = new Audio(url); r.audio = audio;
+        const audio = new Audio(); r.audio = audio;
         audio.onplaying = () => { if (current()) { setPhase('speaking'); setVoiceState('speaking'); } };
         audio.onended = end; audio.onerror = fail;
-        await audio.play();
+        const output = streamSpeech(audio, response, controller.signal, current);
+        r.audioUrl = output.url; r.streamCancel = output.cancel;
+        await output.finished;
       } catch { fail(); }
       finally { clearTimeout(deadline); if (r.controller === controller) r.controller = null; }
       return;
@@ -163,9 +167,10 @@ export function useMentalConversation(parked: boolean) {
     const r = runtime.current, epoch = r.epoch, text = value.trim();
     if (!text || !valid(epoch) || r.busy || r.voiceWaiting || r.failed) return;
     r.busy = true; abortRecognition();
-    const turn = ++r.turn, time = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const timestamp = new Date().toISOString();
+    const turn = ++r.turn, time = new Date(timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
     const prior = r.transcript.filter(m => m.completed).map(m => ({ role: m.sender === 'USER' ? 'user' : 'assistant', content: m.text }));
-    const user: ConversationMessage = { id: `${r.id}-${turn}-user`, turn, sender: 'USER', text, time, completed: false };
+    const user: ConversationMessage = { id: `${r.id}-${turn}-user`, turn, sender: 'USER', text, time, timestamp, completed: false };
     append(user); setPhase('preparing'); setNotice(null);
     const crisis = checkCrisisTrigger(text, !settings.current.parked);
     const controller = new AbortController(); r.controller = controller;
@@ -184,10 +189,10 @@ export function useMentalConversation(parked: boolean) {
       if (!isDemoMode() && !['LIVE_OPENAI', 'CRISIS_SAFETY_GUARD'].includes(data.providerType)) throw new Error('Unexpected demo reply');
       r.transcript = r.transcript.map(m => m.id === user.id ? { ...m, completed: true } : m);
       const badge = data.providerType === 'LIVE_OPENAI' ? 'LIVE_OPENAI — OpenAI Canlı' : data.providerType === 'CRISIS_SAFETY_GUARD' ? 'Kriz Güvenlik Filtresi' : data.providerType === 'LOCAL_DEMO_FALLBACK' ? 'LOCAL_DEMO_FALLBACK — sağlayıcıya ulaşılamadı' : 'LOCAL_DEMO — Yerel Model';
-      append({ id: `${r.id}-${turn}-ai`, turn, sender: 'AI', text: data.reply, time, completed: true, isCrisis: data.isCrisis, providerBadge: badge });
+      append({ id: `${r.id}-${turn}-ai`, turn, sender: 'AI', text: data.reply, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }), timestamp: new Date().toISOString(), completed: true, isCrisis: data.isCrisis, providerBadge: badge });
       if (data.providerType === 'LOCAL_DEMO_FALLBACK') setNotice('Canlı sağlayıcıya ulaşılamadı; bu yanıt yerel demo motorundan geldi.');
       if (data.isCrisis) { r.failed = true; setNotice('Normal görüşme durduruldu. Acil Kriz Destek: 112 Acil Çağrı.'); }
-      await speak(data.reply, epoch, !!data.isCrisis);
+      await speak(spokenText(data.reply), epoch, !!data.isCrisis);
     } catch {
       if (!valid(epoch)) return;
       r.failed = true; r.busy = false; setPhase('error');
@@ -198,7 +203,7 @@ export function useMentalConversation(parked: boolean) {
   function start(asText = settings.current.textMode) {
     if (!settings.current.parked || runtime.current.active || !settings.current.speechConsent) return;
     cleanup(); const r = runtime.current;
-    r.epoch++; r.active = true; r.failed = false; r.busy = false; r.turn = 0; r.id = crypto.randomUUID(); r.transcript = [];
+    r.epoch++; r.active = true; r.failed = false; r.busy = false; r.turn = 0; r.id = crypto.randomUUID(); r.startedAt = new Date().toISOString(); r.transcript = [];
     settings.current.textMode = asText;
     setActive(true); setTextMode(asText); setMessages([]); setSummary(null); setNotice(null); setVoiceNotice(null); setVoiceState('ready'); setPhase('ready');
     if (!asText) listen();
@@ -221,10 +226,11 @@ export function useMentalConversation(parked: boolean) {
       if (!isDemoMode() && data.providerType !== 'LIVE_OPENAI') throw new Error('Unexpected demo summary');
       if (typeof data.summaryText !== 'string' || !data.summaryText.trim() || !Array.isArray(data.themes) || !data.themes.every((t: unknown) => typeof t === 'string')) throw new Error('Invalid summary');
       const item: MentalHistoryItem = { id: r.id, date: new Date().toISOString(), summaryText: data.summaryText, themes: data.themes,
-        moodTrend: typeof data.moodTrend === 'string' ? data.moodTrend : undefined, providerType: data.providerType, schemaVersion: 2, completed: true, consented: false };
+        moodTrend: typeof data.moodTrend === 'string' ? data.moodTrend : undefined, providerType: data.providerType, schemaVersion: 3, startedAt: r.startedAt, completedAt: new Date().toISOString(), completed: true, consented: false };
       if (!isDemoMode() && isMentalSummarySavingAllowed()) {
         // This is the last operation before storage. Consent can change during analysis.
         item.consented = true;
+        if (isMentalTranscriptSavingAllowed()) { item.transcriptConsented = true; item.transcript = completed.map(m => ({ id:m.id, turn:m.turn, sender:m.sender, text:spokenText(m.text), timestamp:m.timestamp })); }
         const records = await saveMentalHistory(item, () => r.mounted && r.epoch === epoch && settings.current.parked && settings.current.speechConsent);
         if (!r.mounted || r.epoch !== epoch || !settings.current.parked || !settings.current.speechConsent) return;
         setHistory(records); setNotice('Tamamlanan görüşmenin tek özeti kaydedildi.');

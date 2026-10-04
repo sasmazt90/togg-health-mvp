@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibleDialog } from './AccessibleDialog';
+import { MentalSessionRows } from './MentalSessionRows';
 import { HealthCategory, HealthRecord, RECORD_LABELS, prepareHealthRecords, deleteHealthRecord, recordDate } from '../utils/healthRecords';
 
 export function RecordHistory({ category, parked }: { category: HealthCategory; parked: boolean }) {
@@ -30,9 +31,9 @@ export function RecordHistory({ category, parked }: { category: HealthCategory; 
     <p className="text-sm text-slate-400">{records.length} {category === 'mental' ? 'kayıtlı görüşme' : 'kayıt'}</p>
     {notice && <p role="status" className="text-sm text-amber-200">{notice}</p>}
     {!records.length && <p className="text-sm text-slate-400">Henüz kayıt yok.</p>}
-    {records.map(r => <article key={r.id} data-record-id={r.id} className="rounded-xl border border-white/10 p-3 space-y-2">
+    {category === 'mental' ? <MentalSessionRows records={records} onDelete={r=>{setNotice('');setSelected(r);}} parked={parked} busy={busy}/> : records.map(r => <article key={r.id} data-record-id={r.id} className="rounded-xl border border-white/10 p-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2"><time className="text-xs text-slate-400">{recordDate(r)}</time><button type="button" disabled={!parked || busy} aria-label={`${RECORD_LABELS[category]} kaydını sil: ${recordDate(r)}`} onClick={() => { setNotice(''); setSelected(r); }} className="min-h-11 px-4 rounded-xl border border-rose-400/40 text-rose-200 disabled:opacity-40 disabled:cursor-not-allowed">Sil</button></div>
-      <p className="text-sm break-words">{category === 'mental' ? r.summaryText || 'Özet kaydı' : category === 'skin' ? r.clinicalNoteTr || `${r.highestChangeRegion || 'Cilt'} • ${r.isBaseline ? 'Referans taraması' : r.comparisonUnavailable ? 'Karşılaştırma yok' : 'Analiz sonucu'}` : `Keskinlik: ${r.acuityRightSnellen || '—'} • ${r.acuityLeftSnellen || '—'}`}</p>
+      <p className="text-sm break-words">{category === 'skin' ? r.clinicalNoteTr || `${r.highestChangeRegion || 'Cilt'} • ${r.isBaseline ? 'Referans taraması' : r.comparisonUnavailable ? 'Karşılaştırma yok' : 'Analiz sonucu'}` : r.protocolVersion === 'landolt-orientation-continuous-v1' ? `Açısal ön değerlendirme · ${r.validTrials || 0} geçerli deneme. Görme keskinliği bu protokolle hesaplanmadı.` : `Eski dört yönlü protokol · Keskinlik: ${r.acuityRightSnellen || '—'} • ${r.acuityLeftSnellen || '—'}`}</p>
     </article>)}
     {selected && <AccessibleDialog title="Bu kaydı silmek istiyor musunuz?" onClose={close} className="w-full max-w-lg rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4">
       <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-bold">Bu kaydı silmek istiyor musunuz?</h2><button type="button" disabled={busy} aria-label="Silme penceresini kapat" onClick={close} className="min-h-11 min-w-11 rounded-xl border border-white/20 disabled:opacity-40">✕</button></div>

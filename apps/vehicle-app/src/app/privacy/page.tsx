@@ -44,6 +44,7 @@ export default function PrivacyPage() {
   const [browserMicState, setBrowserMicState] = useState<'granted' | 'denied' | 'prompt'>('prompt');
   const [cameraStatus, setCameraStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
+  const [saveTranscript, setSaveTranscript] = useState(false);
   const [saveMentalSummaries, setSaveMentalSummaries] = useState<boolean>(true);
   const [dataStats, setDataStats] = useState<{
     visionCount: number;
@@ -95,6 +96,7 @@ export default function PrivacyPage() {
         setMicStatus(deriveEffectiveStatus(micAllowed, 'prompt'));
       }
 
+      setSaveTranscript(localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true');
       const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
       if (mentalPref !== null) {
         setSaveMentalSummaries(mentalPref === 'true');
@@ -319,7 +321,7 @@ export default function PrivacyPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Seans Hafızası</h2><InformationButton title="Seans Hafızası"><p>Tamamlanan görüşmenin kısa özeti, temaları, duygu eğilimi ve tarihi bu cihazda saklanır. Ham ses ve tam konuşma dökümü saklanmaz. Kapatmak önceki kayıtları silmez. Görüşme başlatmak için saklama izni zorunlu değildir.</p></InformationButton></div>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Seans Hafızası</h2><InformationButton title="Seans Hafızası"><p>Tamamlanan görüşmenin kısa özeti, temaları, duygu eğilimi ve tarihi bu cihazda saklanır. Ham ses saklanmaz. Tam konuşma dökümü için aşağıdaki ayrı, varsayılan kapalı tercih gerekir. Kapatmak önceki kayıtları silmez. Görüşme başlatmak için saklama izni zorunlu değildir.</p></InformationButton></div>
             </div>
           </div>
 
@@ -333,6 +335,12 @@ export default function PrivacyPage() {
             </button>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3">
+        <div className="flex items-center justify-between gap-3"><h2 className="font-bold">Konuşma dökümü</h2><InformationButton title="Konuşma dökümü saklama"><p>Varsayılan kapalıdır. Açarsanız, ayrıca özet saklama tercihiniz açıkken tamamlanmış görüşmenin kullanıcı/asistan metinleri ve gerçek mesaj zamanları bu tarayıcıda aynı oturum kaydına eklenir. Ham mikrofon sesi saklanmaz. Bu tercih yeni bir backend veya dış sağlayıcı döküm kaydı oluşturmaz.</p><p>Görüşme hizmet onayı kapsamındaki yanıt/özet metin aktarımı ayrıdır. Yerel Sil eylemi dökümü ve özeti birlikte temizler; sağlayıcının tarihsel saklama veya silme durumunu doğrulamaz. Tercihi kapatmak eski kayıtları otomatik silmez.</p></InformationButton></div>
+        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveTranscript} aria-label="Tam konuşma dökümünü bu cihazda sakla" onChange={e=>{try{localStorage.setItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED,String(e.target.checked));setSaveTranscript(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Tam konuşma dökümünü bu cihazda sakla</label>
+        <p className="text-xs text-slate-400">Fotoğraflar yalnız açık cilt sonucu sayfasının belleğindedir; kalıcı fotoğraf saklama yapılmaz.</p>
       </section>
 
       {/* 3. BELOW FOLD: YEREL VERİ YÖNETİMİ VE SİLME */}

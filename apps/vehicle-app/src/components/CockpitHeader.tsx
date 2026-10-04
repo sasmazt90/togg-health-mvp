@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { InformationButton } from './InformationButton';
 import { usePathname } from 'next/navigation';
 import { useVehicle } from '../context/VehicleContext';
 import {
@@ -13,9 +14,6 @@ import {
   ShieldCheck,
   Car,
   Activity,
-  BatteryCharging,
-  Video,
-  Mic,
   AlertTriangle
 } from 'lucide-react';
 
@@ -52,34 +50,16 @@ export const CockpitHeader: React.FC = () => {
             </span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-2.5 text-slate-400 border-l border-white/10 pl-4 text-xs">
-            <span className="flex items-center gap-1.5 text-slate-200 font-medium">
-              <User className="w-3.5 h-3.5 text-togg-turquoise" />
-              <span>{state.driverName} (örnek araç profili)</span>
-            </span>
-            <span className="text-slate-600">•</span>
-            <span className="text-slate-400">{state.currentLocation.label}</span>
-          </div>
+
         </div>
 
         {/* Sensörler, Batarya ve Araç Durumu Butonu */}
         <div className="flex items-center gap-3">
-          <div className="hidden lg:flex items-center gap-3 text-slate-400 bg-slate-950/80 px-3.5 py-1 rounded-full border border-white/10 text-[11px]">
-            <span className="flex items-center gap-1.5 text-slate-300">
-              <Video className="w-3 h-3 text-emerald-400" /> Kamera
-            </span>
-            <span className="text-slate-700">•</span>
-            <span className="flex items-center gap-1.5 text-slate-300">
-              <Mic className="w-3 h-3 text-emerald-400" /> Mikrofon
-            </span>
-            <span className="text-slate-700">•</span>
-            <span className="flex items-center gap-1.5 text-slate-300">
-              <BatteryCharging className="w-3.5 h-3.5 text-togg-turquoise" /> %{state.batteryLevelPct}
-            </span>
-          </div>
+
 
           {/* Sürüş / Park Durumu */}
-          <button
+          <span data-vehicle-status className={`flex items-center gap-2 rounded-full px-3 py-2 border text-xs ${isParked?'text-emerald-300 border-emerald-800':'text-amber-200 border-amber-700'}`}><Car className="w-3.5 h-3.5"/>{syncStatus!=='synced'?(syncStatus==='failed'?'ARAÇ DURUMU BELİRSİZ':'ARAÇ DURUMU DOĞRULANIYOR'):isParked?'PARK':'SÜRÜŞ'}</span>
+          <InformationButton title="Demo araç durumu"><p>Windows MVP’si gerçek araç API/CAN bağlantısına sahip değildir. Aşağıdaki demo kontrolü gerçek frontend/backend durumunu değiştirir. PARK doğrulanmadan işlemler açılmaz. Kamera ve mikrofonun native izinleri araç sensörlerinden bağımsızdır.</p>          <button
             onClick={toggleDrivingMode}
             disabled={syncStatus === 'loading' || syncStatus === 'updating'}
             className={`flex items-center gap-2 px-3 py-1 rounded-full shrink-0 font-bold text-xs transition-all border shadow-sm ${
@@ -104,7 +84,7 @@ export const CockpitHeader: React.FC = () => {
             <span className="text-[9px] bg-white/10 px-1.5 py-0.2 rounded text-slate-300 font-normal">
               Değiştir
             </span>
-          </button>
+          </button></InformationButton>
         </div>
       </div>
 

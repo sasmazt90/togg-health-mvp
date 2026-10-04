@@ -11,7 +11,6 @@ import {
   CalendarCheck,
   ArrowRight,
   AlertCircle,
-  MapPin,
   Lock,
   Activity,
   ChevronRight,
@@ -19,7 +18,7 @@ import {
   ShieldCheck,
   Info
 } from 'lucide-react';
-import { isDemoMode, isCameraAllowed, isMicrophoneAllowed } from '../utils/attuneMode';
+import { isDemoMode } from '../utils/attuneMode';
 import {
   getVisionSummary,
   EMPTY_VISION_SUMMARY,
@@ -35,18 +34,7 @@ import {
 } from '../utils/healthSelectors';
 
 export default function CockpitDashboard() {
-  const { state, isParked, syncStatus } = useVehicle();
-  const [cameraAllowed, setCameraAllowed] = useState(true);
-  const [microphoneAllowed, setMicrophoneAllowed] = useState(true);
-
-  useEffect(() => {
-    const refresh = () => { setCameraAllowed(isCameraAllowed()); setMicrophoneAllowed(isMicrophoneAllowed()); };
-    refresh();
-    window.addEventListener('attune-privacy', refresh);
-    window.addEventListener('storage', refresh);
-    return () => { window.removeEventListener('attune-privacy', refresh); window.removeEventListener('storage', refresh); };
-  }, []);
-
+  const { isParked } = useVehicle();
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [vision, setVision] = useState<VisionSummaryData>(EMPTY_VISION_SUMMARY);
   const [skin, setSkin] = useState<SkinSummaryData>(EMPTY_SKIN_SUMMARY);
@@ -110,41 +98,7 @@ export default function CockpitDashboard() {
             </div>
           </div>
 
-          {/* Minimal Araç ve Durum Bloğu */}
-          <div data-vehicle-provenance className="w-full lg:max-w-md bg-slate-950/80 px-5 py-3.5 rounded-2xl border border-white/10 backdrop-blur-md shadow-lg space-y-3">
-            <p className="text-xs text-togg-turquoise font-semibold">Araç simülasyonu <span className="block text-[11px] text-slate-400 font-normal">Gerçek araç bağlantısı yok.</span></p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Araç Durumu</div>
-              <div className="text-xs font-semibold flex items-center gap-2 text-white">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isParked
-                      ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                      : 'bg-amber-400 animate-pulse'
-                  }`}
-                />
-                <span>{syncStatus === 'failed' ? 'Durum alınamadı' : syncStatus !== 'synced' ? 'Durum doğrulanıyor' : isParked ? 'Park Halinde' : `Sürüş (${state.currentSpeed} km/s)`}</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Varış Süresi</div>
-              <div className="text-xs font-semibold text-slate-200 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-togg-turquoise" />
-                <span>Rota hesabı bağlı değil</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Sensörler</div>
-              <div data-sensor-status className="text-xs text-slate-300 flex items-start gap-1">
-                <Info className="w-3.5 h-3.5 shrink-0" />
-                <span>{!cameraAllowed && !microphoneAllowed ? 'Kamera ve mikrofon izni kapalı' : !cameraAllowed ? 'Kamera izni kapalı' : !microphoneAllowed ? 'Mikrofon izni kapalı' : 'Donanım durumu doğrulanmadı'}</span>
-              </div>
-            </div>
-            </div>
-          </div>
+          <InformationButton title="Attune ve araç kapsamı"><p>Park halinde kişisel sağlık ve iyi oluş ön değerlendirmesi içindir. Bu Windows demosunda gerçek araç telemetrisi bağlı değildir. Durum kontrolü header’daki Demo araç durumu bilgisinde bulunur. Klinik veya gerçek araç doğrulaması yapılmamıştır.</p></InformationButton>
         </div>
 
         {/* Sürüş Modu Emniyet Uyarısı (Sadece hareket halindeyken) */}

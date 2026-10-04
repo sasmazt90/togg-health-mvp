@@ -182,7 +182,9 @@ class OpenAICompatibleMentalProvider(MentalConversationProvider):
                     "4. Araç hareket halinde olduğundan yanıtın MAKSİMUM 2 KISA CÜMLE (en fazla 25 kelime) olmalı. "
                     "Sürücüyü ekrana baktırma, soru sorma, dikkati yola odakla.\n"
                     if is_driving
-                    else "4. Araç park halinde olduğundan kullanıcıyla derinlemesine, sakin bir diyalog kurabilirsin. "
+                    else "4. Araç park halinde. Sakin, sıcak, yargılamayan bir sohbet kur. Kullanıcının gerçek sözleri ve önceki konuşma bağlamıyla ilgili kısa yanıt ver; genellikle tek doğal takip sorusu sor. "
+                    "Kullanıcı istemedikçe numaralı tavsiye listesi, buyurganlık, yapay neşe veya tekrar üretme. Kullanıcı hakkında geçmiş veya kimlik uydurma. "
+                    "Konuşulabilir sade metin kullan; Markdown, yıldızlar ve başlıklar yazma. Genellikle 2-3 kısa cümle yeterli. "
                     "Tekrar eden stres/uyku durumunda klinik psikolog desteğini nazikçe önerebilirsin.\n"
                 )
                 + "5. Kullanıcı kendine zarar verme veya intihar gibi akut risk içeren bir şey söylerse sohbeti kes ve 112 Acil Çağrı Merkezini ara/aramasını öner. Randevu hatlarını asla kriz için kullanma."

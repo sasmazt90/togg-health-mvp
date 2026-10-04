@@ -27,7 +27,8 @@ export const STORAGE_KEYS = {
   // App-Level Privacy Preferences
   PRIVACY_CAMERA_ALLOWED: 'attune_privacy_camera_allowed',
   PRIVACY_MIC_ALLOWED: 'attune_privacy_microphone_allowed',
-  PRIVACY_MENTAL_SAVE_ALLOWED: 'togg_privacy_mental_summary_allowed'
+  PRIVACY_MENTAL_SAVE_ALLOWED: 'togg_privacy_mental_summary_allowed',
+  PRIVACY_MENTAL_TRANSCRIPT_ALLOWED: 'attune_privacy_mental_transcript_allowed'
 } as const;
 
 export function isDemoMode(): boolean {
@@ -66,4 +67,9 @@ export function isMicrophoneAllowed(): boolean {
 export function isMentalSummarySavingAllowed(): boolean {
   if (typeof window === 'undefined') return true;
   return localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED) !== 'false';
+}
+
+export function isMentalTranscriptSavingAllowed(): boolean {
+  if (typeof window === 'undefined') return false;
+  return localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true';
 }
