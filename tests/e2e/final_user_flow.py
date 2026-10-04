@@ -14,10 +14,7 @@ class VerifiedSyntheticRecognition {start(){window.controlledRecognition=this;wi
 window.SpeechRecognition=window.webkitSpeechRecognition=VerifiedSyntheticRecognition;
 navigator.mediaDevices.getUserMedia=()=>{window.captureAttempts++;throw new Error('Physical capture forbidden');};
 const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...args){for(const type of ['playing','ended','error'])this.addEventListener(type,()=>window.audioProof.push({type,time:performance.now()}));return play.apply(this,args);};"""
-stream=io.BytesIO()
-with wave.open(stream,'wb') as w:
- w.setparams((1,2,16000,0,'NONE','not compressed'));w.writeframes(b''.join(struct.pack('<h',int(700*math.sin(i*2*math.pi*440/16000))) for i in range(16000)))
-CONTROLLED_AUDIO=stream.getvalue() # one second generated tone; no human audio/provider claim
+CONTROLLED_AUDIO=Path('tests/fixtures/synthetic-tone.mp3').read_bytes() # generated tone, controlled regression only; not provider acceptance
 
 def record(name,fn):
  try: result={'name':name,'status':'PASS','detail':fn()}
@@ -55,7 +52,7 @@ with sync_playwright() as pw:
       assert caller.bounding_box()['width']>=44 and caller.bounding_box()['height']>=44
       caller.click();dialog=p.get_by_role('dialog');expect(dialog).to_be_visible()
       p.wait_for_function('document.querySelector("[role=dialog]").contains(document.activeElement)')
-      bounds=dialog.bounding_box();assert bounds['y']>=15 and bounds['y']+bounds['height']<=height-15
+      bounds=dialog.bounding_box();assert bounds['y']>=15 and bounds['y']+bounds['height']<=height-15,(route,width,caller.get_attribute('aria-label'),bounds)
       assert dialog.evaluate('(e)=>{const r=e.firstElementChild.getBoundingClientRect();return e.contains(document.elementFromPoint(r.left+10,r.top+10))}'),'Dialog title covered by page navigation'
       for _ in range(15):p.keyboard.press('Tab');assert dialog.evaluate('e=>e.contains(document.activeElement)')
       p.keyboard.press('Shift+Tab');assert dialog.evaluate('e=>e.contains(document.activeElement)')
@@ -64,7 +61,7 @@ with sync_playwright() as pw:
      evidence.append({'route':route or 'cockpit','width':width,'dialogs':len(buttons),'captureAttempts':p.evaluate('window.captureAttempts')})
     for category in KEYS:
      p.goto(BASE+'/profile');seed(p,category);p.reload();panel=p.locator(f'[data-record-history={category}]');expect(panel.locator('[data-record-id]')).to_have_count(2)
-     panel.get_by_role('button').first.click();snap(p,f'{category}-delete-dialog-{width}',False);p.keyboard.press('Escape');expect(panel.locator('[data-record-id]')).to_have_count(2)
+     panel.get_by_role('button',name='kaydını sil:').first.click();snap(p,f'{category}-delete-dialog-{width}',False);p.keyboard.press('Escape');expect(panel.locator('[data-record-id]')).to_have_count(2)
    finally:c.close()
   return evidence
  record('All seven tabs: information dialogs, touch targets, short viewport, trap and return',information)
@@ -76,14 +73,14 @@ with sync_playwright() as pw:
    migrated=p.evaluate('(k)=>JSON.parse(localStorage.getItem(k))',KEYS[category][0]);assert len({r['id'] for r in migrated})==2 and migrated[0]['id']!='new-'+category
    before=p.evaluate('()=>JSON.stringify({...localStorage})')
    for action in ['cancel','escape','close']:
-    caller=panel.get_by_role('button').first
+    caller=panel.get_by_role('button',name='kaydını sil:').first
     caller.click();dialog=p.get_by_role('dialog',name='Bu kaydı silmek istiyor musunuz?',exact=True);expect(dialog).to_contain_text('Bu işlem geri alınamaz.');snap(p,f'{category}-delete-{action}-390',False)
     if action=='cancel':dialog.get_by_role('button',name='Hayır, vazgeç',exact=True).click()
     elif action=='escape':p.keyboard.press('Escape')
     else:dialog.get_by_role('button',name='Silme penceresini kapat',exact=True).click()
     assert p.evaluate('()=>JSON.stringify({...localStorage})')==before
     assert caller.evaluate('e=>e===document.activeElement')
-   old_id=migrated[0]['id'];panel.get_by_role('button').first.click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(1)
+   old_id=migrated[0]['id'];panel.get_by_role('button',name='kaydını sil:').first.click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(1)
    assert p.evaluate('(k)=>JSON.parse(localStorage.getItem(k))[0].id',KEYS[category][0])=='new-'+category
    assert p.evaluate('(k)=>JSON.parse(localStorage.getItem(k)).id',KEYS[category][1])=='new-'+category
    p.reload();expect(panel.locator('[data-record-id]')).to_have_count(1)
@@ -91,7 +88,7 @@ with sync_playwright() as pw:
    assert panel.locator(f'[data-record-id="{old_id}"]').count()==0
    # Another isolated browser user never receives or removes this profile's record.
    other=browser.new_context();op=other.new_page();op.goto(BASE+'/profile');expect(op.locator(f'[data-record-history={category}] [data-record-id]')).to_have_count(0);other.close()
-   panel.get_by_role('button').click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(0);p.reload();expect(panel.locator('[data-record-id]')).to_have_count(0)
+   panel.get_by_role('button',name='kaydını sil:').click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(0);p.reload();expect(panel.locator('[data-record-id]')).to_have_count(0)
    assert p.evaluate('(k)=>localStorage.getItem(k)',KEYS[category][1]) is None
    p.get_by_role('button',name='Hekimle Paylaşılabilir Özet',exact=True).click();expect(p.get_by_role('button',name='Yazdır / PDF olarak kaydet',exact=True)).to_be_disabled()
    return {'oldAndNew':True,'cancelEscapeCloseNoMutation':True,'onlySelectedIdDeleted':True,'refreshReopenSurvives':True,'otherProfileIsolated':True,'lastRecordEmpty':True,'pdfEmpty':True}
@@ -107,7 +104,7 @@ with sync_playwright() as pw:
    assert all('deletionToken' not in r for r in c.request.get(API+'/api/mental/sessions').json())
    seed(p,'mental',{'backendSessionId':a['sessionId'],'backendDeletionToken':a['deletionToken']});p.reload();panel=p.locator('[data-record-history=mental]');expect(panel.locator('[data-record-id]')).to_have_count(2)
    p.route('**/api/mental/sessions/**',lambda r:r.fulfill(status=503,json={'detail':'controlled backend unavailable'}))
-   panel.locator('[data-record-id=new-mental]').get_by_role('button').click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(p.get_by_role('dialog')).to_contain_text('Yerel kayıt korundu');assert len(p.evaluate('(k)=>JSON.parse(localStorage.getItem(k))',KEYS['mental'][0]))==2
+   panel.locator('[data-record-id=new-mental]').get_by_role('button',name='kaydını sil:').click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(p.get_by_role('dialog')).to_contain_text('Yerel kayıt korundu');assert len(p.evaluate('(k)=>JSON.parse(localStorage.getItem(k))',KEYS['mental'][0]))==2
    p.unroute('**/api/mental/sessions/**');p.get_by_role('button',name='Evet, sil',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(1)
    remaining=c.request.get(API+'/api/mental/sessions').json();assert a['sessionId'] not in [r['sessionId'] for r in remaining] and b['sessionId'] in [r['sessionId'] for r in remaining]
    assert c.request.delete(API+'/api/mental/sessions/'+a['sessionId'],data={'deletionToken':a['deletionToken']}).json()=={'deleted':True}
@@ -136,7 +133,7 @@ with sync_playwright() as pw:
    assert p.evaluate('window.recognitionProof')==[] and posts==[]
    p.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();p.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click();expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','permission')
    p.evaluate('window.controlledRecognition.onstart()');expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','listening')
-   p.route('**/api/mental/speech',lambda r:r.fulfill(status=200,content_type='audio/wav',body=CONTROLLED_AUDIO))
+   p.route('**/api/mental/speech',lambda r:r.fulfill(status=200,content_type='audio/mpeg',body=CONTROLLED_AUDIO))
    p.evaluate('window.controlledRecognition.onresult({resultIndex:0,results:[Object.assign([{transcript:"Bugün yeni bir kitap okudum."}],{isFinal:true})]})')
    expect(p.locator('[data-chat-author=USER]')).to_have_count(1);expect(p.locator('[data-chat-author=AI]')).to_have_count(1)
    p.wait_for_function('window.audioProof.some(e=>e.type==="playing")');assert p.evaluate('window.recognitionProof.filter(e=>e==="requested").length')==1
@@ -144,12 +141,12 @@ with sync_playwright() as pw:
    p.evaluate('window.controlledRecognition.onstart()');expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','listening')
    pending=[];p.route('**/api/mental/converse',lambda r:pending.append(r));p.evaluate('window.controlledRecognition.onresult({resultIndex:0,results:[[{transcript:"Sentetik gecikmiş tur"}]]})');p.wait_for_timeout(150);assert len(pending)==1
    p.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).uncheck();pending[0].fulfill(json={'reply':'late prohibited response','providerType':'LIVE_OPENAI'});p.wait_for_timeout(500)
-   assert p.locator('[data-chat-author=AI]').count()==1 and len(p.evaluate('window.audioProof.filter(e=>e.type==="playing")'))==1
+   assert p.locator('[data-live-transcript]').count()==0 and len(p.evaluate('window.audioProof.filter(e=>e.type==="playing")'))==1
    assert p.evaluate('localStorage.getItem("togg_health_mental_history")') is None and p.evaluate('window.captureAttempts')==0
    expect(p.get_by_role('button',name='Görüşmeyi Başlat',exact=True)).to_be_disabled();snap(p,'mental-service-revoked')
    p.unroute('**/api/mental/converse');p.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();p.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click();p.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click()
-   p.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');p.get_by_role('button',name='Gönder',exact=True).click();expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready');p.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed');expect(p.locator('[data-current-summary]')).to_be_visible()
-   other=c.new_page();other.goto(BASE+'/profile');other.locator('[data-record-history=mental]').get_by_role('button').click();other.get_by_role('button',name='Evet, sil',exact=True).click()
+   p.get_by_role('textbox',name='Görüşme mesajı').fill('Bugün yeni bir kitap okudum.');p.get_by_role('button',name='Gönder',exact=True).click();expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready');p.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();expect(p.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed');expect(p.locator('[data-session-rows]')).to_be_visible();assert p.locator('[data-current-summary]').count()==0
+   other=c.new_page();other.goto(BASE+'/profile');other.locator('[data-record-history=mental]').get_by_role('button',name='kaydını sil:').click();other.get_by_role('button',name='Evet, sil',exact=True).click()
    expect(p.locator('[data-current-summary]')).to_have_count(0);expect(p.locator('[data-mental-history]')).to_contain_text('0 kayıtlı görüşme');expect(p.get_by_role('img',name='Görüşme tema payları')).to_have_count(0);other.close()
    return {'singleConsentDefaultOff':True,'automaticSpeech':True,'permissionPendingTruthful':True,'noCaptureDuringAudio':True,'resumeAfterEnded':True,'lateOutputAfterRevokeBlocked':True,'currentSummaryAndChartRemovedAfterDeletion':True,'physicalCapture':0,'fixtureAudioSha256':hashlib.sha256(CONTROLLED_AUDIO).hexdigest(),'liveAcceptance':False}
   finally:c.close()

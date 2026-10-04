@@ -22,7 +22,8 @@ with sync_playwright() as pw:
         result=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
         reference=page.evaluate('JSON.parse(localStorage.getItem("togg_health_skin_multi_baseline_v2"))')
         assert result['comparisonScope']=='three-angle-v2' and result['usedMediaPipe'] is True
-        scope=page.locator('[data-skin-comparison-scope]');expect(scope).to_have_attribute('data-skin-comparison-scope','three-angle-v2');expect(scope).to_contain_text('Kapsam: ön, anatomik sağ ve anatomik sol açı');assert 'tek karşı açı' not in scope.inner_text()
+        page.get_by_role('button',name='Referans ve görüntü hakkında bilgi',exact=True).click()
+        scope=page.locator('[data-skin-comparison-scope]');expect(scope).to_have_attribute('data-skin-comparison-scope','three-angle-v2');expect(scope).to_contain_text('Kapsam: ön, anatomik sağ ve anatomik sol açı');assert 'tek karşı açı' not in scope.inner_text();page.keyboard.press('Escape')
         assert len(result['regions'])==6 and result['isBaseline'] == (repetition==0)
         assert set(reference['captures'])=={'FRONT','RIGHT','LEFT'}
         assert len({c['frameToken'] for c in reference['captures'].values()})==3
@@ -34,6 +35,10 @@ with sync_playwright() as pw:
         else:
             assert all('changeFromBaselinePct' not in r for r in result['regions'].values())
             assert page.evaluate('localStorage.getItem("togg_health_skin_baseline")') is None
+        assert page.evaluate('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
+        assert page.locator('[data-skin-snapshot]').count()==1 and page.locator('[data-skin-photo-empty]').count()==0
+        assert page.locator('[data-skin-roi="rightCheek"]').count()==1 and page.locator('[data-skin-roi="leftCheek"]').count()==0
+        assert 'data:image' not in page.evaluate('JSON.stringify(Object.fromEntries(Object.entries(localStorage)))')
         captures.append({'result':result,'reference':reference})
         page.screenshot(path=str(OUT/f'completed-{repetition}.png'),full_page=True)
     assert not errors,errors

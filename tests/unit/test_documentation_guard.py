@@ -75,8 +75,9 @@ def test_no_182_in_crisis_contexts():
 
 def test_no_synthetic_distance_generator_in_vision():
     """Vision modülünde 'intervalCount % 5' benzeri sahte mesafe döngüsü bulunmamalıdır."""
-    vision_page = ROOT_DIR / "apps" / "vehicle-app" / "src" / "app" / "vision" / "page.tsx"
+    vision_page = ROOT_DIR / "apps" / "vehicle-app" / "src" / "app" / "vision" / "ContinuousPage.tsx"
     assert vision_page.exists()
     content = vision_page.read_text(encoding="utf-8")
     assert "intervalCount % 5" not in content, "Sahte mesafe hesabı 'intervalCount % 5' tespit edildi!"
-    assert "Doğrulanan" in content or "verifiedDistanceCm" in content, "Kullanıcı doğrulamalı mesafe mantığı bulunamadı."
+    assert "verifiedDistanceCm" not in content
+    assert "relativeScaleChange" in content and "Mutlak mesafe ölçülmüyor" in content

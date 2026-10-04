@@ -1,3 +1,4 @@
+from vehicle_controls import toggle_vehicle, vehicle_status
 """Keyless UI evidence for cockpit provenance, Care limits and selected print.
 
 --before only captures observations of the unchanged starting product; it is
@@ -36,35 +37,39 @@ with sync_playwright() as pw:
         c.add_init_script(INIT); page = c.new_page()
         c.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
         try:
-            page.goto(BASE); expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_be_enabled()
+            page.goto(BASE); expect(vehicle_status(page)).to_contain_text('PARK')
             snap(page,f'cockpit-health-demo-off-{width}')
             if not args.before:
-                expect(page.locator('[data-vehicle-provenance]')).to_contain_text('Araç simülasyonu')
-                expect(page.locator('[data-vehicle-provenance]')).to_contain_text('Rota hesabı bağlı değil')
-                expect(page.locator('[data-sensor-status]')).to_contain_text('Donanım durumu doğrulanmadı')
+                assert page.locator('[data-vehicle-provenance]').count()==0
+                assert page.locator('[data-sensor-status]').count()==0
+                assert 'Ahmet Yılmaz' not in page.locator('header').inner_text()
                 assert '22 dk varış' not in page.locator('main').inner_text()
-                assert 'Hazır' not in page.locator('[data-sensor-status]').inner_text()
+                page.get_by_role('button',name='Demo araç durumu hakkında bilgi',exact=True).click()
+                expect(page.get_by_role('dialog')).to_contain_text('gerçek araç API/CAN bağlantısına sahip değildir')
+                page.keyboard.press('Escape')
                 expect(page.locator('[data-cockpit-care]')).to_contain_text('Örnek randevu')
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             page.goto(BASE+'/?demo=1'); snap(page,f'cockpit-health-demo-on-{width}')
             if not args.before:
-                expect(page.locator('[data-vehicle-provenance]')).to_contain_text('Araç simülasyonu')
+                assert page.locator('[data-vehicle-provenance]').count()==0
                 expect(page.get_by_text('demo veri',exact=True)).to_be_visible()
             page.goto(BASE+'/privacy')
             page.get_by_role('button',name='Erişimi Kapat',exact=True).first.click()
             page.get_by_role('button',name='Erişimi Kapat',exact=True).first.click()
             page.goto(BASE); snap(page,f'cockpit-permissions-denied-{width}')
             if not args.before:
-                expect(page.locator('[data-sensor-status]')).to_contain_text('Kamera ve mikrofon izni kapalı')
+                assert page.locator('[data-sensor-status]').count()==0
+                assert page.evaluate('localStorage.getItem("attune_privacy_camera_allowed")')=='false'
+                assert page.evaluate('localStorage.getItem("attune_privacy_microphone_allowed")')=='false'
             page.route('**/api/vehicle/state',lambda route:route.abort())
-            page.goto(BASE); expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_contain_text('ARAÇ DURUMU BELİRSİZ')
+            page.goto(BASE); expect(vehicle_status(page)).to_contain_text('ARAÇ DURUMU BELİRSİZ')
             snap(page,f'cockpit-vehicle-api-outage-{width}')
             if not args.before:
-                expect(page.locator('[data-vehicle-provenance]')).to_contain_text('Durum alınamadı')
-                assert 'Sürüş (0' not in page.locator('[data-vehicle-provenance]').inner_text()
+                expect(vehicle_status(page)).to_contain_text('ARAÇ DURUMU BELİRSİZ')
+                assert 'Sürüş (0' not in page.locator('main').inner_text()
                 assert 'Yalnızca sesli asistan kullanılabilir' not in page.locator('main').inner_text()
             page.unroute('**/api/vehicle/state')
-            page.goto(BASE+'/profile'); expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_contain_text('PARK')
+            page.goto(BASE+'/profile'); expect(vehicle_status(page)).to_contain_text('PARK')
             snap(page,f'profile-empty-{width}')
             page.get_by_role('button',name='Hekimle Paylaşılabilir Özet',exact=True).click()
             button=page.get_by_role('button',name='Yazdır / PDF olarak kaydet',exact=True)

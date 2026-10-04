@@ -7,8 +7,9 @@ class AdmissionRejected(RuntimeError):
     pass
 
 class LiveAdmission:
-    def __init__(self, source_verified=False):
+    def __init__(self, source_verified=False, spoken_reply=None):
         self.source_verified = source_verified
+        self.spoken_reply = spoken_reply or (lambda value: value)
         self.counts = {'conversation': 0, 'tts': 0, 'summary': 0}
         self.messages = []
         self.pending = None
@@ -31,7 +32,7 @@ class LiveAdmission:
                 kind = 'tts'
                 if self.counts[kind] >= 3 or self.counts['conversation'] != self.counts[kind] + 1:
                     self.reject('TTS_BUDGET_OR_ORDER')
-                if not self.messages or data.get('input') != self.messages[-1]['content']:
+                if not self.messages or data.get('input') != self.spoken_reply(self.messages[-1]['content']):
                     self.reject('TTS_NOT_CURRENT_VERIFIED_REPLY')
                 if not isinstance(data.get('input'), str) or len(data['input']) > 2000:
                     self.reject('TTS_INPUT_BUDGET')

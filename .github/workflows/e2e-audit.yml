@@ -162,6 +162,14 @@ jobs:
       - name: Final service consent and durable per-record deletion
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/final_user_flow.py 2>&1 | tee audit-results/final-user-flow.log
+      - name: Continuous selector, opt-in transcript and real MPEG streaming regressions
+        if: ${{ !cancelled() }}
+        run: |
+          python -u tests/e2e/vision_camera_followup.py 2>&1 | tee audit-results/vision-camera.log
+          python -u tests/e2e/continuous_vision_contract.py 2>&1 | tee audit-results/continuous-vision.log
+          python -u tests/e2e/mental_sessions_followup.py 2>&1 | tee audit-results/mental-sessions.log
+          python -u tests/e2e/stream_speech_followup.py 2>&1 | tee audit-results/stream-speech.log
+          python -u tests/e2e/uat_visuals.py 2>&1 | tee audit-results/uat-visuals.log
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4

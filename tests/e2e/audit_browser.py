@@ -1,3 +1,5 @@
+from vehicle_controls import toggle_vehicle, vehicle_status
+from continuous_vision_contract import selector_contract
 """Independent browser audit. Runs production app with genuine Chromium media APIs.
 Face/audio files are controlled virtual-device fixtures, not clinical validation.
 No real appointments, payments, API credentials or external writes are used.
@@ -60,8 +62,8 @@ with sync_playwright() as pw:
         if os.environ.get('ATTUNE_TRACE')=='1':c.tracing.stop(path=str(OUT/(name+'.trace.zip')))
         c.close()
     def click_toggle(page):
-        page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
-        page.wait_for_function("document.querySelector('button[title=\"Sürüş ve Park modları arasında geçiş\"]')?.innerText.includes('SÜRÜŞ')")
+        toggle_vehicle(page)
+        page.wait_for_function("document.querySelector('[data-vehicle-status]')?.innerText.includes('SÜRÜŞ')")
 
     c,page=new()
     for route in ['/','/vision','/skin','/mental','/care','/profile','/privacy']:
@@ -75,31 +77,26 @@ with sync_playwright() as pw:
 
     c,page=new()
     def vision_setup():
-        go(page,'/vision');page.get_by_role('button',name='TESTİ HAZIRLA').click();page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç').click();page.wait_for_timeout(1600);snap(page,'vision-camera')
+        go(page,'/vision');page.get_by_role('button',name='Hazırlığı Başlat').click();page.wait_for_timeout(1600);snap(page,'vision-camera')
         live=page.evaluate('window.__audit.streams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
         require(live,'Application did not acquire a live video track')
         require(page.locator('video').evaluate('(v)=>v.videoWidth>0 && v.readyState>=2'),'Camera preview has no decoded frames')
         return 'Actual getUserMedia video track and decoded preview frames'
     check('vision camera acquisition and preview',vision_setup)
     def vision_complete():
-        page.get_by_role('button',name='Doğrulandı, Testi Başlat').click()
-        for i in range(180):
-            if page.get_by_text('Görme Ön Değerlendirmesi Tamamlandı',exact=True).is_visible():break
-            choices=['Yukarı','Sol','Sağ','Aşağı'];page.get_by_title(choices[i%4],exact=True).click();page.wait_for_timeout(45)
-        require(page.get_by_text('Görme Ön Değerlendirmesi Tamamlandı',exact=True).is_visible(),'Vision test did not complete within 180 responses')
-        record=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_vision"))');snap(page,'vision-complete')
-        require(record and record.get('testCompleted'),'Completed test did not persist');require(record.get('contrastSensitivityLogCS') is not None,'Missing contrast result')
-        return record
-    check('vision full calibration two-eye contrast persistence',vision_complete)
+        require(page.get_by_role('button',name='Ölçümü Başlat',exact=True).is_disabled(),'Unverified eye occlusion permits measurement')
+        require(not page.evaluate('localStorage.getItem("togg_health_latest_vision")'),'Unverified camera produced a result')
+        return selector_contract(page,OUT,'vision-continuous-practice')
+    check('vision continuous selector; unverified occlusion blocks measurement/persistence',vision_complete)
     def vision_profile():
-        page.get_by_role('link',name='Sağlık Geçmişim').click();page.wait_for_timeout(600);snap(page,'vision-profile');require('Henüz görme' not in page.locator('body').inner_text(),'Completed vision absent from profile')
-    check('vision result available in health profile',vision_profile)
+        page.get_by_role('link',name='Sağlık Geçmişim').click();page.wait_for_timeout(600);snap(page,'vision-profile');require('Henüz tamamlanmış görme değerlendirmesi' in page.locator('body').inner_text(),'Practice falsely reported as a measured result')
+    check('vision practice absent from measured health profile',vision_profile)
     close(c,'vision-flow')
 
     c,page=new()
     def vision_stop():
-        go(page,'/vision');page.get_by_role('button',name='TESTİ HAZIRLA').click();page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç').click();page.wait_for_timeout(900);click_toggle(page);snap(page,'vision-driving')
-        require(page.get_by_text('Görme Kontrolü Kullanılamıyor').is_visible(),'No driving lock')
+        go(page,'/vision');page.get_by_role('button',name='Hazırlığı Başlat').click();page.wait_for_timeout(900);click_toggle(page);snap(page,'vision-driving')
+        require(page.get_by_role('button',name='Hazırlığı Başlat').is_disabled(),'No driving lock')
         require(not page.evaluate('window.__audit.streams.some(s=>s.getTracks().some(t=>t.readyState==="live"))'),'Camera remains LIVE after driving lock')
     check('vision driving lock stops active camera',vision_stop)
     def driving_sync():

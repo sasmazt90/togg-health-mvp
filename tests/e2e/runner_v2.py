@@ -35,16 +35,9 @@ extra=r'''
     # Additional actual-user and negative-path regression checks.
     c,page=new()
     def vision_geometry():
-        go(page,'/vision');page.get_by_role('button',name='TESTİ HAZIRLA').click();page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç').click();page.get_by_role('button',name='Doğrulandı, Testi Başlat').click()
-        svg=page.locator('svg[data-logmar]');widths=[]
-        for i in range(3):
-            widths.append(svg.evaluate('(s)=>({width:s.getBoundingClientRect().width,attr:s.getAttribute("width"),style:s.getAttribute("style")})'))
-            deg=svg.evaluate('(s)=>parseFloat(s.parentElement.style.transform.match(/rotate\(([-\d.]+)deg\)/)[1])')
-            title={0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[deg]
-            page.get_by_title(title,exact=True).click();page.wait_for_timeout(450)
-        snap(page,'vision-geometry');(OUT/'vision-geometry-values.json').write_text(json.dumps(widths,indent=2));require(widths[-1]['width']<widths[0]['width'],'Correct responses change reported difficulty but actual symbol width remains '+str(widths))
-        return widths
-    check('vision actual rendered symbol shrinks after correct responses',vision_geometry);close(c,'vision-geometry')
+        from continuous_vision_contract import manual_calibration_contract
+        return manual_calibration_contract(page)
+    check('vision manual calibrated symbol without floor; no clinical or practice persistence',vision_geometry);close(c,'vision-geometry')
 
     c,page=new()
     def mental_fabricated_panels():

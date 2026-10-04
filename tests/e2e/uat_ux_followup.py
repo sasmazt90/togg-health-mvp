@@ -1,3 +1,5 @@
+from vehicle_controls import toggle_vehicle, vehicle_status
+from continuous_vision_contract import selector_contract, manual_calibration_contract
 """Keyless UAT: actual production UI/API, explicit UI saving consent and UX faults.
 Controlled delays/permission faults are labelled; no fake provider/STT/MediaPipe success.
 """
@@ -49,9 +51,9 @@ with sync_playwright() as pw:
    c,page=fresh(w,h)
    try:
     for route in ['','skin','vision','mental','profile','privacy','care']:
-     page.goto(BASE+'/'+route);expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_be_enabled();page.wait_for_timeout(400)
+     page.goto(BASE+'/'+route);expect(vehicle_status(page)).to_contain_text('PARK');page.wait_for_timeout(400)
      assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
-     brand=page.locator('header a').filter(has=page.get_by_alt_text('Togg',exact=True)).bounding_box();park=page.get_by_title('Sürüş ve Park modları arasında geçiş').bounding_box()
+     brand=page.locator('header a').filter(has=page.get_by_alt_text('Togg',exact=True)).bounding_box();park=vehicle_status(page).bounding_box()
      overlap=brand['x']<park['x']+park['width'] and brand['x']+brand['width']>park['x'] and brand['y']<park['y']+park['height'] and brand['y']+brand['height']>park['y']
      if not args.baseline:assert not overlap
      snap(page,f'{route or "home"}-empty-{w}',True);evidence.append({'route':'/'+route,'viewport':[w,h],'brandParkOverlap':overlap})
@@ -68,7 +70,7 @@ with sync_playwright() as pw:
    page.goto(BASE+'/mental');start(page);send(page,'Bugün yeni bir kitap okudum.');assert history(page)==[];finish(page);assert history(page)==[];snap(page,'mental-completed-saving-off',True)
    page.goto(BASE+'/privacy');page.get_by_role('button',name='Etkinleştir',exact=True).click();snap(page,'privacy-saving-explicit-on',True)
    for i,text in enumerate(['Ailemle güzel bir kitap okudum.','İş projemi bitirdim ve ailemle sohbet ettim.']):
-    page.goto(BASE+'/mental');start(page);send(page,text);assert len(history(page))==i;finish(page);saved=history(page);assert len(saved)==i+1 and saved[-1]['completed'] and saved[-1]['consented'] and saved[-1]['schemaVersion']==2
+    page.goto(BASE+'/mental');start(page);send(page,text);assert len(history(page))==i;finish(page);saved=history(page);assert len(saved)==i+1 and saved[-1]['completed'] and saved[-1]['consented'] and saved[-1]['schemaVersion']==3 and 'transcript' not in saved[-1]
     page.wait_for_timeout(250);assert len(history(page))==i+1
    snap(page,'mental-two-completed-390',True)
    page.get_by_role('button',name='sosyal ilişkiler:',exact=False).click();expect(page.locator('[data-selected-theme]')).to_contain_text('sosyal ilişkiler');snap(page,'mental-selected-theme-390',True)
@@ -145,7 +147,7 @@ with sync_playwright() as pw:
    page.goto(BASE+'/mental');page.get_by_role('checkbox',name='TOGG Attune hizmet onayı',exact=True).check();page.get_by_role('button',name='Görüşmeyi Başlat',exact=True).click();expect(page.get_by_text('Mikrofon kullanım izni Gizlilik ayarlarında kapalıdır.',exact=False)).to_be_visible();assert page.evaluate('window.captureAttempts')==0
    page.route('**/api/mental/converse',lambda r:r.abort());page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click();page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik kesinti kontrolü');page.get_by_role('button',name='Gönder',exact=True).click();expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','error');snap(page,'mental-api-outage',True)
    page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();assert history(page)==[]
-   page.get_by_title('Sürüş ve Park modları arasında geçiş').click();expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_contain_text('SÜRÜŞ')
+   toggle_vehicle(page);expect(vehicle_status(page)).to_contain_text('SÜRÜŞ')
    for route in ['skin','vision','mental','care','profile']:
     page.goto(BASE+'/'+route);snap(page,route+'-driving',True)
    assert page.evaluate('window.captureAttempts')==0;return {'failedRecords':0,'captureAttempts':0,'drivingRoutes':5}
@@ -170,18 +172,9 @@ with sync_playwright() as pw:
    layouts=[]
    for width in [390,820,1280]:
     page.set_viewport_size({'width':width,'height':844 if width==390 else 900})
-    page.goto(BASE+'/vision');page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click();snap(page,f'vision-calibration-{width}',True)
-    page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click();page.get_by_role('button',name='Doğrulandı, Testi Başlat',exact=True).click()
-    panel=page.locator('[data-vision-panels]');children=panel.locator(':scope > div');left,right=children.nth(0).bounding_box(),children.nth(1).bounding_box();adjacent=right['x']>=left['x']+left['width']
-    if not args.baseline:assert adjacent, {'width':width,'left':left,'right':right}
-    if not args.baseline:
-     progress=page.locator('[data-vision-progress]');expect(progress).to_have_text('1 / 6');assert progress.bounding_box()['height']<=22
-    svg=page.locator('svg[data-logmar]');before=svg.bounding_box();logmar=svg.get_attribute('data-logmar');angle=svg.evaluate('s=>Number(s.parentElement.style.transform.match(/[-\d.]+/)[0])');direction={0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle]
-    for button in ['Sağ','Sol','Yukarı','Aşağı']:
-     rect=page.get_by_title(button,exact=True).bounding_box();assert rect['width']>=44 and rect['height']>=44, rect
-    snap(page,f'vision-active-{width}',True);trial=svg.get_attribute('data-trial');page.get_by_title(direction,exact=True).click();expect(svg).not_to_have_attribute('data-trial',trial);assert svg.get_attribute('data-logmar')==logmar
-    angle=svg.evaluate('s=>Number(s.parentElement.style.transform.match(/[-\\d.]+/)[0])');direction={0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle];page.get_by_title(direction,exact=True).click();expect(svg).not_to_have_attribute('data-logmar',logmar);assert svg.bounding_box()['width']<before['width'];snap(page,f'vision-correct-smaller-{width}',True)
-    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');layouts.append({'width':width,'adjacentPanels':adjacent,'actualMeasuredSizeReduced':True})
+    result=selector_contract(page,OUT,f'vision-active-{width}')
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    layouts.append({'width':width,'actualPaintedContinuousGap':True,'singleDragArrow':True,'practiceNotPersisted':True})
    page.set_viewport_size({'width':1280,'height':900});page.goto(BASE+'/mental');start(page)
    text='Sentetik uzun görüşme kontrolü. '+('Ailemle bir kitap okuduk ve günümüzü konuştuk. '*18)
    for i in range(4):send(page,text+str(i))

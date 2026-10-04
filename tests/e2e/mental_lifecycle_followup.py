@@ -1,3 +1,4 @@
+from vehicle_controls import toggle_vehicle, vehicle_status
 """Production UI, actual keyless FastAPI replies; controlled transport delays test races.
 This file makes no native-STT, native-TTS, or live-provider capability claim.
 """
@@ -56,9 +57,12 @@ with sync_playwright() as pw:
             assert page.locator('[data-chat-author="USER"]').count() == page.locator('[data-chat-author="AI"]').count() == 3
             page.screenshot(path=str(OUT/'three-turn-text.png'), full_page=True)
             finish(page); saved = storage(page)
-            assert len(saved) == 1 and saved[0]['completed'] and saved[0]['consented'] and saved[0]['schemaVersion'] == 2
+            assert len(saved) == 1 and saved[0]['completed'] and saved[0]['consented'] and saved[0]['schemaVersion'] == 3 and saved[0]['startedAt'] < saved[0]['completedAt'] and 'transcript' not in saved[0]
             expect(page.get_by_role('img', name='Görüşme tema payları')).to_be_visible()
-            assert not any(code in page.locator('[data-current-summary]').inner_text() for code in ['STRESSED','TIRED','RELAXED','NEUTRAL'])
+            page.locator('[data-session-rows] button[aria-haspopup=dialog]').first.click()
+            assert not any(code in page.get_by_role('dialog',name='Görüşme kaydı').inner_text() for code in ['STRESSED','TIRED','RELAXED','NEUTRAL'])
+            page.keyboard.press('Escape')
+            assert page.locator('[data-current-summary]').count()==0
             page.screenshot(path=str(OUT/'after-session.png'), full_page=True)
             page.reload(); expect(page.locator('[data-mental-history]')).to_contain_text('1 kayıtlı görüşme')
             return {'turns': 3, 'historyLengths': [0,2,4], 'records': 1, 'nativeAudioClaim': False}
@@ -71,7 +75,8 @@ with sync_playwright() as pw:
             page.evaluate('localStorage.setItem("togg_privacy_mental_summary_allowed","false")')
             text_start(page); send(page, 'Bugün güzel bir kitap okudum.'); finish(page)
             assert storage(page) == []
-            expect(page.locator('[data-current-summary]')).to_be_visible()
+            expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','completed')
+            assert page.locator('[data-current-summary]').count()==0
             return {'summaryCreated': True, 'saved': False}
         finally: context.close()
     record('Summary generation and storage permission are independent', no_consent)
@@ -126,7 +131,7 @@ with sync_playwright() as pw:
         try:
             text_start(page); page.route('**/api/mental/converse',lambda r: pending.append(r))
             page.get_by_role('textbox',name='Görüşme mesajı').fill('Sentetik sürüş geçişi');page.get_by_role('button',name='Gönder',exact=True).click()
-            page.wait_for_timeout(200);page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
+            page.wait_for_timeout(200);toggle_vehicle(page)
             expect(page.get_by_text('Sürüş geçişinde görüşme güvenle kapatıldı.',exact=False)).to_be_visible()
             pending[0].fulfill(json={'reply':'GEÇ SÜRÜŞ OLAYI','providerType':'LIVE_OPENAI'})
             page.wait_for_timeout(400);assert 'GEÇ SÜRÜŞ OLAYI' not in page.locator('body').inner_text() and storage(page)==[]
@@ -193,7 +198,7 @@ with sync_playwright() as pw:
             text_start(page);send(page,'Sentetik tamamlanmış kitap turu')
             page.route('**/api/mental/analyze-session',lambda r:pending.append(r))
             page.get_by_role('button',name='Görüşmeyi Bitir',exact=True).click();page.wait_for_timeout(200);assert len(pending)==1
-            page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
+            toggle_vehicle(page)
             expect(page.get_by_text('Sürüş geçişinde görüşme güvenle kapatıldı.',exact=False)).to_be_visible()
             pending[0].fulfill(json={'summaryText':'GEÇ ÖZET','themes':['kitap'],'moodTrend':'NEUTRAL','providerType':'LIVE_OPENAI'})
             page.wait_for_timeout(400);assert storage(page)==[] and 'GEÇ ÖZET' not in page.locator('body').inner_text()

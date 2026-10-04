@@ -24,18 +24,21 @@ with sync_playwright() as pw:
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
     first=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
     assert first['isBaseline'] is True and first['usedMediaPipe'] is True
-    scope=page.locator('[data-skin-comparison-scope]');expect(scope).to_have_attribute('data-skin-comparison-scope','single-front-v1');expect(scope).to_contain_text('Kapsam: tek karşı açı')
+    page.get_by_role('button',name='Referans ve görüntü hakkında bilgi',exact=True).click()
+    scope=page.locator('[data-skin-comparison-scope]');expect(scope).to_have_attribute('data-skin-comparison-scope','single-front-v1');expect(scope).to_contain_text('Kapsam: tek karşı açı');page.keyboard.press('Escape')
     assert first['quality']['blurScore']>=4 and 40<=first['quality']['avgLuminance']<=220
     expect(page.get_by_text('Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.',exact=True)).to_be_visible()
     assert page.locator('video').count()==0
     page.wait_for_function('window.actualStreams.length>0 && window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
     assert '%0' not in page.locator('body').inner_text()
     for _ in range(6):
-        graphic=page.locator('[data-face-schematic] svg')
+        graphic=page.locator('[data-skin-snapshot]')
         label=graphic.get_attribute('aria-label')
-        assert graphic.locator('path[fill="#00c2e7"]').count()>0
+        assert graphic.locator('[data-skin-roi]').count()==6
+        assert graphic.locator('[data-skin-roi][fill-opacity=".32"]').count()==1
+        assert len(set(graphic.locator('[data-skin-roi]').evaluate_all('(elements)=>elements.map(e=>e.getAttribute("fill"))')))==6
         page.get_by_role('button',name='Gözlem Notu',exact=True).click()
-        selected=label.replace(' anatomik yüz şeması','')
+        selected=label.replace(' kabul edilmiş tarama görüntüsü','')
         note=page.get_by_text(selected+' — Referans oluşturuldu',exact=True)
         expect(note).to_be_visible()
         page.keyboard.press('Escape')
@@ -47,11 +50,11 @@ with sync_playwright() as pw:
         page.screenshot(path=str(visual/f'actual-first-reference-{width}.png'),full_page=True)
     page.set_viewport_size({'width':1280,'height':900})
     for region_index in range(6):
-        graphic=page.locator('[data-face-schematic] svg');selected=graphic.get_attribute('aria-label').replace(' anatomik yüz şeması','')
+        graphic=page.locator('[data-skin-snapshot]');selected=graphic.get_attribute('aria-label').replace(' kabul edilmiş tarama görüntüsü','')
         page.evaluate('scrollTo(0,0)');page.screenshot(path=str(visual/f'actual-region-{region_index}.png'),full_page=True)
         page.get_by_role('button',name='Gözlem Notu',exact=True).click();expect(page.get_by_text(selected+' — Referans oluşturuldu',exact=True)).to_be_visible()
         page.screenshot(path=str(visual/f'actual-region-note-{region_index}.png'));page.keyboard.press('Escape');page.get_by_role('button',name='Sonraki Bölge',exact=True).click()
-    page.screenshot(path=str(OUT/'skin-baseline-schematic.png'))
+    page.screenshot(path=str(OUT/'skin-baseline-snapshot.png'))
     page.get_by_role('button',name='Önerilen Aksiyonlar',exact=True).click()
     page.get_by_role('button',name='Hatırlat',exact=True).click()
     date_input=page.get_by_role('textbox',name='Hatırlatma tarihi ve saati')
@@ -94,7 +97,7 @@ with sync_playwright() as pw:
     assert len(second['regions'])==6
     assert all('changeFromBaselinePct' in r for r in second['regions'].values())
     assert not errors,errors
-    page.screenshot(path=str(OUT/'skin-repeat-schematic.png'))
+    page.screenshot(path=str(OUT/'skin-repeat-snapshot.png'))
     page.get_by_role('button',name='Zaman İçinde Değişim',exact=True).click();page.screenshot(path=str(visual/'actual-compatible-trend.png'));page.keyboard.press('Escape')
     (OUT/'skin.json').write_text(json.dumps({'first':first,'second':second,'calendarUid':reminder['id'],'cameraStoppedInResult':True,'allSixRegionsVisible':True,'reminderDefaultCalendarDays':28,'reminderEditDedupErrorCancel':True,'visualScreenshots':'uat-skin (actual production MediaPipe/UI scans, not injected baseline)'},ensure_ascii=False,indent=2),encoding='utf-8')
     # Migration fixture starts from the two actual UI scans above, never injected metrics.

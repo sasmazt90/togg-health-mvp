@@ -187,7 +187,7 @@ def test_camera_app_permission_false_blocks_skin_and_vision():
     assert "isCameraAllowed()" in skin_content
     assert "!isCameraAllowed()" in skin_content
 
-    vision_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "vision" / "page.tsx"
+    vision_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "vision" / "ContinuousPage.tsx"
     vision_content = vision_page.read_text(encoding="utf-8")
     assert "isCameraAllowed()" in vision_content
     assert "!isCameraAllowed()" in vision_content

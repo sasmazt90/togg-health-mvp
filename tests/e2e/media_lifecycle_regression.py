@@ -1,3 +1,4 @@
+from vehicle_controls import toggle_vehicle, vehicle_status
 """Production browser regressions using decoded frames, actual MediaPipe and native permission denial."""
 import json
 import os
@@ -60,12 +61,12 @@ with sync_playwright() as pw:
     run('Second scan starts after route cleanup', scan)
 
     def driving():
-        page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
+        toggle_vehicle(page)
         expect(page.get_by_text('Cilt Kontrolü Kilitlendi', exact=True)).to_be_visible()
         page.wait_for_timeout(300)
         assert page.evaluate('window.__streams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
         assert not errors, errors
-        page.get_by_title('Sürüş ve Park modları arasında geçiş').click()
+        toggle_vehicle(page)
         expect(page.get_by_role('button', name='Analizi Başlat', exact=True)).to_be_visible()
         return {'tracksEnded': True, 'parkRestored': True}
 

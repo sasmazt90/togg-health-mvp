@@ -1,3 +1,5 @@
+from vehicle_controls import toggle_vehicle, vehicle_status
+from continuous_vision_contract import selector_contract, manual_calibration_contract
 """Behavior-level backlog regressions against the built app and actual local API."""
 import argparse
 import json
@@ -120,26 +122,24 @@ with sync_playwright() as pw:
                 page = context.new_page()
                 page.add_init_script("""window.cameraStreams=[];const gum=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...args)=>{const stream=await gum(...args);window.cameraStreams.push(stream);return stream;};""")
                 page.goto(BASE+'/vision')
-                toggle = page.get_by_title('Sürüş ve Park modları arasında geçiş')
+                toggle = vehicle_status(page)
                 expect(toggle).to_contain_text('PARK')
-                page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click()
-                page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click()
+                page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click()
                 page.wait_for_function('window.cameraStreams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
-                toggle.click()
+                toggle_vehicle(page)
                 expect(toggle).to_contain_text('SÜRÜŞ')
-                expect(page.get_by_role('heading',name='Görme Kontrolü Kullanılamıyor')).to_be_visible()
+                expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_disabled()
                 assert page.evaluate('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
                 driving = context.request.get(API+'/api/vehicle/state').json()
                 assert driving['vehicleMoving'] is True and driving['currentSpeed'] == 75
                 reply = context.request.post(API+'/api/mental/converse',data={'userMessage':'Bugün kitap okudum'}).json()
                 assert reply['isDriving'] is True
-                toggle.click()
+                toggle_vehicle(page)
                 expect(toggle).to_contain_text('PARK')
                 parked = context.request.get(API+'/api/vehicle/state').json()
                 assert parked['vehicleMoving'] is False and parked['currentSpeed'] == 0
-                expect(page.get_by_role('button',name='TESTİ HAZIRLA',exact=True)).to_be_visible()
-                page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click()
-                page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click()
+                expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_enabled()
+                page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click()
                 page.wait_for_function('window.cameraStreams.some(s=>s.getVideoTracks().some(t=>t.readyState==="live"))')
                 page.get_by_role('link',name='Gizlilik & İzinler',exact=True).click()
                 page.wait_for_function('window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))')
@@ -158,7 +158,7 @@ with sync_playwright() as pw:
                 page.goto(BASE+'/vision')
                 notice = page.get_by_role('alert').filter(has_text='Araç durumu doğrulanamıyor')
                 expect(notice).to_be_visible()
-                assert page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).count() == 0
+                expect(page.get_by_role('button',name='Hazırlığı Başlat',exact=True)).to_be_disabled()
                 return {'actualSafetyNotice':notice.inner_text()}
             finally:
                 context.close()
@@ -169,29 +169,12 @@ with sync_playwright() as pw:
             try:
                 context.request.post(API+'/api/vehicle/speed',data={'speedKmH':0})
                 page = context.new_page()
-                page.goto(BASE+'/vision')
-                page.get_by_role('button',name='TESTİ HAZIRLA',exact=True).click()
-                page.get_by_role('button',name='Ölçek Doğrulandı, Mesafeye Geç',exact=True).click()
-                page.get_by_role('button',name='Doğrulandı, Testi Başlat',exact=True).click()
-                symbol = page.get_by_role('img',name='Görme testi simgesi',exact=True)
-                observations = []
-                for i in range(3):
-                    page.wait_for_function('document.querySelector("svg[data-logmar]").getAnimations().length === 0')
-                    observations.append(symbol.evaluate('(s)=>({width:s.getBoundingClientRect().width,logMAR:Number(s.dataset.logmar)})'))
-                    angle = symbol.evaluate("s=>parseFloat(s.parentElement.style.transform.match(/rotate\(([-\\d.]+)deg\)/)[1])")
-                    title = {0:'Sağ',90:'Aşağı',180:'Sol',270:'Yukarı',-90:'Yukarı'}[angle]
-                    page.get_by_title(title,exact=True).click()
-                assert observations[-1]['width'] < observations[0]['width'], observations
-                ratio = observations[-1]['width']/observations[0]['width']
-                expected = 10 ** (observations[-1]['logMAR']-observations[0]['logMAR'])
-                assert abs(ratio-expected)<0.01, observations
-                # Touch controls retain their readable size independently of the measured stimulus.
-                assert page.get_by_title('Yukarı',exact=True).bounding_box()['height'] >= 90
-                page.screenshot(path=str(OUT/'vision-geometry.png'))
-                return observations
+                result = selector_contract(page, OUT, 'vision-continuous')
+                result['calibration'] = manual_calibration_contract(page)
+                return result
             finally:
                 context.close()
-        record('Rendered optotype geometry follows actual logMAR difficulty',geometry)
+        record('Continuous selector and physical size preserve coordinate/scale contract; measurement blocked',geometry)
     elif phase == 'mental':
         def evidence():
             context = browser.new_context()
@@ -249,7 +232,7 @@ with sync_playwright() as pw:
                 page.on('pageerror',lambda error:errors.append(str(error)))
                 for route in ['/','/profile']:
                     page.goto(BASE+route)
-                    expect(page.get_by_title('Sürüş ve Park modları arasında geçiş')).to_contain_text('PARK')
+                    expect(vehicle_status(page)).to_contain_text('PARK')
                     assert not errors,errors
                 page.goto(BASE+'/mental')
                 enter_text(page,'Ailemle bugün güzel vakit geçirdik.')
