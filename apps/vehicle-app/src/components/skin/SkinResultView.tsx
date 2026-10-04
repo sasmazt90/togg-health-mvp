@@ -2,11 +2,14 @@
 
 import React from 'react';
 import { SkinRegionData } from '../../data/skinDemoFixture';
+import { SkinSnapshot } from '../../utils/skinSnapshot';
+import { InformationButton } from '../InformationButton';
 import { SkinFacePanel } from './SkinFacePanel';
 import { SkinRegionSummary } from './SkinRegionSummary';
 
 interface SkinResultViewProps {
   currentRegion: SkinRegionData;
+  snapshot?: SkinSnapshot;
   onPrev: () => void;
   onNext: () => void;
   onOpenModal: (modal: 'trend' | 'observation' | 'actions') => void;
@@ -21,7 +24,7 @@ interface SkinResultViewProps {
 }
 
 export const SkinResultView: React.FC<SkinResultViewProps> = ({
-  currentRegion,
+  currentRegion, snapshot,
   onPrev,
   onNext,
   onOpenModal,
@@ -43,7 +46,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
               comparisonUnavailable ? 'Karşılaştırma yapılamadı: eski referansın kalite bilgisi yok veya ışık/netlik/poz koşulları uyuşmuyor. Referansınız korundu.' :
               `${currentRegion.nameTr}: kızarıklık piksel göstergesinde referansa göre ${currentRegion.changePct > 0 ? '+' : ''}${currentRegion.changePct}% değişim.`}
           </p>
-          <p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p>
+          <InformationButton title="Referans ve görüntü"><p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p><p>Fotoğraf ve gerçek ölçüm alanları yalnız bellektedir. Renkler bölge kimliğini gösterir; hastalık veya klinik şiddet haritası değildir. Önizleme aynalanmaz ve kırpılmaz.</p></InformationButton>
         </div>
 
         <div>
@@ -59,6 +62,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
         <div className="lg:col-span-5 flex flex-col items-center justify-center">
           <SkinFacePanel
             currentRegion={currentRegion}
+            snapshot={snapshot}
             mode="result"
             onPrev={onPrev}
             onNext={onNext}

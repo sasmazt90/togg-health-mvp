@@ -23,6 +23,7 @@ import { appendHealthRecord } from '../../utils/healthRecords';
 import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
+import { SkinSnapshot, snapshotSkinFrame, snapshotAngleForRegion } from '../../utils/skinSnapshot';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
 import { SkinResultView } from '../../components/skin/SkinResultView';
@@ -76,6 +77,9 @@ export default function SkinPage() {
   });
   const [guidanceText, setGuidanceText] = useState<string>('Lütfen başınızı sabit tutun.');
 
+  const snapshotFrames = useRef<Partial<Record<SkinAngle, SkinSnapshot>>>({});
+  const snapshotRecord = useRef<string | null>(null);
+  const [snapshots, setSnapshots] = useState<Partial<Record<SkinAngle, SkinSnapshot>>>({});
   const [analysisResult, setAnalysisResult] = useState<SkinAnalysisResult | null>(null);
 
   // Real-time döngü referansları
@@ -155,6 +159,7 @@ export default function SkinPage() {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      snapshotFrames.current = {}; snapshotRecord.current = null;
       acquisitionRef.current += 1;
       if (demoTimerRef.current) {
         clearInterval(demoTimerRef.current);
@@ -167,6 +172,7 @@ export default function SkinPage() {
     const revoke = () => {
       if (!parkedRef.current || !isCameraAllowed()) {
         acquisitionRef.current += 1;
+        snapshotFrames.current = {}; snapshotRecord.current = null; setSnapshots({});
         if (demoTimerRef.current) clearInterval(demoTimerRef.current);
         setScanState('READY');
         setMediaStream(null);
@@ -187,6 +193,7 @@ export default function SkinPage() {
       if (scanState !== 'COMPLETED' || isDemoMode()) return;
       try {
         const latest = JSON.parse(localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) || 'null');
+        if (latest?.id !== snapshotRecord.current) { snapshotFrames.current = {}; snapshotRecord.current = null; setSnapshots({}); }
         if (latest?.regions) setAnalysisResult(latest);
         else { setAnalysisResult(null); setScanState('READY'); }
       } catch { setErrorMessage('Kayıt durumu doğrulanamadı.'); setScanState('ERROR'); }
@@ -414,6 +421,9 @@ export default function SkinPage() {
       return;
     }
 
+    const snapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT');
+    snapshotFrames.current = { FRONT: snapshot }; snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
+    setMediaStream(null); setIsLiveVideo(false);
     setAnalysisResult(finalResult);
     // En yüksek değişimin olduğu bölgeye odaklan veya varsayılan sağ yanak
     if (!isFirstScan && comparison.highestChangeRegion) {
@@ -447,6 +457,8 @@ export default function SkinPage() {
       // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
       await appendHealthRecord('skin', finalResult, !prior ? { [STORAGE_KEYS.SKIN_MULTI_BASELINE]: JSON.stringify(current) } : {}, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) === priorRaw);
       if (!validCapture()) return;
+      snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
+      setMediaStream(null); setIsLiveVideo(false);
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {
       setErrorMessage('Üç açılı ölçüm veya referans kaydı doğrulanamadı. Eski tek açılı referansınız değiştirilmedi.'); setScanState('ERROR');
@@ -570,6 +582,9 @@ export default function SkinPage() {
                   try {
                     const capture = await captureSkinAngle(ctx, curAlign, curQual, target, captureState.captures);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
+                    const snapshot = snapshotSkinFrame(canvas, curAlign, target);
+                    if (target === 'FRONT') snapshot.rois = snapshot.rois.filter(r => !['rightCheek','leftCheek'].includes(r.id));
+                    snapshotFrames.current[target] = snapshot;
                     captureState.captures[target] = capture;
                     setCompletedAngles([...SKIN_ANGLES.slice(0, captureState.index + 1)]);
                     if (captureState.index === 2) { finishMultiRef.current(captureState.captures as Record<SkinAngle, AngleCapture>); return; }
@@ -615,6 +630,7 @@ export default function SkinPage() {
     if (!isParked || scanState === 'CAMERA_ACTIVE') return;
     const acquisition = ++acquisitionRef.current;
     setErrorMessage(null);
+    snapshotFrames.current = {}; snapshotRecord.current = null; setSnapshots({});
     angleRuntime.current = { enabled: multiAngle, index: 0, captures: {} };
     setAngleIndex(0); setCompletedAngles([]);
 
@@ -787,7 +803,7 @@ export default function SkinPage() {
       {/* SCREEN 1: SKIN START VIEW (REFERANS 1 & 2)                  */}
       {/* ============================================================ */}
       {scanState === 'READY' && (
-        <><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm text-slate-300">{multiAngle ? "Ön ve iki yan pozda kısa bir tarama." : "Yalnız ön pozda kısa bir tarama."}</p><InformationButton title="Cilt taraması"><p>Görüntü bu cihazda işlenir; ham fotoğraf saklanmaz. İlk uygun tarama referans olur. Işık, netlik ve poz uyumsuzsa karşılaştırma yapılmaz. Sonuç klinik tanı değildir.</p><label className="flex min-h-11 items-center gap-3"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Ön, sağ ve sol pozlarda tara. Kapalıyken yalnız ön poz kullanılır.</label></InformationButton></div><SkinStartView onStart={startCamera} /></>
+        <><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm text-slate-300">{multiAngle ? "Ön ve iki yan pozda kısa bir tarama." : "Yalnız ön pozda kısa bir tarama."}</p><InformationButton title="Cilt taraması"><p>Görüntü bu cihazda işlenir. Sonuç fotoğrafı yalnız bu açık sayfanın belleğinde kalır; kamera sonuçta kapanır. Yenileme, çıkış, izin geri çekme veya silme sonrasında fotoğraf gösterilmez; kalıcı kayıtta yalnız sayısal metrikler bulunur. İlk uygun tarama referans olur. Işık, netlik ve poz uyumsuzsa karşılaştırma yapılmaz. Sonuç klinik tanı değildir.</p><label className="flex min-h-11 items-center gap-3"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Ön, sağ ve sol pozlarda tara. Kapalıyken yalnız ön poz kullanılır.</label></InformationButton></div><SkinStartView onStart={startCamera} /></>
       )}
 
       {/* ============================================================ */}
@@ -816,6 +832,7 @@ export default function SkinPage() {
         <p className="text-xs text-slate-300">{analysisResult?.comparisonScope === 'three-angle-v2' ? 'Üç açılı tarama tamamlandı. Alın, burun, çene ve göz çevresi ön pozdan; yanaklar göründükleri yan pozdan ölçüldü.' : 'Tek karşı açı sonucu; üç açılı tarama değildir.'}</p>
         <SkinResultView
           currentRegion={currentRegionData}
+          snapshot={snapshots[snapshotAngleForRegion(selectedRegionId, analysisResult?.comparisonScope === 'three-angle-v2')]}
           onPrev={handlePrevRegion}
           onNext={handleNextRegion}
           onOpenModal={(modal) => setActiveModal(modal)}

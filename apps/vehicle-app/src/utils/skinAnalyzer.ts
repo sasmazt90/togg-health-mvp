@@ -18,6 +18,7 @@ import { FilesetResolver, FaceLandmarker, NormalizedLandmark } from '@mediapipe/
 
 export interface FaceAlignment {
   faceDetected: boolean;
+  faceCount?: number;
   isMediaPipeActive: boolean;
   box?: { x: number; y: number; width: number; height: number };
   yaw: number; // -1.0 (sol) to +1.0 (sağ)
@@ -128,7 +129,7 @@ export class SkinAnalyzer {
         },
         runningMode: 'IMAGE',
         ...(typeof document === 'undefined' ? { canvas: new OffscreenCanvas(1, 1) } : {}),
-        numFaces: 1
+        numFaces: 2
       });
       return this.landmarkerInstance;
     } catch (err) {
@@ -163,6 +164,7 @@ export class SkinAnalyzer {
         if (!result.faceLandmarks || result.faceLandmarks.length === 0) {
           return {
             faceDetected: false,
+            faceCount: 0,
             isMediaPipeActive: true,
             yaw: 0,
             pitch: 0,
@@ -174,7 +176,10 @@ export class SkinAnalyzer {
         }
 
         const lms = result.faceLandmarks[0];
-        return this.calculateAlignmentFromLandmarks(lms, width, height);
+        const alignment = this.calculateAlignmentFromLandmarks(lms, width, height);
+        return { ...alignment, faceCount: result.faceLandmarks.length,
+          ...(result.faceLandmarks.length !== 1 ? { faceDetected: false, isAligned: false, guidanceTextTr: 'Kadrajda yalnız bir yüz bulunmalı.' } : {}) };
+
       } catch (e) {
         console.warn('MediaPipe detect hatası, geometrik dedektöre düşülüyor:', e);
       }
@@ -437,13 +442,7 @@ export class SkinAnalyzer {
    * 6 Anatomik ROI bölgesini gerçek MediaPipe landmark noktalarından veya oranlı geometriden çıkarır.
    * Göz ve dudak bölgelerini pikselleri bozmaması için maskeler.
    */
-  public static analyzeRegions(
-    ctx: CanvasRenderingContext2D,
-    width: number,
-    height: number,
-    alignment?: FaceAlignment,
-    visibleRegionIds?: string[]
-  ): Record<string, RegionMetrics> {
+  public static regionGeometry(width: number, height: number, alignment?: FaceAlignment) {
     const lms = alignment?.landmarks;
     const b = alignment?.box || { x: width * 0.25, y: height * 0.2, width: width * 0.5, height: height * 0.6 };
 
@@ -487,6 +486,18 @@ export class SkinAnalyzer {
       { id: 'chin', nameTr: 'Çene', x: ch.x * width - rw * 0.6, y: ch.y * height - rh * 0.8, w: rw * 1.2, h: rh * 0.7 },
       { id: 'periorbital', nameTr: 'Göz Çevresi', x: b.x + b.width * 0.2, y: b.y + b.height * 0.28, w: b.width * 0.6, h: b.height * 0.12 }
     ];
+
+    return { roiDefinitions, exclusionBoxes };
+  }
+
+  public static analyzeRegions(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    alignment?: FaceAlignment,
+    visibleRegionIds?: string[]
+  ): Record<string, RegionMetrics> {
+    const { roiDefinitions, exclusionBoxes } = this.regionGeometry(width, height, alignment);
 
     const results: Record<string, RegionMetrics> = {};
 
