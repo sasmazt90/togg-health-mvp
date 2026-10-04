@@ -10,7 +10,10 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 BASE=ROOT/'audit-results/live-provider/paired-20261004'
 parser=argparse.ArgumentParser();parser.add_argument('phase',choices=['before','after']);parser.add_argument('--prepare-only',action='store_true');args=parser.parse_args()
-OUT=BASE/args.phase;OUT.mkdir(parents=True,exist_ok=True)
+OUT=BASE/args.phase
+if any((OUT/name).exists() for name in ('launch-consumed.json','run-consumed.json')):
+    raise SystemExit('Consumed experiment is immutable: no preparation overwrite or retry')
+OUT.mkdir(parents=True,exist_ok=True)
 
 def replace_once(source, old, new):
     assert source.count(old)==1,old[:100]

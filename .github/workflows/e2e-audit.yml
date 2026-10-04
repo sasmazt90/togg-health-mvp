@@ -86,6 +86,9 @@ jobs:
       - name: Keyless checked-in live harness entrypoints and both admission gates
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/live_harness_preparation.py 2>&1 | tee audit-results/live-harness-preparation.log
+      - name: Final seven-request admission and clocks, keyless success/failure only
+        if: ${{ !cancelled() }}
+        run: xvfb-run -a python -u tests/e2e/final_provider_preparation.py 2>&1 | tee audit-results/final-provider-preparation.log
       - name: Original app focused diagnostics with actual MediaPipe and OS audio
         if: ${{ !cancelled() }}
         env:
@@ -166,6 +169,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python -u tests/e2e/vision_camera_followup.py 2>&1 | tee audit-results/vision-camera.log
+          python -u tests/e2e/guided_vision_followup.py 2>&1 | tee audit-results/guided-vision.log
           python -u tests/e2e/continuous_vision_contract.py 2>&1 | tee audit-results/continuous-vision.log
           python -u tests/e2e/mental_sessions_followup.py 2>&1 | tee audit-results/mental-sessions.log
           python -u tests/e2e/stream_speech_followup.py 2>&1 | tee audit-results/stream-speech.log

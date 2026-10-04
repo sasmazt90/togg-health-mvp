@@ -33,7 +33,7 @@ def install_fixture(mode, output, gate, httpx):
         if mode == 'failure':
             return httpx.Response(503, json={'error': {'message': 'Preparation failure', 'type': 'server_error'}})
         if kind == 'tts':
-            return httpx.Response(200, content=(Path(__file__).parent/'fixtures/preparation-tone.mp3').read_bytes(), headers={'content-type': 'audio/mpeg'})
+            return httpx.Response(200, stream=httpx.ByteStream((Path(__file__).parent/'fixtures/preparation-tone.mp3').read_bytes()), headers={'content-type': 'audio/mpeg'})
         content = (f"Anahtarsız hazırlık yanıtı {gate.counts['conversation']}." if kind == 'conversation' else json.dumps({
             'summaryText':'Anahtarsız hazırlık oturumu.', 'themes':['hazırlık'], 'moodTrend':'NEUTRAL',
             'professionalSupportSuggested':False, 'professionalSupportReason':None}))
