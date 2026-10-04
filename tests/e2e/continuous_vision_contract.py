@@ -7,6 +7,8 @@ from playwright.sync_api import expect
 def selector_contract(page,out=None,tag='continuous'):
     page.goto('http://localhost:3000/vision')
     page.evaluate('localStorage.removeItem("attune_manual_screen_scale_v1")');page.reload()
+    expect(page.locator('[data-vehicle-status]')).to_have_text('PARK')
+    assert page.get_by_text('Sürüş sırasında görme kontrolü ve alıştırma kapalıdır.',exact=True).count()==0
     page.get_by_role('button',name='Kısa Alıştırma',exact=True).click()
     selector=page.get_by_role('slider',name='Boşluk yönünü ayarlayın',exact=True)
     submit=page.get_by_role('button',name='Yanıtla',exact=True)

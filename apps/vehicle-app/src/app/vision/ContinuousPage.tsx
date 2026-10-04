@@ -10,7 +10,7 @@ import { isCameraAllowed } from '../../utils/attuneMode';
 import { CALIBRATION_KEY, ScreenCalibration, calibrationMatches, screenContext, randomAngle, conditionFailure, VisionConditions } from '../../utils/continuousVision';
 
 export default function VisionPage() {
-  const { isParked }=useVehicle();
+  const { isParked,syncStatus }=useVehicle();
   const [mode,setMode]=useState<'idle'|'prepare'|'practice'>('idle');
   const [calibration,setCalibration]=useState<ScreenCalibration|null>(null),[calibrationValid,setCalibrationValid]=useState(false);
   const [cardWidth,setCardWidth]=useState(240),[calibrating,setCalibrating]=useState(false);
@@ -34,7 +34,7 @@ export default function VisionPage() {
   },[]);
   const [observedClock,setObservedClock]=useState(0);
   useEffect(()=>{if(!cameraLive)return;const timer=setInterval(()=>setObservedClock(performance.now()),200);return()=>clearInterval(timer);},[cameraLive]);
-  useEffect(()=>{if(!isParked){stop();setMode('idle');setNotice('Sürüş sırasında görme kontrolü ve alıştırma kapalıdır.');}},[isParked]);
+  useEffect(()=>{if(!isParked){stop();setMode('idle');setNotice('');}},[isParked]);
   useEffect(()=>{if(video.current&&runtime.current.stream){video.current.srcObject=runtime.current.stream;void video.current.play().catch(()=>{});}},[mode,cameraLive]);
   async function prepare() {
     if(!parked.current)return;
@@ -88,7 +88,7 @@ export default function VisionPage() {
   const responseLocked=!isParked || mode!=='practice';
   return <div className="space-y-6">
     <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold">Görme Kontrolü</h1><InformationButton title="Görme kontrolü hakkında"><p>Tek okla Landolt boşluğunun yönünü eşleştirirsiniz. Yeni görev açısal performans içindir; klinik keskinlik, Snellen, logMAR veya risk eşiği hesaplamaz. Eski dört yönlü kayıtlar kendi protokolünde korunur.</p><p>Kamera tek yüz, görüntü kalitesi, baş konumu ve başlangıca göre yüz ölçeği değişimini izler. Kesin santimetre veya tam göz örtülmesini doğrulamaz. El, opak kapatıcı, gözlük ve yansıma nedeniyle tam kapatma güvenilir kanıtlanamadığında ölçüm kilitli kalır.</p><p>Windows demosu gerçek araç ekranına veya sensörlerine bağlı değildir. Önizleme aynalanmaz; göz adları kişinin anatomik sağı ve soludur. Kamera kareleri yalnız bellekte işlenir.</p></InformationButton></div>
-    {!isParked&&<p role="alert" className="text-amber-200">Sürüş sırasında kontrol kapalıdır. Park durumunu bekleyin.</p>}
+    {!isParked&&<p role="alert" className="text-amber-200">{syncStatus==='synced'?'Sürüş sırasında kontrol kapalıdır. Park durumunu bekleyin.':'Araç park durumu doğrulanamıyor. Kontrol kapalıdır.'}</p>}
     {notice&&<p role="status" className="text-sm text-amber-200">{notice}</p>}
     {mode==='idle'&&<section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-4"><h2 className="text-xl font-bold">Boşluğun yönünü eşleştirin</h2><p className="text-sm text-amber-200">Gözün tam kapatılması güvenilir doğrulanamıyor. Bu cihazda ölçüm kapalı; alıştırma kullanabilirsiniz.</p><p className="text-slate-300">Oku halka üzerinde sürükleyin, sonra Yanıtla’ya dokunun.</p><div className="flex flex-wrap gap-3"><button className="min-h-11 rounded-xl bg-togg-turquoise text-togg-darkBlue px-5 font-bold disabled:opacity-40" disabled={!isParked} onClick={()=>void prepare()}>Hazırlığı Başlat</button><button className="min-h-11 px-4 rounded-xl border border-white/20 disabled:opacity-40" disabled={!isParked} onClick={practice}>Kısa Alıştırma</button></div></section>}
     {mode==='prepare'&&<section className="grid md:grid-cols-2 gap-6 rounded-2xl border border-white/10 bg-cockpit-surface p-6">
