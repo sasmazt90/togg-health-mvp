@@ -220,6 +220,29 @@ with sync_playwright() as pw:
             return {'unreadableHistoryPreserved':True,'previousLatestPreserved':True}
         finally:context.close()
     record('Unreadable existing history is never silently overwritten by a new summary',corrupt_history)
+    def audio_notice_recovery():
+        context,page=fresh();mode=['failure'];calls=[]
+        try:
+            page.evaluate('''()=>{window.nativePlayback=[];window.physicalAttempts=0;const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(){window.testAudio=this;for(const type of ['playing','ended','error'])this.addEventListener(type,()=>window.nativePlayback.push(type));return play.call(this);};navigator.mediaDevices.getUserMedia=()=>{window.physicalAttempts++;throw Error('Physical capture forbidden');};const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR)SR.prototype.start=()=>{window.physicalAttempts++;throw Error('Physical STT forbidden');};}''')
+            def speech(route):
+                calls.append(mode[0])
+                if mode[0]=='failure':route.fulfill(status=503,json={'detail':'Controlled unavailable speech'})
+                else:route.fulfill(content_type='audio/mpeg',body=Path('tests/fixtures/synthetic-tone.mp3').read_bytes())
+            page.route('**/api/mental/speech',speech)
+            page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
+            box=page.get_by_role('textbox',name='Görüşme mesajı');box.fill('Bugün yeni bir kitap okudum.');box.press('Enter')
+            expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','failed')
+            warning=page.get_by_text('Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True);expect(warning).to_be_visible()
+            mode[0]='tone';box.fill('Bugün yeni bir film izledim.');box.press('Enter')
+            page.wait_for_function('window.nativePlayback.includes("playing")');expect(warning).not_to_be_visible()
+            expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready',timeout=15000)
+            mode[0]='failure';box.fill('Bugün yeni bir şarkı dinledim.');box.press('Enter');expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','failed');expect(warning).to_be_visible()
+            page.get_by_role('button',name='Sesli yanıtı kapat',exact=True).click();expect(warning).not_to_be_visible();send(page,'Bugün yeni bir kitap okudum.');expect(warning).not_to_be_visible()
+            finish(page);page.wait_for_function('window.testAudio.paused && !window.testAudio.getAttribute("src")')
+            assert page.evaluate('window.physicalAttempts')==0 and calls==['failure','tone','failure']
+            return {'staleWarningClearedOnMuteAndSuccess':True,'nativePlaybackEvents':page.evaluate('window.nativePlayback'),'syntheticTone':True,'liveAcceptance':False,'physicalCapture':0,'finishReleasesAudioSource':True}
+        finally:context.close()
+    record('Audio failure warning clears on mute and subsequent actual MPEG playback',audio_notice_recovery)
     browser.close()
 
 (OUT/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2),encoding='utf-8')

@@ -33,6 +33,7 @@ Dar kapsamlı düzeltmeler:
 - SDK `iter_bytes(chunk_size=None)` decoded transport parçalarını biriktirmeden iletir; 4096-byte birikim eşiği kaldırıldı.
 - Frontend ilk append sırasında play promise'ını başlatır. Bir chunk önden okuma network read ile SourceBuffer update'i üst üste getirir; sıralı append ve 8 MiB transport koruması kalır. MSE tam çözülebilen MP3 frame'i bekler; sabit keyfî saniye buffer'ı yoktur. Tek yanıt/tek istek, chunk başına ücretli istek yok.
 - Direct cancel, sourceopen/updateend bekleyişini de uyandırır; reader/fetch/SourceBuffer/audio/URL cleanup ve STT gate korunur.
+- Ses hatası uyarısı sessize geçişte veya yeni yanıtın ses aşamasında temizlenir; yeniden hata oluşursa yeniden gösterilir. Ücretsiz hata → native MPEG oynatma → tekrar hata → sessiz metin akışı, eski uyarının yeni başarılı duruma taşınmadığını doğrular.
 - Üretim yolu içeriksiz in-memory zaman olayları yayınlar: gönderim, chat dönüşü, TTS isteği/headers/chunk, play isteği, playing, gövde sonu, ended ve cleanup. Yerel kalıcı telemetry veya dış aktarım yoktur.
 - Yeni kabul aracında AST normalizer run başına önceden hazırlanır; request başına yeni Node süreci açılmaz. Success/failure finally arşivi tüm mevcut olayları tutar. Eski paired consumed alanları hiçbir modda yeniden hazırlanamaz.
 

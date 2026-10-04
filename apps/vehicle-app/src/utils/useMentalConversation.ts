@@ -125,6 +125,7 @@ export function useMentalConversation(parked: boolean) {
   async function speak(text: string, epoch: number, crisis: boolean) {
     const r = runtime.current;
     if (!valid(epoch)) return;
+    setVoiceNotice(null);
     if (!settings.current.voiceEnabled) { if (crisis) { r.active = false; r.busy = false; setActive(false); setPhase('error'); } else resume(epoch); return; }
     abortRecognition(); stopAudio();
     const audioEpoch = r.audioEpoch;
@@ -250,7 +251,7 @@ export function useMentalConversation(parked: boolean) {
     settings.current.textMode = true; abortRecognition(); setTextMode(true);
     if (runtime.current.active && !runtime.current.busy) setPhase('ready');
   }
-  actions.current = { listen, cancel, send, audioOff: () => { if (runtime.current.voiceWaiting) { const epoch = runtime.current.epoch; runtime.current.controller?.abort(); runtime.current.controller = null; stopAudio(); setVoiceState('ready'); resume(epoch); } } };
+  actions.current = { listen, cancel, send, audioOff: () => { setVoiceNotice(null); if (runtime.current.voiceWaiting) { const epoch = runtime.current.epoch; runtime.current.controller?.abort(); runtime.current.controller = null; stopAudio(); setVoiceState('ready'); resume(epoch); } } };
   useEffect(() => {
     const r = runtime.current; r.mounted = true;
     setHistory(readMentalHistory());
