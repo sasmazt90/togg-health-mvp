@@ -54,7 +54,7 @@ def manual_calibration_contract(page):
     page.goto('http://localhost:3000/vision')
     page.evaluate('localStorage.setItem("attune_privacy_camera_allowed","false")')
     page.get_by_role('button',name='Hazırlığı Başlat',exact=True).click()
-    expect(page.get_by_role('button',name='Ölçümü Başlat',exact=True)).to_be_disabled()
+    expect(page.get_by_role('button',name='Alıştırma ve denemelere geç',exact=True)).to_be_disabled()
     page.get_by_role('button',name='Ekran ölçeğini ayarla',exact=True).click()
     slider=page.get_by_role('slider',name='Kart kenarının ekrandaki genişliği')
     slider.fill('80');page.get_by_role('button',name='Manuel eşleştirmeyi kaydet',exact=True).click()

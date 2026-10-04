@@ -29,12 +29,32 @@ const conditions={observedAt:1000,cameraLive:true,modelActive:true,faceCount:1,q
 const summary=V.summarizeContinuousTrials([{visibility:'visible',minimumCircularError:12},{visibility:'not-visible',minimumCircularError:null},{visibility:'not-visible',minimumCircularError:null}]);
 assert.equal(summary.validTrials,3);assert.equal(summary.notVisible,2);assert.equal(summary.meanAngularError,12);assert(!('logMAR' in summary));assert(!('referral' in summary));
 assert.equal(V.summarizeContinuousTrials([{visibility:'not-visible',minimumCircularError:null}]).meanAngularError,null);
-const session=new V.ContinuousVisionSession();assert(!session.respond(null,false,conditions,1000));assert(!session.respond(45,true,conditions,1000));assert.equal(session.trials.length,0);
+const session=new V.ContinuousVisionSession();session.present(900);assert(!session.respond(45,false,conditions,1000));assert(session.respond(null,false,conditions,1000));assert.equal(session.trials.length,1);assert.equal(session.trials[0].responseAngle,null);assert.equal(session.trials[0].minimumCircularError,null);assert.equal(session.trials[0].eyeOcclusionVerification,'not-camera-verified-user-instruction');assert(!session.respond(null,false,conditions,1000));
 """)
 
-@pytest.mark.parametrize('change',[{'observedAt':0},{'cameraLive':False},{'modelActive':False},{'faceCount':0},{'faceCount':2},{'qualityValid':False},{'positionValid':False},{'relativeScaleChange':.081},{'relativeScaleChange':None},{'eyeEvidence':'both-open'},{'eyeEvidence':'wrong-eye'},{'eyeEvidence':'uncertain'},{'eyeEvidence':'unsupported'}])
-def test_invalid_camera_and_occlusion_conditions_never_advance(change):
+@pytest.mark.parametrize('change',[{'observedAt':0},{'cameraLive':False},{'modelActive':False},{'faceCount':0},{'faceCount':2},{'qualityValid':False},{'positionValid':False},{'relativeScaleChange':.081},{'relativeScaleChange':None},{'eyeEvidence':'both-open'},{'eyeEvidence':'wrong-eye'}])
+def test_invalid_camera_and_definite_violation_conditions_never_advance(change):
     run_module("const base={observedAt:1000,cameraLive:true,modelActive:true,faceCount:1,qualityValid:true,positionValid:true,relativeScaleChange:0,eye:'RIGHT',eyeEvidence:'unsupported'};const conditions={...base,..."+json.dumps(change)+"};assert(V.conditionFailure(conditions,1100));const session=new V.ContinuousVisionSession();const target=session.targetAngle;assert(!session.respond(null,false,conditions,1100));assert(!session.respond(29.3,true,conditions,1100));assert.equal(session.trials.length,0);assert.equal(session.targetAngle,target);")
+
+@pytest.mark.parametrize('evidence',['unsupported','uncertain'])
+def test_guided_unknown_occlusion_is_not_camera_verification(evidence):
+    run_module("""
+const session=new V.ContinuousVisionSession();
+for(let i=0;i<24;i++){
+ const eye=session.eye,conditions={observedAt:1000,cameraLive:true,modelActive:true,faceCount:1,qualityValid:true,positionValid:true,relativeScaleChange:0,eye,eyeEvidence:"""+json.dumps(evidence)+"""};
+ session.present(900);assert.equal(V.conditionFailure(conditions,1100),null);
+ assert(!session.respond(10,true,{...conditions,eye:eye==='RIGHT'?'LEFT':'RIGHT'},1100));
+ assert(session.respond(i%3===0?null:session.targetAngle+2,true,conditions,1100));
+ assert(!session.respond(null,false,conditions,1100));
+}
+assert(session.completed);assert.equal(session.trials.length,24);
+for(const eye of ['RIGHT','LEFT','BOTH'])assert.equal(session.trials.filter(t=>t.eye===eye).length,8);
+assert(session.trials.every(t=>t.eyeOcclusionVerification==='not-camera-verified-user-instruction'&&t.eyeInstruction===V.eyeInstruction(t.eye)));
+const result=V.summarizeContinuousTrials(session.trials);assert.equal(result.notVisible,8);assert(Math.abs(result.meanAngularError-2)<1e-8);assert(!('logMAR' in result));
+""")
+
+def test_invalid_presentation_is_not_visibility_failure():
+    run_module("const s=new V.ContinuousVisionSession();s.present(900);s.invalidate();s.invalidate();assert.equal(s.invalidPresentations,1);assert.equal(s.trials.length,0);assert.equal(s.stimulusSizeMm,2);s.present(1000);assert.equal(s.trials.length,0);")
 
 def test_manual_calibration_context_and_no_scale_floor():
     run_module("""

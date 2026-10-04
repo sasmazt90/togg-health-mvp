@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 
@@ -13,7 +13,7 @@ export function AccessibleDialog({ title, onClose, children, className }: {
   useEffect(() => setMounted(true), []);
   const panel = useRef<HTMLDivElement>(null);
   const close = useRef(onClose); close.current = onClose;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = panel.current;
     if (!element) return;
     element.style.setProperty('--dialog-background', getComputedStyle(element).backgroundColor);

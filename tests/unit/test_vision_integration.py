@@ -90,5 +90,7 @@ def test_vision_incomplete_result_has_no_fake_snellen_fallback():
     # testResults.rightEye null olduğunda '20/30' basılmamalı
     assert "testResults.rightEye?.snellen || '20/30'" not in content
     assert "testResults.leftEye?.snellen || '20/24'" not in content
-    assert "ölçüm sonucu oluşturulamaz" in content
+    assert "if(t.completed)" in content
+    assert "isVisionSavingAllowed()" in content
+    assert "eyeOcclusionVerification:'not-camera-verified-user-instruction'" in content
     assert "conditionFailure" in content

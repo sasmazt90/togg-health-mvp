@@ -45,6 +45,7 @@ export default function PrivacyPage() {
   const [cameraStatus, setCameraStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [saveTranscript, setSaveTranscript] = useState(false);
+  const [saveVision, setSaveVision] = useState(false);
   const [saveMentalSummaries, setSaveMentalSummaries] = useState<boolean>(true);
   const [dataStats, setDataStats] = useState<{
     visionCount: number;
@@ -97,6 +98,7 @@ export default function PrivacyPage() {
       }
 
       setSaveTranscript(localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true');
+      setSaveVision(localStorage.getItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED) === 'true');
       const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
       if (mentalPref !== null) {
         setSaveMentalSummaries(mentalPref === 'true');
@@ -341,6 +343,8 @@ export default function PrivacyPage() {
         <div className="flex items-center justify-between gap-3"><h2 className="font-bold">Konuşma dökümü</h2><InformationButton title="Konuşma dökümü saklama"><p>Varsayılan kapalıdır. Açarsanız, ayrıca özet saklama tercihiniz açıkken tamamlanmış görüşmenin kullanıcı/asistan metinleri ve gerçek mesaj zamanları bu tarayıcıda aynı oturum kaydına eklenir. Ham mikrofon sesi saklanmaz. Bu tercih yeni bir backend veya dış sağlayıcı döküm kaydı oluşturmaz.</p><p>Görüşme hizmet onayı kapsamındaki yanıt/özet metin aktarımı ayrıdır. Yerel Sil eylemi dökümü ve özeti birlikte temizler; sağlayıcının tarihsel saklama veya silme durumunu doğrulamaz. Tercihi kapatmak eski kayıtları otomatik silmez.</p></InformationButton></div>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveTranscript} aria-label="Tam konuşma dökümünü bu cihazda sakla" onChange={e=>{try{localStorage.setItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED,String(e.target.checked));setSaveTranscript(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Tam konuşma dökümünü bu cihazda sakla</label>
         <p className="text-xs text-slate-400">Fotoğraflar yalnız açık cilt sonucu sayfasının belleğindedir; kalıcı fotoğraf saklama yapılmaz.</p>
+        <div className="flex items-center justify-between gap-3"><h2 className="font-bold">Görme ön değerlendirmesi</h2><InformationButton title="Yön hizalama sonucu saklama"><p>Varsayılan kapalıdır. Açarsanız tamamlanan yön hizalama denemeleri, görünürlük yanıtları, açı hataları, tarih ve hazırlık/doğrulama sınırları yalnız bu tarayıcıdaki geçmişe kaydedilir. Kamera karesi veya klinik keskinlik kaydı oluşturulmaz. Kapatmak eski kayıtları silmez; Sil ile tek kayıt kaldırılabilir.</p></InformationButton></div>
+        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveVision} aria-label="Yön hizalama sonuçlarını bu cihazda sakla" onChange={e=>{try{localStorage.setItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED,String(e.target.checked));setSaveVision(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Yön hizalama sonuçlarını bu cihazda sakla</label>
       </section>
 
       {/* 3. BELOW FOLD: YEREL VERİ YÖNETİMİ VE SİLME */}

@@ -2,7 +2,7 @@
  * Descriptive orientation task, NOT an acuity/clinical threshold estimator.
  * Legacy visionEngine.ts is deliberately retained under its original contract.
  */
-export const CONTINUOUS_VISION_PROTOCOL = 'landolt-orientation-continuous-v1' as const;
+export const CONTINUOUS_VISION_PROTOCOL = 'landolt-orientation-guided-v2' as const;
 export const CALIBRATION_KEY = 'attune_manual_screen_scale_v1';
 export type VisionEye = 'RIGHT' | 'LEFT' | 'BOTH';
 export function normalizeAngle(value: number): number {
@@ -42,13 +42,20 @@ export function conditionFailure(conditions: VisionConditions | null, now: numbe
   if (conditions.relativeScaleChange === null || !Number.isFinite(conditions.relativeScaleChange) || Math.abs(conditions.relativeScaleChange) > .08) return 'Başlangıç konumunuza dönün. Mutlak mesafe ölçülmüyor.';
   if (conditions.eyeEvidence === 'wrong-eye') return 'İstenen göz koşulu sağlanmıyor.';
   if (conditions.eyeEvidence === 'both-open') return 'Tek göz ölçümü için diğer gözün kapatılması gerekiyor.';
-  // Face landmarks/blendshapes do not certify complete optical occlusion.
-  return 'Gözün tam kapatılması bu kamerayla güvenilir doğrulanamıyor. Ölçüm kapalı; alıştırma yapabilirsiniz.';
+  // Unknown optical occlusion is metadata, not an automatic camera failure.
+  // This guided descriptive task never claims camera-certified occlusion.
+  return null;
+}
+export function eyeInstruction(eye: VisionEye): string {
+  return eye === 'RIGHT' ? 'Sağ gözünüzle bakın; sol gözünüzü opak bir kapatıcıyla, baskı uygulamadan örtün.'
+    : eye === 'LEFT' ? 'Sol gözünüzle bakın; sağ gözünüzü opak bir kapatıcıyla, baskı uygulamadan örtün.'
+    : 'Kontrast denemelerinde iki gözünüz açık olsun.';
 }
 export interface ContinuousTrial {
   protocolVersion: typeof CONTINUOUS_VISION_PROTOCOL; targetAngle: number; responseAngle: number | null;
   minimumCircularError: number | null; stimulusSizeMm: number; contrast: number; eye: VisionEye;
   visibility: 'visible' | 'not-visible'; responseMs: number; conditions: VisionConditions;
+  eyeInstruction: string; eyeOcclusionVerification: 'not-camera-verified-user-instruction';
 }
 export function summarizeContinuousTrials(trials: ContinuousTrial[]) {
   const visible = trials.filter(t => t.visibility === 'visible');
@@ -64,19 +71,21 @@ export function summarizeContinuousTrials(trials: ContinuousTrial[]) {
  */
 export class ContinuousVisionSession {
   trials: ContinuousTrial[] = []; invalidPresentations = 0;
+  presentationId = 0;
   targetAngle = randomAngle(); private presentedAt = performance.now(); private answered = false;
   stimulusSizeMm = 2; contrast = 1;
   get eye(): VisionEye { return this.trials.length < 8 ? 'RIGHT' : this.trials.length < 16 ? 'LEFT' : 'BOTH'; }
   get completed() { return this.trials.length === 24; }
   invalidate() { if (!this.answered) { this.invalidPresentations++; this.answered=true; } }
-  present() { if (this.completed) return; this.targetAngle=randomAngle(); this.presentedAt=performance.now(); this.answered=false; }
+  present(now=performance.now()) { if (this.completed) return; this.presentationId++;this.targetAngle=randomAngle(); this.presentedAt=now; this.answered=false; }
   respond(responseAngle: number | null, interacted: boolean, conditions: VisionConditions, now: number): boolean {
     if (this.answered || this.completed || (!interacted && responseAngle !== null) || conditions.eye!==this.eye || conditionFailure(conditions,now)) return false;
     this.answered=true;
     const eye=this.eye;
     this.trials.push({ protocolVersion: CONTINUOUS_VISION_PROTOCOL, targetAngle: this.targetAngle,
       responseAngle: responseAngle===null?null:normalizeAngle(responseAngle), minimumCircularError:responseAngle===null?null:circularError(this.targetAngle,responseAngle),
-      stimulusSizeMm:this.stimulusSizeMm,contrast:this.contrast,eye,visibility:responseAngle===null?'not-visible':'visible',responseMs:now-this.presentedAt,conditions:{...conditions} });
+      stimulusSizeMm:this.stimulusSizeMm,contrast:this.contrast,eye,visibility:responseAngle===null?'not-visible':'visible',responseMs:Math.max(0,now-this.presentedAt),conditions:{...conditions},
+      eyeInstruction:eyeInstruction(eye),eyeOcclusionVerification:'not-camera-verified-user-instruction' });
     if (this.eye!==eye) { this.stimulusSizeMm=2; this.contrast=1; }
     else if (responseAngle===null) { if(eye==='BOTH') this.contrast=Math.min(1,this.contrast*2); else this.stimulusSizeMm*=1.25; }
     else if(eye==='BOTH') this.contrast/=1.25; else this.stimulusSizeMm/=1.25;

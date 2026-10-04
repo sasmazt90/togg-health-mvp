@@ -84,7 +84,7 @@ with sync_playwright() as pw:
         return 'Actual getUserMedia video track and decoded preview frames'
     check('vision camera acquisition and preview',vision_setup)
     def vision_complete():
-        require(page.get_by_role('button',name='Ölçümü Başlat',exact=True).is_disabled(),'Unverified eye occlusion permits measurement')
+        require(page.get_by_role('button',name='Alıştırma ve denemelere geç',exact=True).is_disabled(),'Invalid camera or calibration permits assessment')
         require(not page.evaluate('localStorage.getItem("togg_health_latest_vision")'),'Unverified camera produced a result')
         return selector_contract(page,OUT,'vision-continuous-practice')
     check('vision continuous selector; unverified occlusion blocks measurement/persistence',vision_complete)

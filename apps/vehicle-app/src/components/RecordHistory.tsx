@@ -2,11 +2,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccessibleDialog } from './AccessibleDialog';
 import { MentalSessionRows } from './MentalSessionRows';
+import { ContinuousVisionResult, OrientationResult } from './ContinuousVisionResult';
 import { HealthCategory, HealthRecord, RECORD_LABELS, prepareHealthRecords, deleteHealthRecord, recordDate } from '../utils/healthRecords';
 
 export function RecordHistory({ category, parked }: { category: HealthCategory; parked: boolean }) {
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [selected, setSelected] = useState<HealthRecord | null>(null);
+  const [viewed, setViewed] = useState<OrientationResult | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
@@ -33,8 +35,10 @@ export function RecordHistory({ category, parked }: { category: HealthCategory; 
     {!records.length && <p className="text-sm text-slate-400">Henüz kayıt yok.</p>}
     {category === 'mental' ? <MentalSessionRows records={records} onDelete={r=>{setNotice('');setSelected(r);}} parked={parked} busy={busy}/> : records.map(r => <article key={r.id} data-record-id={r.id} className="rounded-xl border border-white/10 p-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2"><time className="text-xs text-slate-400">{recordDate(r)}</time><button type="button" disabled={!parked || busy} aria-label={`${RECORD_LABELS[category]} kaydını sil: ${recordDate(r)}`} onClick={() => { setNotice(''); setSelected(r); }} className="min-h-11 px-4 rounded-xl border border-rose-400/40 text-rose-200 disabled:opacity-40 disabled:cursor-not-allowed">Sil</button></div>
-      <p className="text-sm break-words">{category === 'skin' ? r.clinicalNoteTr || `${r.highestChangeRegion || 'Cilt'} • ${r.isBaseline ? 'Referans taraması' : r.comparisonUnavailable ? 'Karşılaştırma yok' : 'Analiz sonucu'}` : r.protocolVersion === 'landolt-orientation-continuous-v1' ? `Açısal ön değerlendirme · ${r.validTrials || 0} geçerli deneme. Görme keskinliği bu protokolle hesaplanmadı.` : `Eski dört yönlü protokol · Keskinlik: ${r.acuityRightSnellen || '—'} • ${r.acuityLeftSnellen || '—'}`}</p>
+      <p className="text-sm break-words">{category === 'skin' ? r.clinicalNoteTr || `${r.highestChangeRegion || 'Cilt'} • ${r.isBaseline ? 'Referans taraması' : r.comparisonUnavailable ? 'Karşılaştırma yok' : 'Analiz sonucu'}` : ['landolt-orientation-continuous-v1','landolt-orientation-guided-v2'].includes(r.protocolVersion) ? `Açısal ön değerlendirme · ${r.validTrials || 0} geçerli deneme · ${r.notVisible || 0} göremedi. Görme keskinliği bu protokolle hesaplanmadı.` : `Eski dört yönlü protokol · Keskinlik: ${r.acuityRightSnellen || '—'} • ${r.acuityLeftSnellen || '—'}`}</p>
+      {category==='vision'&&r.protocolVersion==='landolt-orientation-guided-v2'&&Array.isArray(r.trials)&&<button className="min-h-11 px-4 rounded-xl border border-white/20 disabled:opacity-40" disabled={!parked} onClick={()=>setViewed(r as OrientationResult)}>Sonucu Aç</button>}
     </article>)}
+    {viewed&&<AccessibleDialog title="Yön hizalama sonucu" onClose={()=>setViewed(null)} className="w-full max-w-2xl rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4"><div className="flex justify-between gap-3"><time>{recordDate(viewed)}</time><button className="min-h-11 min-w-11 rounded-xl border border-white/20" aria-label="Sonuç penceresini kapat" onClick={()=>setViewed(null)}>✕</button></div><ContinuousVisionResult result={viewed}/></AccessibleDialog>}
     {selected && <AccessibleDialog title="Bu kaydı silmek istiyor musunuz?" onClose={close} className="w-full max-w-lg rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4">
       <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-bold">Bu kaydı silmek istiyor musunuz?</h2><button type="button" disabled={busy} aria-label="Silme penceresini kapat" onClick={close} className="min-h-11 min-w-11 rounded-xl border border-white/20 disabled:opacity-40">✕</button></div>
       <p>{RECORD_LABELS[category]} · {recordDate(selected)}</p><p className="text-sm text-slate-300">Bu işlem geri alınamaz.</p>

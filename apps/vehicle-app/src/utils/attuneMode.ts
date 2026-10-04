@@ -28,7 +28,8 @@ export const STORAGE_KEYS = {
   PRIVACY_CAMERA_ALLOWED: 'attune_privacy_camera_allowed',
   PRIVACY_MIC_ALLOWED: 'attune_privacy_microphone_allowed',
   PRIVACY_MENTAL_SAVE_ALLOWED: 'togg_privacy_mental_summary_allowed',
-  PRIVACY_MENTAL_TRANSCRIPT_ALLOWED: 'attune_privacy_mental_transcript_allowed'
+  PRIVACY_MENTAL_TRANSCRIPT_ALLOWED: 'attune_privacy_mental_transcript_allowed',
+  PRIVACY_VISION_SAVE_ALLOWED: 'attune_privacy_vision_save_allowed'
 } as const;
 
 export function isDemoMode(): boolean {
@@ -72,4 +73,8 @@ export function isMentalSummarySavingAllowed(): boolean {
 export function isMentalTranscriptSavingAllowed(): boolean {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true';
+}
+
+export function isVisionSavingAllowed(): boolean {
+  return typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED) === 'true';
 }
