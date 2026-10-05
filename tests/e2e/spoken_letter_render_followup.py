@@ -27,7 +27,7 @@ with sync_playwright() as pw:
   assert all(abs(x['nominal']-x['geometry']['viewportWidthCssPx'])<.1 for x in observations)
   p.reload();panel=p.locator('[data-record-history=vision]');expect(panel.locator('[data-record-id]')).to_have_count(1);panel.get_by_role('button',name='Sonucu Aç',exact=True).click();d=p.get_by_role('dialog',name='Harf tanıma sonucu',exact=True);expect(d).to_contain_text('Yeterli yanıt yok');expect(d).to_contain_text('Birleşik');assert 'en küçük' not in d.inner_text();p.screenshot(path=str(OUT/f'algorithm-fixture-result-{width}.png'),full_page=True);p.keyboard.press('Escape')
   panel.get_by_role('button',name='kaydını sil:').click();p.screenshot(path=str(OUT/f'fixture-delete-{width}.png'),full_page=True);p.get_by_role('button',name='Hayır, vazgeç',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(1)
-  panel.get_by_role('button',name='kaydını sil:').click();p.get_by_role('button',name='Evet, sil',exact=True).click();p.reload();expect(panel.locator('[data-record-id]')).to_have_count(0)
+  panel.get_by_role('button',name='kaydını sil:').click();p.get_by_role('button',name='Evet, sil',exact=True).click();expect(panel.locator('[data-record-id]')).to_have_count(0);expect(p.get_by_role('dialog')).to_have_count(0);p.reload();expect(panel.locator('[data-record-id]')).to_have_count(0)
   proof.append({'width':width,'observations':observations,'nativeSTT':False,'cameraAcceptance':False,'controlledAlgorithmFixture':True,'actualDOMGeometry':True,'durableDelete':True});c.close()
  b.close()
 (OUT/'proof.json').write_text(json.dumps(proof,indent=2));print(json.dumps(proof))

@@ -162,6 +162,8 @@ jobs:
           python -u tests/e2e/prepare_high_detail_fixture.py 2>&1 | tee audit-results/high-detail-fixture.log
           xvfb-run -a --server-args="-screen 0 1920x1080x24" python -u tests/e2e/skin_resolution_followup.py 2>&1 | tee audit-results/skin-resolution-high.log
           xvfb-run -a --server-args="-screen 0 1920x1080x24" python -u tests/e2e/skin_resolution_followup.py --low-quality 2>&1 | tee audit-results/skin-resolution-low.log
+          python -u tests/e2e/prepare_high_detail_fixture.py --digital-source 2>&1 | tee audit-results/digital-detail-fixture.log
+          xvfb-run -a --server-args="-screen 0 1920x1080x24" python -u tests/e2e/skin_resolution_followup.py --digital-source 2>&1 | tee audit-results/skin-resolution-digital.log
       - name: Explicit pause and clarification without capture or paid generation
         if: ${{ !cancelled() }}
         run: python -u tests/e2e/mental_pause_followup.py 2>&1 | tee audit-results/mental-pause-followup.log

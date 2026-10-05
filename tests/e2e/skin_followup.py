@@ -14,7 +14,12 @@ with sync_playwright() as pw:
     assert context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0}).ok
     page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
     page.goto('http://localhost:3000/skin')
-    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click()
+    expect(page.get_by_role('dialog',name='Cilt taraması',exact=True)).to_be_visible()
+    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck()
+    page.get_by_role('button',name='Bilgi penceresini kapat',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     page.wait_for_function('''()=>{const video=document.querySelector('video');return video && video.videoWidth>0 && video.videoHeight>0;}''')
     geometry=page.locator('video').evaluate('''video=>{
       const box=video.getBoundingClientRect();const panel=video.closest('[data-face-panel]').getBoundingClientRect();
@@ -34,9 +39,11 @@ with sync_playwright() as pw:
     for _ in range(6):
         graphic=page.locator('[data-skin-snapshot]')
         label=graphic.get_attribute('aria-label')
-        assert graphic.locator('[data-skin-roi]').count()==6
-        assert graphic.locator('[data-skin-roi][opacity="1"]').count()==1
-        assert len(set(graphic.locator('[data-skin-roi]').evaluate_all('(elements)=>elements.map(e=>e.getAttribute("stroke"))')))==6
+        assert graphic.locator('[data-skin-roi]').count()==1  # compatibility attribute on the selected graph, no ROI clip
+        selected_mesh=graphic.locator('[data-skin-mesh]')
+        assert selected_mesh.count()==1
+        assert selected_mesh.locator('[data-mesh-edge]').count()>=15
+        assert graphic.locator('clipPath').count()==0
         page.get_by_role('button',name='Gözlem Notu',exact=True).click()
         selected=label.replace(' kabul edilmiş tarama görüntüsü','')
         note=page.get_by_text(selected+' — İlk tarama',exact=True)
@@ -89,7 +96,12 @@ with sync_playwright() as pw:
     page.keyboard.press('Escape')
     page.set_viewport_size({'width':1280,'height':900})
     page.goto('http://localhost:3000/skin')
-    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click()
+    expect(page.get_by_role('dialog',name='Cilt taraması',exact=True)).to_be_visible()
+    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck()
+    page.get_by_role('button',name='Bilgi penceresini kapat',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
     second=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
     assert second['id']!=first['id'] and second['isBaseline'] is False
@@ -104,18 +116,31 @@ with sync_playwright() as pw:
     original_baseline=page.evaluate('localStorage.getItem("togg_health_skin_baseline")')
     page.evaluate('localStorage.removeItem("togg_health_skin_baseline_meta")')
     page.goto('http://localhost:3000/skin')
-    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click()
+    expect(page.get_by_role('dialog',name='Cilt taraması',exact=True)).to_be_visible()
+    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck()
+    page.get_by_role('button',name='Bilgi penceresini kapat',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Cilt Analizi Tamamlandı',exact=True)).to_be_visible(timeout=45000)
     legacy=page.evaluate('JSON.parse(localStorage.getItem("togg_health_latest_skin"))')
     assert legacy['isBaseline'] is False and legacy['comparisonUnavailable'] is True
     assert all('changeFromBaselinePct' not in r for r in legacy['regions'].values())
     assert page.evaluate('localStorage.getItem("togg_health_skin_baseline")')==original_baseline
-    expect(page.get_by_text('Karşılaştırma yapılamadı:',exact=False)).to_be_visible()
+    expect(page.get_by_text('Karşılaştırılamadı. Referansınız korundu.',exact=True)).to_have_count(1)
+    page.get_by_role('button',name='Referans ve görüntü hakkında bilgi',exact=True).click()
+    expect(page.locator('[data-comparison-reason]')).to_contain_text('Eski referansın kalite veya poz bilgisi eksik')
+    page.keyboard.press('Escape')
     # Controlled corrupt-storage fault: prove existing data is preserved, not overwritten.
     page.evaluate('localStorage.setItem("togg_health_skin_baseline","invalid-reference-json")')
     latest_before=page.evaluate('localStorage.getItem("togg_health_latest_skin")')
     page.goto('http://localhost:3000/skin')
-    (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+    page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click()
+    expect(page.get_by_role('dialog',name='Cilt taraması',exact=True)).to_be_visible()
+    page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck()
+    page.get_by_role('button',name='Bilgi penceresini kapat',exact=True).click()
+    expect(page.get_by_role('dialog')).to_have_count(0)
+    page.get_by_role('button',name='Analizi Başlat',exact=True).click()
     expect(page.get_by_text('Mevcut referans okunamadı. Referansınız değiştirilmedi; bu tarama kaydedilmedi.',exact=True)).to_be_visible(timeout=45000)
     assert page.evaluate('localStorage.getItem("togg_health_skin_baseline")')=='invalid-reference-json'
     assert page.evaluate('localStorage.getItem("togg_health_latest_skin")')==latest_before

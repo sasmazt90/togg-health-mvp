@@ -45,7 +45,13 @@ export class SkinInference {
   }
 
   async segmentHead(canvas: HTMLCanvasElement): Promise<HeadSegmentation> {
-    return (await this.request('segment', await createImageBitmap(canvas))).segmentation;
+    // Freeze the accepted pixels before loading the presentation model. Model
+    // loading and inference each have a bounded deadline; cold loading must
+    // not consume the native-resolution inference budget.
+    const frame = await createImageBitmap(canvas);
+    try { await this.request('initializeSegmentation'); }
+    catch (error) { frame.close(); throw error; }
+    return (await this.request('segment', frame)).segmentation;
   }
 
   close(): void {

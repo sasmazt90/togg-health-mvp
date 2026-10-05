@@ -19,6 +19,11 @@ self.onmessage = async (event: MessageEvent) => {
       self.postMessage({ id, ready: true });
       return;
     }
+    if (type === 'initializeSegmentation') {
+      await getSegmenter();
+      self.postMessage({ id, ready: true });
+      return;
+    }
     const canvas = new OffscreenCanvas(frame.width, frame.height);
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) throw new Error('Analiz tuvali başlatılamadı');

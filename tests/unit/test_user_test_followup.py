@@ -107,3 +107,13 @@ for(let y=23;y<32;y++)for(let x=12;x<20;x++)categories[y*32+x]=y<27?2:4;
 const {alpha}=S.headAlpha({width:32,height:32,categories,confidence,neckConfidence,elapsedMs:1},{landmarks:l},64,64);
 assert.equal(alpha[30*64+30],255);assert(alpha[47*64+30]>0);assert.equal(alpha[60*64+30],0);assert.equal(alpha[47*64+5],0);
 """)
+
+
+def test_cheek_rows_do_not_skip_anatomy_or_draw_non_node_crossings(tmp_path):
+ run(tmp_path,"""
+const rows=[0,0,0,1,1,1,2,2,2,3,3,4,4,4,5,5,5,6,6];
+for(const id of ['rightCheek','leftCheek']){const g=M.SKIN_GRAPHS[id];assert.equal(g.indices.length,19);assert(g.edges.length>=35);assert(g.edges.every(([a,b])=>Math.abs(rows[a]-rows[b])<=1));}
+const lm=Array.from({length:478},()=>({x:0,y:0})),alpha=new Uint8Array(10000).fill(255);
+const graph={points:[{x:20,y:20},{x:80,y:80},{x:20,y:80},{x:80,y:20}],edges:[[0,1],[2,3]],major:[0,2],boundary:[],excluded:['occluded-cheek']};
+const supported=M.supportedSkinMesh(graph,lm,100,100,alpha);assert.equal(supported.edges.length,1,'Non-node cheek crossing cannot reach the render');assert.equal(supported.points.length,2);
+""")
