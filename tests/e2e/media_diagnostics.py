@@ -135,7 +135,21 @@ with sync_playwright() as pw:
   return p.evaluate('navigator.permissions.query({name:"camera"}).then(p=>p.state)')
  c,p=new()
  def stalled_scan():
-  go(p,'/skin');browser_environment(p,b,'camera-browser-environment');p.wait_for_timeout(5000);p.get_by_role('button',name='Analizi Başlat',exact=True).click();p.wait_for_timeout(10000);d=snap(p,'skin-live-loop-diagnostic');require(d['video'] and d['video'][0]['w']>0 and d['video'][0]['time']>5,'No actual decoded video');require(d['draw']>0,'Live camera has decoded frames, but analysis drew ZERO canvas frames. RAF trace: '+str(d['raf'])+' cancelled: '+str(d['cancel']));require(d['rafCounts']['fired']>1,'RAF did not repeatedly execute');require(d['engine']['mediapipeReady']=='true' and d['engine']['mediapipeActive']=='true' and d['engine']['faceDetected']=='true' and int(d['engine']['landmarkCount'])>=400,'Live UI did not reach actual MediaPipe detection');require(not d['errors'],'Uncaught live analysis error');p.wait_for_timeout(500);later=state(p);require(later['draw']>d['draw'],'Canvas stopped drawing while active');require('togg_health_latest_skin' not in d['storage'] if d['engine']['qualityStatus']=='BLURRY' else True,'Rejected blurry fixture generated a real result');return d
+  go(p,'/skin');browser_environment(p,b,'camera-browser-environment')
+  p.wait_for_function('document.querySelector("canvas")?.dataset.mediapipeReady==="true"',timeout=30000)
+  p.get_by_role('button',name='Analizi Başlat',exact=True).click()
+  # Observe live acquisition before the accepted frame is frozen for matting.
+  # Actual inference is asynchronous; a 500ms redraw assumption is not FPS proof.
+  p.wait_for_function('document.querySelector("canvas")?.dataset.mediapipeActive==="true" && document.querySelector("canvas")?.dataset.faceDetected==="true" && window.__audit.draw>=3',timeout=30000)
+  d=snap(p,'skin-live-loop-diagnostic')
+  require(d['video'] and d['video'][0]['w']>0 and d['video'][0]['time']>0,'No actual decoded video')
+  require(d['rafCounts']['fired']>1,'RAF did not repeatedly execute')
+  require(int(d['engine']['landmarkCount'])>=400,'Live UI did not reach actual MediaPipe detection')
+  require(not d['errors'],'Uncaught live analysis error')
+  p.wait_for_function('(before)=>window.__audit.draw>before',arg=d['draw'],timeout=10000)
+  later=state(p);require(later['draw']>d['draw'],'Canvas stopped drawing during live acquisition')
+  require('togg_health_latest_skin' not in d['storage'] if d['engine']['qualityStatus']=='BLURRY' else True,'Rejected blurry fixture generated a real result')
+  d['drawsAfterBoundedWait']=later['draw'];return d
  record('original skin live preview actually reaches frame analysis',stalled_scan)
  def route_cleanup():
   p.get_by_role('link',name='Gizlilik & İzinler',exact=True).click();expect(p).to_have_url(BASE+'/privacy');p.wait_for_timeout(800);d=snap(p,'skin-route-cleanup');require(all(t['state']=='ended' for t in d['tracks']),'Video track survives route exit')

@@ -120,3 +120,10 @@ advisory incelemesinde ve yeni audit JSON'undadır.
 kapanmaz. Bilinen kusurlar kullanıcıya “iyi ışıkta tekrar tarayın” denerek
 devredilmez. Exact commit/build, final ekranlar ve normal kısayol zinciri
 yerel teslim raporunda ayrıca kaydedilir.
+
+CI kamera tanısı sabit 500 ms yeniden çizim beklentisi yerine gerçek yüz/478
+landmark algısından sonra bounded yeniden çizimi bekler. Kaynak uygulama
+aynıdır; bu test değişikliği kabul edilmiş kare hazırlanırken kamera çiziminin
+durmasını canlı preview donmasıyla karıştırmaz. Windows gerçek fixture
+koşusunda çizimler 3 -> 4 olarak doğrulandı. Linux native ses adımları bu
+yerel kamera doğrulamasında çalıştırılmış sayılmaz.
