@@ -1,5 +1,6 @@
 """Bounded local verification with owned processes and disposable health storage."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -49,7 +50,7 @@ try:
                         assert time.monotonic()<deadline,'Service startup failed'
                         time.sleep(.25)
             for script in args.scripts:
-                name=Path(script.split()[0]).stem
+                name=Path(script.split()[0]).stem+('-'+hashlib.sha256(script.encode()).hexdigest()[:8] if len(script.split())>1 else '')
                 with (out/(name+'-followup.log')).open('w',encoding='utf-8') as log:
                     result=subprocess.run([sys.executable,*script.split()],cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT)
                 results.append({'script':script,'exitCode':result.returncode,'generationFixture':bool(args.contract_provider),'liveAcceptance':False if args.contract_provider or not args.live else None});print(json.dumps(results[-1]),flush=True)

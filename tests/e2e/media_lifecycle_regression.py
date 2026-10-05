@@ -38,7 +38,9 @@ with sync_playwright() as pw:
         (page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click(), page.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck(), page.keyboard.press('Escape'));page.get_by_role('button', name='Analizi Başlat', exact=True).click()
         page.wait_for_function('document.querySelector("canvas")?.dataset.mediapipeActive==="true" && window.__draws>2', timeout=30000)
         before = page.evaluate('window.__draws')
-        page.wait_for_timeout(600)
+        # Native inference/accepted-frame segmentation is asynchronous; require
+        # actual continuing draws without asserting a synthetic 600ms frame rate.
+        page.wait_for_function('(before)=>window.__draws>before',arg=before,timeout=10000)
         after = page.evaluate('window.__draws')
         assert after > before, (before, after)
         assert page.evaluate('window.__streams.some(s=>s.getTracks().some(t=>t.readyState==="live"))')

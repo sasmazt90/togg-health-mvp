@@ -53,7 +53,7 @@ extra=r'''
         go(page,'/mental?demo=1')
         # Crisis content/guard remain real; the requested TTS transport is denied
         # by the keyless fixture, never replaced by an alternate production voice.
-        text_input('İNTİHAR ETMEK İSTİYORUM')
+        text_input('İNTİHAR ETMEK İSTİYORUM',expect_crisis=True)
         snap(page,'mental-uppercase-crisis')
         require('112' in page.locator('[data-chat-author="AI"]').last.inner_text(),'Uppercase Turkish crisis not escalated in actual reply')
         require(page.locator('[data-chat-author="AI"]').count()==1,'Crisis duplicated a response')
