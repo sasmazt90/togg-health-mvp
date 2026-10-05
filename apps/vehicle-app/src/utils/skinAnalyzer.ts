@@ -67,6 +67,9 @@ export interface RegionMetrics {
 }
 
 export interface SkinAnalysisResult {
+  schemaVersion?:3;
+  indicatorContract?:string;
+  indicators?:import('./skinIndicators').SkinIndicators;
   id: string;
   timestamp: string;
   quality: ImageQuality;
@@ -427,7 +430,7 @@ export class SkinAnalyzer {
         avgLuminance,
         blurScore,
         status: 'BLURRY',
-        warningMessageTr: 'Görüntü net değil veya hareketli. Lütfen kameraya sabit bakın.'
+        warningMessageTr: 'Görüntü ayrıntısı yetersiz. Kamera netliğini ve yüz aydınlatmasını kontrol edin.'
       };
     }
 

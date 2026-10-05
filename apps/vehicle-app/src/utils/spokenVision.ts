@@ -33,10 +33,10 @@ export function equivalentOrientation(letter:Letter,a:Orientation,b:Orientation)
  return a===b || (letter==='E' && [a,b].every(o=>o==='down'||o==='mirror')) || (letter==='A' && [a,b].every(o=>o==='upright'||o==='mirror'));
 }
 export type EyePixelEvidence={state:'open'|'closed'|'uncertain';ear:number;darkFraction:number;contrast:number;method:'lid-geometry-and-current-pixels'};
-export type LetterConditions={observedAt:number;cameraLive:boolean;modelActive:boolean;faceCount:number;qualityValid:boolean;positionValid:boolean;relativeScaleChange:number|null;right:EyePixelEvidence;left:EyePixelEvidence};
+export type LetterConditions={observedAt:number;cameraLive:boolean;modelActive:boolean;faceCount:number;qualityValid:boolean;positionValid:boolean;relativeScaleChange:number|null;motionStable?:boolean;right:EyePixelEvidence;left:EyePixelEvidence};
 export function letterConditionFailure(c:LetterConditions|null,eye:Eye|null,now:number):'camera'|'position'|'eye'|'uncertain'|null {
  if(!c||now-c.observedAt>750||now<c.observedAt||!c.cameraLive||!c.modelActive||c.faceCount!==1||!c.qualityValid)return 'camera';
- if(!c.positionValid||c.relativeScaleChange===null||Math.abs(c.relativeScaleChange)>.08)return 'position';
+ if(c.motionStable===false||!c.positionValid||c.relativeScaleChange===null||Math.abs(c.relativeScaleChange)>.08)return 'position';
  if(!eye)return null;
  const opened=eye==='RIGHT'?c.right:c.left,closed=eye==='RIGHT'?c.left:c.right;
  if(opened.state==='uncertain'||closed.state==='uncertain')return 'uncertain';
@@ -76,6 +76,7 @@ export class SpokenLetterSession {
  get completed(){return this.trials.length>=LETTER_RULES.maxValid;}
  get eye():Eye{return this.trials.length<LETTER_RULES.perEye?'RIGHT':'LEFT';}
  get ledger(){return [...this.trials,...this.invalidTrials].sort((a,b)=>a.sequence-b.sequence);}
+ beginResponse(now=performance.now()){if(this.presentationId)this.presentedAt=now;}
  present(now=performance.now()){
   if(this.completed||this.presentationId)return;
   if(!this.pending){this.trialId=crypto.randomUUID();const letters=Object.keys(LETTER_PATHS) as Letter[];this.letter=letters[random(letters.length)];

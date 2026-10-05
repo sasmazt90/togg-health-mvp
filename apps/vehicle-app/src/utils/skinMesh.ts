@@ -21,7 +21,7 @@ export const SKIN_GRAPHS:Record<string,Graph>={
  forehead:rowsGraph([[103,67,109,10,338,297,332],[54,104,108,151,337,333,284],[21,63,66,9,296,293,251]],[10,151,9],['eyes','nose','hair']),
  rightCheek:rowsGraph([[111,117,119,100],[123,50,36,142],[147,187,205,203],[132,207,216,206],[58,215,192,212],[172,138,214,202]],[117,50,205,192],['right-eye','nose','lips','ear','occluded-cheek']),
  leftCheek:rowsGraph([[340,346,348,329],[352,280,266,371],[376,411,425,423],[361,427,436,426],[288,435,416,432],[397,367,434,422]],[346,280,425,416],['left-eye','nose','lips','ear','occluded-cheek']),
- nose:rowsGraph([[193,168,417],[122,6,351],[196,197,419],[3,195,248],[126,51,5,281,355],[129,49,4,279,358],[209,48,1,278,429],[102,98,2,327,331]],[168,4,98,327],['eyes','nostril-interior','upper-lip','wide-cheek']),
+ nose:rowsGraph([[67,109,10,338,297],[104,108,151,337,333],[63,66,9,296,293],[193,168,417],[122,6,351],[196,197,419],[3,195,248],[126,51,5,281,355],[129,49,4,279,358],[209,48,1,278,429],[102,98,2,327,331]],[10,151,9,168,4,98,327],['eyes','nostril-interior','upper-lip','wide-cheek']),
  periorbital:eyeBands(),
  chin:rowsGraph([[202,106,83,18,313,406,422],[210,194,201,200,421,418,430],[169,170,208,199,428,395,394],[149,176,148,152,377,400,378]],[18,200,152],['lips','mouth','neck'])
 };
@@ -41,9 +41,9 @@ function inside(p:MeshPoint,polygon:MeshPoint[]) {
 /** Omit whole unsafe edges, never chop a regional graph into sampling boxes.
  * Current semantic head support also prevents floating lines on occluded skin.
  */
-export function supportedSkinMesh(mesh:SkinMesh,landmarks:MeshPoint[],width:number,height:number,alpha:Uint8Array):SkinMesh {
+export function supportedSkinMesh(mesh:SkinMesh,landmarks:MeshPoint[],width:number,height:number,alpha?:Uint8Array):SkinMesh {
  const holes=Object.values(MESH_HOLES).map(indices=>indices.map(i=>({x:landmarks[i].x*width,y:landmarks[i].y*height})));
- const supported=(p:MeshPoint)=>p.x>=0&&p.x<width&&p.y>=0&&p.y<height&&alpha[Math.floor(p.y)*width+Math.floor(p.x)]>0;
+ const supported=(p:MeshPoint)=>p.x>=0&&p.x<width&&p.y>=0&&p.y<height&&(!alpha || alpha[Math.floor(p.y)*width+Math.floor(p.x)]>0);
  const edges=mesh.edges.filter(([a,b])=>{for(let step=1;step<40;step++){const t=step/40,p={x:mesh.points[a].x*(1-t)+mesh.points[b].x*t,y:mesh.points[a].y*(1-t)+mesh.points[b].y*t};if(!supported(p)||holes.some(h=>inside(p,h)))return false;}return supported(mesh.points[a])&&supported(mesh.points[b]);});
  // A turned or noisy projection must not draw crossing cheek chords. Keep
  // shorter supported anatomical connections when two non-node edges cross.

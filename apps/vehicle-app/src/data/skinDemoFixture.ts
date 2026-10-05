@@ -28,6 +28,7 @@ export interface MetricItem {
 }
 
 export interface SkinRegionData {
+  indicators?:import('../utils/skinIndicators').SkinIndicator[];
   id: SkinRegionId;
   index: number;
   nameTr: string;
@@ -79,7 +80,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku çeşitliliği',
+        label: 'Eski piksel doku farkı',
         score: 22,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -145,7 +146,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku çeşitliliği',
+        label: 'Eski piksel doku farkı',
         score: 48,
         displayValue: 'Hafif Artış',
         status: 'cyan'
@@ -211,7 +212,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku çeşitliliği',
+        label: 'Eski piksel doku farkı',
         score: 22,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -277,7 +278,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku çeşitliliği',
+        label: 'Eski piksel doku farkı',
         score: 26,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -342,7 +343,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku çeşitliliği',
+        label: 'Eski piksel doku farkı',
         score: 16,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -407,7 +408,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku çeşitliliği',
+        label: 'Eski piksel doku farkı',
         score: 34,
         displayValue: 'Hafif Artış',
         status: 'cyan'
@@ -477,6 +478,7 @@ export function buildSkinRegionViewModel(
   isDemo: boolean = false
 ): SkinRegionData {
   const base = getRegionData(regionId);
+  if(analysisResult?.schemaVersion===3)return {...base,nameTr:regionId==='nose'?'T-Bölgesi':base.nameTr,indicators:analysisResult.indicators?.[regionId]||[],badgeText:analysisResult.isBaseline?'Yeni ölçüm referansı':'Yeni değerlendirme',trend:[],changePct:0,isAttentionRequired:false,observation:{headline:`${regionId==='nose'?'T-Bölgesi':base.nameTr} — görsel değerlendirme`,details:'Renk indeksleri yalnız kabul edilmiş fotoğrafta ölçülür. Boş göstergeler için doğrulanmış yöntem yoktur. Eski parlaklık/doku skorları bu başlıklara dönüştürülmez.'}};
   if (isDemo) {
     return base;
   }
@@ -502,7 +504,7 @@ export function buildSkinRegionViewModel(
           status: 'cyan'
         },
         texture: {
-          label: 'Doku çeşitliliği',
+          label: 'Eski piksel doku farkı',
           score: 0,
           displayValue: '—',
           status: 'cyan'
@@ -535,7 +537,7 @@ export function buildSkinRegionViewModel(
 
   const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : 0;
   const textStatus: 'amber' | 'cyan' | 'emerald' = textScore > 40 ? 'amber' : 'cyan';
-  const textDisplay = textScore > 40 ? 'Yüksek çeşitlilik' : textScore > 20 ? 'Orta çeşitlilik' : 'Düşük çeşitlilik';
+  const textDisplay = textScore > 40 ? 'Belirgin piksel farkı' : textScore > 20 ? 'Orta piksel farkı' : 'Az piksel farkı';
 
   const comparable = !analysisResult.isBaseline && !analysisResult.comparisonUnavailable && typeof real.changeFromBaselinePct === 'number';
   const deltaDisplay = !comparable ? (analysisResult.isBaseline ? 'İlk tarama' : 'Karşılaştırılamadı') : `${changePct > 0 ? '+' : ''}${changePct}%`;

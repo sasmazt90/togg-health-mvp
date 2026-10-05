@@ -14,7 +14,7 @@ PROMPTS={
  'prepare':'Kamera hazırlanıyor. Kameraya bakın ve bulunduğunuz konumu koruyun.',
  'right':'Sağ gözünüz açık kalsın. Sol gözünüzü kapatın. Harfi ve yönünü söyleyin.',
  'left':'Sol gözünüz açık kalsın. Sağ gözünüzü kapatın. Harfi ve yönünü söyleyin.',
- 'letter':'Harfi tekrar söyler misiniz?',
+ 'letter':'Harfi Adana, Bursa gibi kodlayarak tekrar söyler misiniz?',
  'orientation':'Hangi yöne dönük olduğunu da söyler misiniz?',
  'reverse':'Ters derken baş aşağı mı, aynalı mı demek istediniz?',
  'repeat':'Harfi ve yönünü söyleyin. Düz, baş aşağı, sağa veya sola yatmış diyebilirsiniz.',
@@ -25,7 +25,8 @@ PROMPTS={
  'framing':'Alın ve çeneniz kadrajda kalacak şekilde yüzünüzü ortalayın.',
  'light':'Yüzünüzü daha iyi aydınlatın.',
  'bright':'Yüzünüzdeki parlamayı azaltın.',
- 'blur':'Sabit durun ve kameranın netliğini kontrol edin.',
+ 'blur':'Kamera netliğini ve yüz aydınlatmasını kontrol edin.',
+ 'motion':'Kısa süre başınızı sabit tutun.',
  'face':'Yüzünüzü kameraya gösterin.',
  'preparing':'Konumunuz doğrulanıyor. Kısa süre sabit durun.',
  'ready':'Konum hazır.',
@@ -78,6 +79,6 @@ async def speech_response(text,profile,moving):
     if moving():return
     if part['type']=='audio':yield part['data']
   finally:await iterator.aclose()
- result=OwnedSpeechResponse(body(),media_type='audio/mpeg',headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Server-Timing':f'tts_first;dur={(monotonic()-started)*1000:.1f}'})
+ result=OwnedSpeechResponse(body(),media_type='audio/mpeg',headers={'Cache-Control':'no-store','X-TTS-Voice':profile.voice,'X-TTS-Rate':profile.rate,'X-TTS-Pitch':profile.pitch,'X-Content-Type-Options':'nosniff','Server-Timing':f'tts_first;dur={(monotonic()-started)*1000:.1f}'})
  result.provider_iterator=iterator
  return result

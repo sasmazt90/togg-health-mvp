@@ -57,7 +57,7 @@ def test_unavailable_exact_mental_voice_never_exports_text(monkeypatch):
  monkeypatch.setitem(main.vehicle_state,'vehicleMoving',False)
  monkeypatch.setattr(main,'get_openai_client',lambda *args:pytest.fail('TTS must not call OpenAI'))
  response=TestClient(main.app).post('/api/mental/speech',json={'text':'Sentetik metin','cloudConsent':True})
- assert response.status_code==503 and 'en-US-AvaMultilingualNeural' in response.json()['detail']
+ assert response.status_code==503 and 'tr-TR-EmelNeural' in response.json()['detail']
 
 def test_fixed_vision_route_consent_origin_and_targets(monkeypatch):
  monkeypatch.setitem(main.vehicle_state,'vehicleMoving',False);client=TestClient(main.app)

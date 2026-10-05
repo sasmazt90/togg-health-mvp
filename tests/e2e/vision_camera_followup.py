@@ -18,7 +18,7 @@ with sync_playwright() as pw:
         except Exception:
             (OUT/'startup-failure.json').write_text(json.dumps({'body':p.locator('body').inner_text(),'tracks':p.evaluate('window.actualStreams.map(s=>s.getTracks().map(t=>t.readyState))'),'errors':errors},ensure_ascii=False,indent=2),encoding='utf8');p.screenshot(path=str(OUT/'startup-failure.png'),full_page=True);raise
         p.wait_for_timeout(5000)
-    start();p.wait_for_function('document.querySelector("canvas").dataset.visionModelActive==="true"&&document.querySelector("canvas").dataset.visionFaceCount==="1"');expect(p.locator('p[role=alert]')).to_contain_text('GiuseppeMultilingual');expect(p.locator('[data-letter-optotype]')).to_have_count(0)
+    start();p.wait_for_function('document.querySelector("canvas").dataset.visionModelActive==="true"&&document.querySelector("canvas").dataset.visionFaceCount==="1"');expect(p.locator('p[role=alert]')).to_contain_text('Ahmet');expect(p.locator('[data-letter-optotype]')).to_have_count(0)
     p.locator('video').evaluate('v=>v.pause()');p.wait_for_timeout(1000);expect(p.locator('[data-letter-condition]')).to_have_attribute('data-letter-condition','camera')
     assert p.evaluate('localStorage.getItem("togg_health_latest_vision")') is None
     p.locator('video').evaluate('v=>v.play()');p.wait_for_timeout(1200)

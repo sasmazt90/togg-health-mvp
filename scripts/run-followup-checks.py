@@ -12,7 +12,10 @@ import tempfile
 import time
 import urllib.request
 
-parser=argparse.ArgumentParser();parser.add_argument('--live',action='store_true');parser.add_argument('--provider-admission',action='store_true');parser.add_argument('--live-run-id');parser.add_argument('--harness-fixture',choices=['success','failure']);parser.add_argument('--contract-provider',action='store_true');parser.add_argument('scripts',nargs='+');args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--live',action='store_true');parser.add_argument('--postmeeting-paid',action='store_true');parser.add_argument('--provider-admission',action='store_true');parser.add_argument('--live-run-id');parser.add_argument('--harness-fixture',choices=['success','failure']);parser.add_argument('--contract-provider',action='store_true');parser.add_argument('scripts',nargs='+');args=parser.parse_args()
+if args.postmeeting_paid:
+    assert args.live and not args.provider_admission and not args.contract_provider and not args.harness_fixture
+    assert args.scripts==['tests/e2e/postmeeting_paid_ui.py'], 'Only the latest authorized two-request scenario is admitted'
 assert not args.contract_provider or (not args.live and not args.provider_admission), 'Synthetic UI fixture cannot load a key or claim live acceptance'
 if args.harness_fixture:
     assert not args.live and args.provider_admission and args.live_run_id and args.live_run_id.startswith('prep-')
@@ -34,13 +37,14 @@ try:
         try:
             backend_command = [sys.executable, str(root/'tests/e2e/live_provider_backend.py'), '--approved-additional-text-run'] if args.provider_admission else [sys.executable,'-m','uvicorn','main:app','--app-dir',str(root/'services/core-api'),'--host','127.0.0.1','--port','8000']
             if args.contract_provider: backend_command = [sys.executable, str(root/'tests/e2e/ui_contract_backend.py')]
+            if args.postmeeting_paid: backend_command = [sys.executable, str(root/'tests/e2e/postmeeting_paid_backend.py'), '--authorized-current-section10']
             if args.provider_admission and args.live_run_id:backend_command += ['--run-id',args.live_run_id]
             if args.harness_fixture:backend_command += ['--fixture',args.harness_fixture]
             for name,command in [('backend',backend_command),('frontend',[shutil.which('node'),str(root/'node_modules/next/dist/bin/next'),'start',str(root/'apps/vehicle-app'),'--hostname','127.0.0.1','-p','3000'])]:
                 service_env={**env,'ATTUNE_LOAD_LOCAL_ENV':'0','OPENAI_API_KEY':''} if name=='frontend' else env
                 log=(out/(name+'-followup.log')).open('w',encoding='utf-8');logs.append(log)
                 processes.append(subprocess.Popen(command,cwd=root,env=service_env,stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0))
-            for url in ['http://localhost:8000/api/health','http://localhost:3000']:
+            for url in ['http://127.0.0.1:8000/api/health','http://127.0.0.1:3000']:
                 deadline=time.monotonic()+60
                 while True:
                     try:

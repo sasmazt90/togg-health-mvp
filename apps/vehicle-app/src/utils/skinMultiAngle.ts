@@ -4,6 +4,7 @@ export const SKIN_ANGLES = ['FRONT', 'RIGHT', 'LEFT'] as const;
 export type SkinAngle = typeof SKIN_ANGLES[number];
 export const ANGLE_LABELS = { FRONT: 'Ön', RIGHT: 'Anatomik sağ', LEFT: 'Anatomik sol' };
 export interface AngleCapture {
+  indicators?:import('./skinIndicators').SkinIndicators;
   angle: SkinAngle; pose: SkinCapturePose; quality: ImageQuality;
   regions: Record<string, RegionMetrics>; frameToken: string;
 }

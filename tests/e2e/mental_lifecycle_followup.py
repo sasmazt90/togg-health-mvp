@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright, expect
 
 sys.stdout.reconfigure(encoding='utf-8')
 OUT = Path('audit-results/mental-followup'); OUT.mkdir(parents=True, exist_ok=True)
-BASE = 'http://localhost:3000'
+BASE = 'http://127.0.0.1:3000'
 results = []
 
 def record(name, fn):
@@ -234,7 +234,7 @@ with sync_playwright() as pw:
             page.get_by_role('button',name='İsterseniz yazabilirsiniz',exact=True).click()
             box=page.get_by_role('textbox',name='Görüşme mesajı');box.fill('Bugün yeni bir kitap okudum.');box.press('Enter')
             expect(page.locator('[data-voice-state]')).to_have_attribute('data-voice-state','failed')
-            warning=page.get_by_text('Microsoft en-US-AvaMultilingualNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True);expect(warning).to_be_visible()
+            warning=page.get_by_text('Microsoft tr-TR-EmelNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.',exact=True);expect(warning).to_be_visible()
             mode[0]='tone';box.fill('Bugün yeni bir film izledim.');box.press('Enter')
             page.wait_for_function('window.nativePlayback.includes("playing")');expect(warning).not_to_be_visible()
             expect(page.locator('[data-conversation-phase]')).to_have_attribute('data-conversation-phase','ready',timeout=15000)

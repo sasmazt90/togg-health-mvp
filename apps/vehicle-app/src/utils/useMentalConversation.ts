@@ -132,7 +132,7 @@ export function useMentalConversation(parked: boolean) {
     const current = () => valid(epoch) && r.audioEpoch === audioEpoch;
     r.voiceWaiting = true;
     const end = () => { if (!current()) return; timing('ended');stopAudio(); setVoiceState('ready'); if (!crisis) resume(epoch); else { r.active = false; setActive(false); setPhase('error'); } };
-    const fail = () => { if (!current()) return; timing('audio-error');stopAudio(); setVoiceState('failed'); setVoiceNotice('Microsoft en-US-AvaMultilingualNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (r.pendingPause) pause(); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
+    const fail = () => { if (!current()) return; timing('audio-error');stopAudio(); setVoiceState('failed'); setVoiceNotice('Microsoft tr-TR-EmelNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (r.pendingPause) pause(); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
     setVoiceState('loadingSpeech');
     {
       if (!settings.current.speechConsent) { fail(); return; }

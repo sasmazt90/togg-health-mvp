@@ -1,0 +1,45 @@
+import type { SkinSnapshot } from './skinSnapshot';
+import type { ImageQuality } from './skinAnalyzer';
+export const SKIN_SIGN_CONTRACT='regional-rgb-v3';
+export type SkinIndicator={id:string;label:string;score:number|null;referenceDelta?:number;reason:string;method:string;unit:string;sampleCount:number};
+export type SkinIndicators=Record<string,SkinIndicator[]>;
+export const SIGN_LABELS:Record<string,string>={tone:'Ton eşitsizliği',oil:'Yağlı görünüm',redness:'Kızarıklık eğilimi',acne:'Sivilce görünümü',sag:'Sarkma',dry:'Cilt kuruluğu',dark:'Göz altı morluğu',bags:'Göz altı torbaları',lines:'Kaz ayakları'};
+export function indicatorIds(region:string){return region==='periorbital'?['dark','bags','lines','dry']:region==='nose'?['tone','oil','redness','acne','dry']:['tone','oil','redness','acne','sag','dry'];}
+export function validSkinIndicators(value:unknown):value is SkinIndicators {
+ if(!value||typeof value!=='object')return false;
+ return ['forehead','rightCheek','leftCheek','nose','chin','periorbital'].every(region=>{
+  const rows=(value as SkinIndicators)[region],ids=indicatorIds(region);
+  return Array.isArray(rows)&&rows.length===ids.length&&ids.every(id=>{
+   const matching=rows.filter(row=>row?.id===id);if(matching.length!==1)return false;
+   const row=matching[0];return typeof row.reason==='string'&&!!row.reason&&typeof row.method==='string'&&!!row.method&&
+    (row.score===null||(typeof row.score==='number'&&Number.isFinite(row.score)&&row.score>=0&&row.score<=100&&['tone','redness'].includes(id)))&&
+    (row.referenceDelta===undefined||Number.isFinite(row.referenceDelta));
+  });
+ });
+}
+const unavailable:Record<string,string>={oil:'Tek RGB fotoğrafında yansıma ile yağlılık ayrıştırılamıyor.',acne:'Ben, sakal ve artefaktlardan ayıran lisanslı ve doğrulanmış model yok.',sag:'Bu kamera ve tek poz için doğrulanmış derinlik/şiddet ölçümü yok.',dry:'Fotoğraf nem veya cilt bariyerini güvenilir ölçmüyor.',dark:'Gölge ile pigment farkını ayıran doğrulanmış yöntem yok.',bags:'Gölge ile hacim farkını ayıracak doğrulanmış 3B ölçüm yok.',lines:'İfade/poz ve ince çizgi ayrıntısı için doğrulanmış model yok.'};
+function inside(x:number,y:number,p:{x:number;y:number}[],tri:number[]){const [a,b,c]=tri.map(i=>p[i]);const d=(v:typeof a,w:typeof a)=>(x-w.x)*(v.y-w.y)-(v.x-w.x)*(y-w.y);const u=d(a,b),v=d(b,c),w=d(c,a);return (u>=0&&v>=0&&w>=0)||(u<=0&&v<=0&&w<=0);}
+/** Direct image color indices, NOT calibrated disease/sign severity or probability.
+ * ROI is the union of triangles actually present in the selected anatomical mesh.
+ * Each region uses its accepted source pose. No LLM or skin disease model.
+ */
+export function measureSkinIndicators(ctx:CanvasRenderingContext2D,snapshot:SkinSnapshot,quality:ImageQuality):SkinIndicators {
+ const result:SkinIndicators={};
+ for(const [region,mesh] of Object.entries(snapshot.meshes)){
+  const edges=new Set(mesh.edges.flatMap(([a,b])=>[`${a}:${b}`,`${b}:${a}`])),triangles:number[][]=[];
+  for(let a=0;a<mesh.points.length;a++)for(let b=a+1;b<mesh.points.length;b++)if(edges.has(`${a}:${b}`))for(let c=b+1;c<mesh.points.length;c++)if(edges.has(`${a}:${c}`)&&edges.has(`${b}:${c}`))triangles.push([a,b,c]);
+  const data=ctx.getImageData(0,0,snapshot.width,snapshot.height).data,chromas:number[]=[],reds:number[]=[];
+  const minX=Math.max(0,Math.floor(Math.min(...mesh.points.map(p=>p.x)))),maxX=Math.min(snapshot.width,Math.ceil(Math.max(...mesh.points.map(p=>p.x))));
+  const minY=Math.max(0,Math.floor(Math.min(...mesh.points.map(p=>p.y)))),maxY=Math.min(snapshot.height,Math.ceil(Math.max(...mesh.points.map(p=>p.y))));
+  // At most about 16K source samples per region; sampling never changes RGB.
+  const step=Math.max(1,Math.ceil(Math.sqrt(Math.max(0,(maxX-minX)*(maxY-minY))/16000)));
+  for(let y=minY;y<maxY;y+=step)for(let x=minX;x<maxX;x+=step)if(triangles.some(t=>inside(x,y,mesh.points,t))){const i=(y*snapshot.width+x)*4,r=data[i],g=data[i+1],b=data[i+2],lum=.299*r+.587*g+.114*b;if(lum<40||lum>220)continue;const total=r+g+b;if(!total)continue;chromas.push((r-g)/total);reds.push(Math.max(0,Math.min(100,(2*r-g-b)/255*100)));}
+  const count=reds.length,mean=reds.reduce((a,b)=>a+b,0)/Math.max(1,count),center=chromas.reduce((a,b)=>a+b,0)/Math.max(1,count);
+  const spread=Math.sqrt(chromas.reduce((a,b)=>a+(b-center)**2,0)/Math.max(1,count));
+  result[region]=indicatorIds(region).map(id=>{const measured=id==='redness'||id==='tone',usable=quality.isValid&&count>=100;
+   return {id,label:SIGN_LABELS[id],score:measured&&usable?Math.round((id==='redness'?mean:Math.min(100,100*spread))*10)/10:null,
+    reason:measured?(usable?'Yalnız fotoğraftaki renk indeksi; ışık, ten tonu, gölge ve sakal etkiler. Kalibre edilmiş belirti şiddeti değildir.':'Geçerli ışık/netlik veya yeterli görünür örnek yok.'):unavailable[id],
+    method:measured?(id==='redness'?'mean(clamp(100*(2R-G-B)/255,0,100))':'100*std((R-G)/(R+G+B))'):'unavailable',unit:measured?'Renk indeksi / 100':'',sampleCount:count};});
+ }
+ return result;
+}

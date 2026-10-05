@@ -20,7 +20,7 @@ function recover() {
   if (!raw) return;
   const backup = JSON.parse(raw);
   if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('Kayıt işlemi doğrulanamadı.');
-  const allowed = new Set<string>([...Object.values(KEYS).flatMap(k => [k.history, k.latest]), STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.REFERRAL_CONTEXT]);
+  const allowed = new Set<string>([...Object.values(KEYS).flatMap(k => [k.history, k.latest]), STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.REFERRAL_CONTEXT]);
   for (const [key, value] of Object.entries(backup)) {
     if (!allowed.has(key) || (value !== null && typeof value !== 'string')) throw new Error('Kayıt işlemi doğrulanamadı.');
     if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value as string);
@@ -157,7 +157,11 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
     if (category === 'skin') {
       const single = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE_META) || 'null');
       const multi = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) || 'null');
-      if (single?.id === id || (!single?.id && record.isBaseline && record.comparisonScope !== 'three-angle-v2')) {
+      const signs = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_SIGNS_BASELINE) || 'null');
+      if(signs?.id===id){changes[STORAGE_KEYS.SKIN_SIGNS_BASELINE]=null;referenceRemoved=true;}
+      const singleSigns = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE) || 'null');
+      if(singleSigns?.id===id){changes[STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE]=null;referenceRemoved=true;}
+      if (single?.id === id || (!single?.id && record.schemaVersion !== 3 && record.isBaseline && record.comparisonScope !== 'three-angle-v2')) {
         changes[STORAGE_KEYS.SKIN_BASELINE] = null; changes[STORAGE_KEYS.SKIN_BASELINE_META] = null; referenceRemoved = true;
       }
       if (multi?.id === id) { changes[STORAGE_KEYS.SKIN_MULTI_BASELINE] = null; referenceRemoved = true; }
@@ -165,6 +169,7 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
         item.comparisonUnavailable = true; item.referenceDeleted = true;
         delete item.highestChangePct; item.referralSuggested = false;
         for (const region of Object.values(item.regions || {}) as any[]) { delete region.changeFromBaselinePct; region.comparisonUnavailable = true; }
+        for (const rows of Object.values(item.indicators || {}) as any[][]) for(const row of rows) delete row.referenceDelta;
         item.clinicalNoteTr = 'Bu karşılaştırmanın referansı silindi. Yeni bir referans taraması gerekiyor.';
       }
       changes[keys.history] = JSON.stringify(remaining);

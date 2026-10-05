@@ -53,7 +53,7 @@ def test_tts_driving_and_no_configuration(monkeypatch):
     assert client.post('/api/mental/speech', json={'text': 'Merhaba', 'cloudConsent': True}).status_code == 409
     monkeypatch.setitem(main.vehicle_state, 'vehicleMoving', False)
     monkeypatch.setenv('OPENAI_API_KEY', '')
-    assert client.post('/api/mental/speech', json={'text': 'Merhaba', 'cloudConsent': True}).json()['detail'] == 'EXACT_MICROSOFT_VOICE_UNAVAILABLE:en-US-AvaMultilingualNeural'
+    assert client.post('/api/mental/speech', json={'text': 'Merhaba', 'cloudConsent': True}).json()['detail'] == 'EXACT_MICROSOFT_VOICE_UNAVAILABLE:tr-TR-EmelNeural'
 
 
 def test_production_theme_math_and_versioned_multiview_rules(tmp_path):

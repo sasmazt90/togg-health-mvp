@@ -50,12 +50,9 @@ export class SkinInference {
   }
 
   async initialize(): Promise<void> {
-    // Start local presentation preparation while the user reads instructions.
-    // One shared promise per worker; retries/scans never reload a ready model.
+    // Prepare the on-device face model while the user reads instructions.
     await this.request('initialize');
-    // MediaPipe task construction shares WASM setup in this worker. Serialize
-    // construction, then warm segmentation while camera positioning starts.
-    void this.prepareSegmentation().catch(()=>{});
+    // Background removal is disabled. Do not load its presentation-only model.
   }
 
   private prepareSegmentation():Promise<void>{

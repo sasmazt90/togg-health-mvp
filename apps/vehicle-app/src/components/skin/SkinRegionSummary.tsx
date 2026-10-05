@@ -30,7 +30,12 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         </div>
 
         {/* 4 Gerçek Engine Metriği Göstergeleri */}
-        <div className="space-y-2.5">
+        {currentRegion.indicators ? <div className="space-y-3" data-skin-indicators>{currentRegion.indicators.map(indicator=><div key={indicator.id} data-skin-indicator={indicator.id} className="space-y-1">
+          <div className="flex flex-wrap justify-between gap-2 text-xs"><span>{indicator.label}</span><span className="font-mono">{indicator.score===null?'Değerlendirilemiyor':`${indicator.score} / 100 · renk indeksi`}</span></div>
+          <div className="h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden" role={indicator.score===null?undefined:'meter'} aria-label={indicator.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={indicator.score??undefined}>{indicator.score!==null&&<div className="h-full bg-sky-400" style={{width:`${indicator.score}%`}}/>}</div>
+          <p className="text-xs leading-relaxed text-slate-400">{indicator.reason}</p>
+          {indicator.referenceDelta!==undefined&&<p className="text-xs text-sky-300">Yeni ölçüm referansından fark: {indicator.referenceDelta>0?'+':''}{indicator.referenceDelta} indeks puanı</p>}
+        </div>)}</div> : <div className="space-y-2.5">
           {/* 1. Kızarıklık Eğilimi */}
           <div className="space-y-1">
             <div className="flex justify-between text-xs font-medium">
@@ -114,10 +119,10 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
               />
             </div>
           </div>}
-        </div>
+        </div>}
       </div>
 
-      <InformationButton title="Görüntü göstergeleri"><p>Renk yoğunluğu: yüksek değer görüntüde daha belirgin kırmızı renk bileşenidir. Parlaklık: yüksek değer daha aydınlık görüntüdür. Doku çeşitliliği: tek kabul edilmiş fotoğrafta komşu cilt piksellerinin farklılığıdır; zaman içindeki değişim değildir. Işık, poz ve kamera bu kategorileri etkiler; sağlıklı veya hastalıklı cilt sınıflaması değildir. Referans farkı yalnız uyumlu sonraki taramalarda hesaplanır.</p></InformationButton>
+      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Yalnız renk indeksleri ölçülür: yüksek indeks fotoğrafta daha belirgin renk farkıdır. Yüzde, hastalık olasılığı veya kalibre edilmiş belirti şiddeti değildir. Işık, gölge, ten tonu ve sakal renk ölçümünü etkiler. Diğer başlıklar için doğrulanmış ölçüm bulunmadığında bar boş kalır. Örnekleme, aynı anatomik ağdaki üçgenlerin içindedir; göz, dudak ve burun deliği kesişimleri çıkarılır.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button

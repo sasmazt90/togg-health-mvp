@@ -35,8 +35,10 @@ export function snapshotSkinFrame(canvas:HTMLCanvasElement, alignment:FaceAlignm
   const points=(indices:number[])=>indices.map(i=>({x:landmarks[i].x*canvas.width,y:landmarks[i].y*canvas.height}));
   const faceContour=points(FACE_OUTLINE);
   assertCompleteFace(alignment,canvas.width,canvas.height);
-  const meshes=Object.fromEntries(allowed.map(id=>[id,buildSkinMesh(id,landmarks,canvas.width,canvas.height)]));
+  const meshes=Object.fromEntries(allowed.map(id=>[id,supportedSkinMesh(buildSkinMesh(id,landmarks,canvas.width,canvas.height),landmarks,canvas.width,canvas.height)]));
   const metadata={width:canvas.width,height:canvas.height,angle,rois,exclusions:exclusionBoxes,faceContour,meshes,contours:Object.fromEntries(Object.entries(SKIN_CONTOURS).map(([id,indices])=>[id,points(indices)]))};
+  // Legacy explicit matte API, retained for compatibility and historical tests.
+  // The current product exclusively calls snapshotRawSkinFrame below.
   if(!segmentation)return {...metadata,dataUrl:'',crop:{x:0,y:0,width:canvas.width,height:canvas.height},visualError:'Arka plan ayrıştırılamadı. Sayısal sonuçlar korundu; yeni taramayla görüntüyü tekrar alabilirsiniz.'};
   try {
     const {alpha,bounds}=segmentation.alpha ? {alpha:segmentation.alpha,bounds:alphaBounds(segmentation.alpha,canvas.width,canvas.height)} : headAlpha(segmentation,alignment,canvas.width,canvas.height);
@@ -58,6 +60,12 @@ export function snapshotSkinFrame(canvas:HTMLCanvasElement, alignment:FaceAlignm
     return {...metadata,dataUrl:output.toDataURL('image/png'),crop,segmentationMs:segmentation.elapsedMs,maskWidth:segmentation.width,maskHeight:segmentation.height};
   } catch {return {...metadata,dataUrl:'',crop:{x:0,y:0,width:canvas.width,height:canvas.height},visualError:'Baş görüntüsü güvenilir ayrıştırılamadı. Sayısal sonuçlar korundu; görüntüyü yeni taramayla tekrar alabilirsiniz.'};}
 
+}
+/** V3 photo contract: full source rectangle, unchanged RGB and alpha. No mask,
+ * segmenter, neck fade, beauty operation or display crop enters this path. */
+export function snapshotRawSkinFrame(canvas:HTMLCanvasElement,alignment:FaceAlignment,angle:SkinAngle):SkinSnapshot {
+ const metadata=snapshotSkinFrame(canvas,alignment,angle);
+ return {...metadata,visualError:undefined,dataUrl:canvas.toDataURL('image/png'),crop:{x:0,y:0,width:canvas.width,height:canvas.height}};
 }
 export function snapshotAngleForRegion(id:string,threeAngle:boolean):SkinAngle {
   return !threeAngle?'FRONT':id==='rightCheek'?'LEFT':id==='leftCheek'?'RIGHT':'FRONT';

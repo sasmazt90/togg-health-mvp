@@ -23,7 +23,8 @@ import { appendHealthRecord } from '../../utils/healthRecords';
 import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
-import { SkinSnapshot, snapshotSkinFrame, snapshotAngleForRegion, assertCompleteFace } from '../../utils/skinSnapshot';
+import { SkinSnapshot, snapshotRawSkinFrame as snapshotSkinFrame, snapshotAngleForRegion, assertCompleteFace } from '../../utils/skinSnapshot';
+import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators } from '../../utils/skinIndicators';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
 import type { CameraResolution } from '../../components/CameraPreparation';
@@ -373,13 +374,12 @@ export default function SkinPage() {
       return;
     }
 
-    let segmentation;
     try { assertCompleteFace(alignToUse, canvas.width, canvas.height); } catch { setErrorMessage('Alın ve çenenin tamamı kadrajda olmalı. İlgili pozu yeniden alın.'); setScanState('ERROR'); return; }
     setGuidanceText('Portre görüntüsü hazırlanıyor...');
-    try { segmentation = await inferenceRef.current?.segmentHead(canvas, alignToUse, validCapture); } catch { /* Presentation error only. */ }
     setPreparationPhase(null);
     if (!validCapture()) return;
-    const acceptedSnapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT', segmentation);
+    const acceptedSnapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT');
+    const indicators=measureSkinIndicators(ctx,acceptedSnapshot,qualToUse);
 
     // Baseline kontrolü (İlk tarama mı, sonraki tarama mı?)
     let baselineData: Record<string, RegionMetrics> | null = null;
@@ -400,38 +400,47 @@ export default function SkinPage() {
       return;
     }
 
-    const isFirstScan = !baselineData;
     const capturePose = { yaw: alignToUse.yaw, pitch: alignToUse.pitch, roll: alignToUse.roll, scaleRatio: alignToUse.scaleRatio };
-    let baselineMeta: SkinReferenceMetadata | null = null;
-    try { baselineMeta = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE_META) || 'null'); } catch {}
-    const comparisonUnavailable = !isFirstScan && !canCompareSkinReference(baselineMeta, qualToUse, capturePose);
-    const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, comparisonUnavailable ? null : baselineData, 20.0);
+    const signsRaw=localStorage.getItem(STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE);
+    let signsPrior:any;
+    try {
+      signsPrior=JSON.parse(signsRaw||'null');
+      if(signsPrior && (signsPrior.schemaVersion!==3 || signsPrior.indicatorContract!==SKIN_SIGN_CONTRACT || !validSkinIndicators(signsPrior.indicators)))throw Error('INCOMPATIBLE_SIGN_REFERENCE');
+    } catch {setErrorMessage('Yeni renk referansı okunamadı. Mevcut referanslar korunuyor; tarama kaydedilmedi.');setScanState('ERROR');return;}
+    const isFirstScan=!signsPrior;
+    const comparisonUnavailable=!!signsPrior && !canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:signsPrior.quality,pose:signsPrior.pose},qualToUse,capturePose);
+    if(signsPrior&&!comparisonUnavailable)for(const [region,rows] of Object.entries(indicators))for(const row of rows){
+      const previous=signsPrior.indicators?.[region]?.find((v:any)=>v.id===row.id&&v.method===row.method);
+      if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;
+    }
+    // Legacy metrics remain available to old records; they do not drive V3 claims.
+    const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, null, 20.0);
 
     const finalResult: SkinAnalysisResult = {
+      schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       quality: qualToUse,
       regions: comparison.comparedRegions,
-      highestChangeRegion: isFirstScan ? 'Tüm Bölgeler' : comparison.highestChangeRegion,
-      highestChangePct: isFirstScan ? 0 : comparison.highestChangePct,
-      referralSuggested: isFirstScan ? false : comparison.referralSuggested,
+      highestChangeRegion: '',
+      highestChangePct: 0,
+      referralSuggested: false,
       isBaseline: isFirstScan,
-      clinicalNoteTr: comparisonUnavailable ? 'Önceki referans korunuyor; ışık/netlik/poz koşulları uyumlu değil veya eski referansın kalite bilgisi yok. Değişim hesaplanmadı.' : comparison.clinicalNoteTr,
-      baselineId: isFirstScan ? undefined : baselineMeta?.id,
-      baselineTimestamp: isFirstScan ? undefined : baselineMeta?.timestamp,
+      clinicalNoteTr: 'V3 renk indeksleri klinik belirti şiddeti değildir. Eski doku/parlaklık referansları korunur; yeni başlıklara dönüştürülmez.',
+      baselineId: signsPrior?.id,
+      baselineTimestamp: signsPrior?.timestamp,
       comparisonUnavailable,
       comparisonScope: 'single-front-v1', capturePose,
-      comparisonReasons: comparisonUnavailable ? [!baselineMeta?.quality || !baselineMeta?.pose ? 'legacy-quality-missing' : 'capture-conditions-incompatible'] : [],
+      comparisonReasons: comparisonUnavailable ? ['capture-conditions-incompatible'] : [],
       usedMediaPipe: true
     };
 
     // Yalnızca canPersistResult doğrulaması geçerse gerçek sonuç kalıcı olarak saklanır
-    if (SkinAnalyzer.canPersistResult(finalResult)) {
+    if (validSkinIndicators(indicators) && SkinAnalyzer.canPersistResult(finalResult)) {
       try {
         await appendHealthRecord('skin', finalResult, isFirstScan ? {
-          [STORAGE_KEYS.SKIN_BASELINE]: JSON.stringify(regionMetrics),
-          [STORAGE_KEYS.SKIN_BASELINE_META]: JSON.stringify({ id: finalResult.id, timestamp: finalResult.timestamp, schemaVersion: 1, scope: 'single-front-v1', quality: qualToUse, pose: capturePose })
-        } : {}, () => validCapture() && (isFirstScan ? !localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE) : localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE) === JSON.stringify(baselineData)));
+          [STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE]: JSON.stringify({id:finalResult.id,timestamp:finalResult.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,quality:qualToUse,pose:capturePose})
+        } : {}, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE)===signsRaw);
         if (!validCapture()) return;
       } catch (e) {
         setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Referans veya geçmiş kaydı oluşturulduğu doğrulanamadı.');
@@ -449,10 +458,6 @@ export default function SkinPage() {
     setMediaStream(null); setIsLiveVideo(false);
     setAnalysisResult(finalResult);
     // En yüksek değişimin olduğu bölgeye odaklan veya varsayılan sağ yanak
-    if (!isFirstScan && comparison.highestChangeRegion) {
-      const match = REGION_ORDER.find((id) => SKIN_REGIONS[id].nameTr === comparison.highestChangeRegion);
-      if (match) setSelectedRegionId(match);
-    }
     setScanState('COMPLETED');
     } finally { persistingRef.current = false; }
   };
@@ -468,17 +473,30 @@ export default function SkinPage() {
       const priorRaw = localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE);
       const prior: MultiAngleReference | null = JSON.parse(priorRaw || 'null');
       const comparison = compareMultiAngle(current, prior);
+      const signsRaw=localStorage.getItem(STORAGE_KEYS.SKIN_SIGNS_BASELINE);
+      const signsPrior=JSON.parse(signsRaw||'null');
+      if(signsPrior && (signsPrior.schemaVersion!==3 || signsPrior.indicatorContract!==SKIN_SIGN_CONTRACT || !validSkinIndicators(signsPrior.indicators)))throw Error('INCOMPATIBLE_SIGN_REFERENCE');
+      const indicators=Object.assign({},captures.FRONT.indicators,captures.RIGHT.indicators,captures.LEFT.indicators);
+      const incompatible:string[]=[];
+      if(signsPrior)for(const [region,rows] of Object.entries(indicators)){
+        const angle=snapshotAngleForRegion(region,true),base=signsPrior.captures?.[angle],capture=captures[angle];
+        const compatible=base&&canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:base.quality,pose:base.pose},capture.quality,capture.pose);
+        if(!compatible){incompatible.push(region);continue;}
+        for(const row of rows){const previous=signsPrior.indicators?.[region]?.find((v:any)=>v.id===row.id&&v.method===row.method);if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;}
+      }
       const finalResult: SkinAnalysisResult = {
+        schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,
         id: current.id, timestamp: current.timestamp, quality: captures.FRONT.quality, regions: comparison.regions,
-        usedMediaPipe: true, isBaseline: !prior, highestChangeRegion: comparison.highestChangeRegion,
-        highestChangePct: comparison.highestChangePct, referralSuggested: comparison.referralSuggested,
-        comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose, baselineId: prior?.id, baselineTimestamp: prior?.timestamp,
-        comparisonUnavailable: comparison.unavailable.length > 0, comparisonReasons: comparison.reasons,
-        clinicalNoteTr: !prior ? 'İlk üç açılı referans oluşturuldu. Eski tek açılı referansınız korunur ve bu taramayla karıştırılmaz.' : comparison.unavailable.length ? 'Bazı açılarda ışık/netlik/poz koşulları uyumsuz. İlgili açıların değişimi hesaplanmadı.' : 'Ön, anatomik sağ ve sol pozlar aynı açılardaki ilk referansla karşılaştırıldı. Klinik değerlendirme değildir.'
+        usedMediaPipe: true, isBaseline: !signsPrior, highestChangeRegion: '',
+        highestChangePct: 0, referralSuggested: false,
+        comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose, baselineId: signsPrior?.id, baselineTimestamp: signsPrior?.timestamp,
+        comparisonUnavailable: incompatible.length > 0, comparisonReasons: incompatible.length?['capture-conditions-incompatible']:[],
+        clinicalNoteTr: 'V3 bölgesel renk indeksleri klinik belirti şiddeti değildir. Eski doku/parlaklık referansları korunur; yeni başlıklara dönüştürülmez. Kuruluk, sarkma, yağlılık, sivilce ve göz çevresi kriterlerinin doğrulanmış ölçümü yoktur.'
       };
-      if (!SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
+      if (!validSkinIndicators(indicators) || !SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
       // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
-      await appendHealthRecord('skin', finalResult, !prior ? { [STORAGE_KEYS.SKIN_MULTI_BASELINE]: JSON.stringify(current) } : {}, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) === priorRaw);
+      const referenceChanges:Record<string,string|null>=!signsPrior?{[STORAGE_KEYS.SKIN_SIGNS_BASELINE]:JSON.stringify({id:current.id,timestamp:current.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,captures})}:{};
+      await appendHealthRecord('skin', finalResult, referenceChanges, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_SIGNS_BASELINE) === signsRaw);
       if (!validCapture()) return;
       snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
       setMediaStream(null); setIsLiveVideo(false);
@@ -619,12 +637,12 @@ export default function SkinPage() {
                     assertCompleteFace(curAlign, canvas.width, canvas.height);
                     const capture = await captureSkinAngle(ctx, curAlign, curQual, target, captureState.captures);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
-                    let segmentation;
                     setGuidanceText('Portre görüntüsü hazırlanıyor...');
-                    try { segmentation = await inferenceRef.current?.segmentHead(canvas, curAlign, ()=>!cancelled && parkedRef.current && isCameraAllowed()); } catch { /* Numerical result remains available. */ }
                     setPreparationPhase(null);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
-                    const snapshot = snapshotSkinFrame(canvas, curAlign, target, segmentation);
+                    const snapshot = snapshotSkinFrame(canvas, curAlign, target);
+                    capture.indicators=measureSkinIndicators(ctx,snapshot,curQual);
+                    if(target==='FRONT'){delete capture.indicators.rightCheek;delete capture.indicators.leftCheek;}
                     if (target === 'FRONT') snapshot.rois = snapshot.rois.filter(r => !['rightCheek','leftCheek'].includes(r.id));
                     snapshotFrames.current[target] = snapshot;
                     captureState.captures[target] = capture;

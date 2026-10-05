@@ -95,7 +95,7 @@ def test_real_speech_boundary_nfc_and_single_provider_iterator(monkeypatch):
   reply=await vision_speech.mental_response(unicodedata.normalize('NFD','Türkçe ses denemesidir. İyi günler.'),lambda:False)
   result=b''.join([chunk async for chunk in reply.body_iterator]);assert result==b'audio-1audio-2audio-3'
  asyncio.run(exercise())
- assert len(calls)==1 and unicodedata.is_normalized('NFC',calls[0][0]);assert calls[0][1:]==('en-US-AvaMultilingualNeural','+10%','+0Hz')
+ assert len(calls)==1 and unicodedata.is_normalized('NFC',calls[0][0]);assert calls[0][1:]==('tr-TR-EmelNeural','-10%','-10Hz')
 
 
 def test_short_neck_uses_only_actual_body_skin_and_preserves_face(tmp_path):

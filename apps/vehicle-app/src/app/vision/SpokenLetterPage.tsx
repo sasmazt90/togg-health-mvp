@@ -14,6 +14,8 @@ import { isCameraAllowed, isMicrophoneAllowed, isVisionSavingAllowed, isDemoMode
 import { streamSpeech } from '../../utils/streamSpeech';
 import { CameraPreview, CameraPreparation } from '../../components/CameraPreparation';
 import { PreparationEvidence, visionPreparationCode, PREPARATION_TEXT } from '../../utils/visionPreparation';
+import { SourceMotion } from '../../utils/cameraStability';
+import { visionFrameQuality } from '../../utils/visionFrameQuality';
 
 
 export default function SpokenLetterPage(){
@@ -26,14 +28,15 @@ export default function SpokenLetterPage(){
  const symbol=useRef<SVGSVGElement>(null);
  const video=useRef<HTMLVideoElement>(null),canvas=useRef<HTMLCanvasElement>(null);
  const r=useRef({mounted:false,epoch:0,active:false,stream:null as MediaStream|null,engine:null as SkinInference|null,raf:0,timer:null as ReturnType<typeof setInterval>|null,baseline:null as number|null,stableSince:0,conditions:null as LetterConditions|null,evidence:null as PreparationEvidence|null,session:null as SpokenLetterSession|null,recognition:null as any,audio:null as HTMLAudioElement|null,controller:null as AbortController|null,streamCancel:null as (()=>void)|null,url:null as string|null,voiceWaiting:false,muted:false,audioFailed:false,modal:false,restart:null as ReturnType<typeof setTimeout>|null,paused:false,fault:null as string|null,faultSince:0,announcedFault:null as string|null,eyeAnnounced:null as string|null,partial:{} as ParsedAnswer,saving:false});
- const actions=useRef({listen:()=>{},receive:(_text:string,_confidence:number)=>{},speak:async(_code:string)=>{},stop:()=>{}});
+ const answerGate=useRef({ready:false,announced:'',clarifications:0});
+ const actions=useRef({listen:()=>{},receive:(_text:string,_confidence:number)=>{},speak:async(_code:string)=>{},stop:()=>{},inspect:()=>{}});
  function timing(stage:string){window.dispatchEvent(new CustomEvent('attune-vision-speech-timing',{detail:{stage,atMs:performance.now(),clock:'browser-performance'}}));}
  function current(epoch:number){return r.current.mounted&&r.current.active&&r.current.epoch===epoch&&parked.current&&isCameraAllowed()&&isMicrophoneAllowed();}
  function abortRecognition(){const old=r.current.recognition;r.current.recognition=null;if(old){try{old.abort();}catch{}}}
  function stopVoice(){const a=r.current;abortRecognition();if(a.restart)clearTimeout(a.restart);a.restart=null;a.controller?.abort();a.controller=null;a.streamCancel?.();a.streamCancel=null;if(a.audio){a.audio.onplaying=a.audio.onended=a.audio.onerror=null;a.audio.pause();a.audio.removeAttribute('src');a.audio.load();a.audio=null;}if(a.url)URL.revokeObjectURL(a.url);a.url=null;a.voiceWaiting=false;}
  function stop(){const a=r.current;a.epoch++;a.active=false;stopVoice();cancelAnimationFrame(a.raf);if(a.timer)clearInterval(a.timer);a.timer=null;a.stream?.getTracks().forEach(t=>t.stop());a.stream=null;a.engine?.close();a.engine=null;a.conditions=null;a.evidence=null;a.baseline=null;a.stableSince=0;a.session=null;if(video.current)video.current.srcObject=null;if(a.mounted){setLive(false);setVoice('quiet');}}
  function listen(){
-  const a=r.current,epoch=a.epoch;if(!current(epoch)||a.recognition||a.voiceWaiting||a.muted||a.audioFailed)return;
+  const a=r.current,epoch=a.epoch;if(!current(epoch)||a.recognition||a.voiceWaiting||a.muted||a.audioFailed||a.paused||a.modal||!a.session?.presentationId||!answerGate.current.ready||letterConditionFailure(a.conditions,a.session.eye,performance.now()))return;
   const SR=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
   if(!SR){setError('Bu tarayıcı Türkçe konuşma tanımayı desteklemiyor. Görev başlatılamadı.');stop();setMode('idle');return;}
   const recognition=new SR();a.recognition=recognition;recognition.lang='tr-TR';recognition.continuous=false;recognition.interimResults=false;
@@ -48,12 +51,12 @@ export default function SpokenLetterPage(){
   const a=r.current,epoch=a.epoch;if(!current(epoch)||a.muted)return;stopVoice();a.audioFailed=false;a.voiceWaiting=true;setVoice('loading');setError('');
   const controller=new AbortController();a.controller=controller;const valid=()=>current(epoch)&&a.controller===controller;
   const deadline=setTimeout(()=>controller.abort(),25000);
-  const fail=()=>{if(!valid())return;stopVoice();a.audioFailed=true;setVoice('failed');setError('GiuseppeMultilingual Türkçe seslendirme kullanılamıyor. Görev sesli yönerge olmadan ilerletilmedi.');};
+  const fail=()=>{if(!valid())return;stopVoice();a.audioFailed=true;setVoice('failed');setError('Ahmet Türkçe seslendirme kullanılamıyor. Görev sesli yönerge olmadan ilerletilmedi.');};
   try{
    timing('request');const response=await fetch('http://localhost:8000/api/vision/speech',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:code,cloudConsent:true}),signal:controller.signal});
    if(!valid()){await response.body?.cancel();return;}if(!response.ok)throw Error('Voice unavailable');
    const audio=new Audio();a.audio=audio;audio.onplaying=()=>{if(valid()){setVoice('playing');timing('playing');}};
-   audio.onended=()=>{if(!valid())return;timing('ended');stopVoice();setVoice('quiet');a.restart=setTimeout(()=>{if(current(epoch))actions.current.listen();},350);};audio.onerror=fail;
+   audio.onended=()=>{if(!valid())return;timing('ended');stopVoice();setVoice('quiet');if(a.session?.presentationId&&answerGate.current.announced===a.session.presentationId){answerGate.current.ready=true;a.session.beginResponse();}actions.current.inspect();a.restart=setTimeout(()=>{if(current(epoch))actions.current.listen();},350);};audio.onerror=fail;
    const stream=streamSpeech(audio,response,controller.signal,valid,stage=>timing(stage));a.url=stream.url;a.streamCancel=stream.cancel;await stream.finished;
   }catch{fail();}finally{clearTimeout(deadline);}
  }
@@ -64,6 +67,7 @@ export default function SpokenLetterPage(){
   const code=failure==='eye'||failure==='uncertain'?failure:preparation;
   const guidance=PREPARATION_TEXT[code];
   if(failure){
+   answerGate.current.ready=false;abortRecognition();if(!a.voiceWaiting)setVoice('quiet');
    if(a.fault!==code){a.fault=code;a.faultSince=performance.now();}
    setStatus(guidance);
    // Immediate scoring gate; delayed warning avoids treating a brief blink as
@@ -72,9 +76,10 @@ export default function SpokenLetterPage(){
    return;
   }
   a.fault=null;a.faultSince=0;a.announcedFault=null;
-  if(a.paused||a.muted){setStatus('Duraklatıldı');return;}
+  if(a.paused||a.muted){answerGate.current.ready=false;abortRecognition();setVoice('quiet');setStatus('Duraklatıldı');return;}
   if(a.eyeAnnounced!==a.session.eye){a.eyeAnnounced=a.session.eye;setStatus(a.session.eye==='RIGHT'?'Konum hazır · sağ göz açık, sol göz kapalı':'Konum hazır · sol göz açık, sağ göz kapalı');void actions.current.speak(a.session.eye==='RIGHT'?'right':'left');return;}
-  if(!a.session.presentationId&&!a.voiceWaiting&&!a.audioFailed&&!a.modal){a.session.present();setMode('test');setRevision(n=>n+1);setStatus('Harfi ve yönünü söyleyin');}
+  if(!a.session.presentationId&&!a.voiceWaiting&&!a.audioFailed&&!a.modal){answerGate.current.ready=false;answerGate.current.clarifications=0;a.session.present();setMode('test');setRevision(n=>n+1);setStatus('Harfi ve yönünü söyleyin');}
+  else if(a.session.presentationId&&!a.voiceWaiting&&!a.audioFailed&&!a.modal){if(!answerGate.current.ready){answerGate.current.announced='';setRevision(n=>n+1);}else actions.current.listen();}
  }
  async function complete(cancelled=false){
   const a=r.current,s=a.session;if(!s)return;const epoch=a.epoch;
@@ -97,7 +102,8 @@ export default function SpokenLetterPage(){
   if(parsed.command==='pause'){a.paused=true;setStatus('Duraklatıldı');void speak('paused');return;}
   if(parsed.command==='resume'){a.paused=false;inspectConditions();restartListening();return;}
   if(parsed.command==='repeat'){void speak('repeat');return;}
-  if(a.paused||a.modal||a.audioFailed||letterConditionFailure(a.conditions,s.eye,performance.now())){restartListening();return;}
+  if(a.paused||a.modal||a.audioFailed||!answerGate.current.ready||!s.presentationId||letterConditionFailure(a.conditions,s.eye,performance.now())){restartListening();return;}
+  if((confidence>0&&confidence<.5)||parsed.clarify){answerGate.current.clarifications++;if(answerGate.current.clarifications>2){s.invalidate('ASR_RETRY_LIMIT',a.conditions,performance.now(),measureSymbol());answerGate.current.ready=false;a.paused=true;setRevision(n=>n+1);setDialog('Yanıt iki açıklama turunda anlaşılamadı. Deneme puanlanmadı. Devam et ile aynı hedefi yeniden deneyebilir veya Bitir ile çıkabilirsiniz.');a.modal=true;setVoice('quiet');return;}}
   if(confidence>0&&confidence<.5){s.unscored('ASR_LOW_CONFIDENCE',a.conditions,performance.now(),measureSymbol(),parsed);void speak('letter');return;}
   const merged:ParsedAnswer={...parsed,letter:parsed.letter||a.partial.letter,orientation:parsed.orientation||a.partial.orientation};
   if(parsed.clarify==='reverse'){s.unscored('ASR_UNCLEAR',a.conditions,performance.now(),measureSymbol(),parsed);a.partial={letter:merged.letter};void speak('reverse');return;}
@@ -106,7 +112,8 @@ export default function SpokenLetterPage(){
   const geometry=measureSymbol();
   if(s.respond(merged,a.conditions,performance.now(),s.presentationId,geometry)){a.partial={};setRevision(n=>n+1);if(s.completed)void complete();else {inspectConditions();restartListening();}}
  }
- actions.current={listen,receive,speak,stop};
+ actions.current={listen,receive,speak,stop,inspect:inspectConditions};
+ useEffect(()=>{const a=r.current,s=a.session;if(mode!=='test'||!s?.presentationId||a.paused||a.modal||a.voiceWaiting||answerGate.current.ready||answerGate.current.announced===s.presentationId)return;const geometry=measureSymbol();if(!geometry)return;answerGate.current.announced=s.presentationId;timing('letter-rendered');void actions.current.speak('repeat');},[mode,revision]);
  useEffect(()=>{
   const a=r.current;a.mounted=true;setReady(true);
   const revoke=()=>{if(!isCameraAllowed()||!isMicrophoneAllowed()){actions.current.stop();setMode('idle');setError('Kamera veya mikrofon tercihi kapalı. Görev durduruldu.');}};
@@ -124,16 +131,22 @@ export default function SpokenLetterPage(){
    if(!current(epoch)){stream.getTracks().forEach(t=>t.stop());return;}a.stream=stream;setLive(true);
    const engine=new SkinInference();a.engine=engine;await engine.initialize();if(!current(epoch))return;
    if(!video.current)throw Error('Preview');video.current.srcObject=stream;await video.current.play();void speak('prepare');
-   let last=-1;
+   let last=-1;const analysis=document.createElement('canvas'),motion=new SourceMotion();
    const loop=async()=>{
     if(!current(epoch))return;const v=video.current,c=canvas.current;
     if(!v||!c||stream.getVideoTracks().some(t=>t.readyState!=='live'))throw Error('Camera ended');
     if(v.readyState>=2&&v.currentTime!==last){last=v.currentTime;c.width=v.videoWidth;c.height=v.videoHeight;const ctx=c.getContext('2d',{willReadFrequently:true});if(!ctx)throw Error('Canvas');ctx.drawImage(v,0,0,c.width,c.height);const observedAt=performance.now();
-     const alignment=await engine.assessAlignment(c);if(!current(epoch))return;const quality=SkinAnalyzer.checkQuality(ctx,c.width,c.height,alignment.faceDetected,alignment.box);
+     const ratio=Math.min(1,640/c.width);analysis.width=Math.round(c.width*ratio);analysis.height=Math.round(c.height*ratio);const ac=analysis.getContext('2d',{willReadFrequently:true})!;ac.drawImage(c,0,0,analysis.width,analysis.height);
+     const alignment=await engine.assessAlignment(analysis);if(!current(epoch))return;const quality=visionFrameQuality(ac,analysis.width,analysis.height,alignment,a.eyeAnnounced?a.session?.eye||null:null);
+     const priorQuality=SkinAnalyzer.checkQuality(ac,analysis.width,analysis.height,alignment.faceDetected,alignment.box);
+     c.dataset.visionQualityComparison=JSON.stringify({frameTime:last,oldFaceMeanGradient:priorQuality.blurScore,visibleEyeGradient:quality.blurScore,oldStatus:priorQuality.status,newStatus:quality.status});
+     if(alignment.box){const b=alignment.box;alignment.box={x:b.x/ratio,y:b.y/ratio,width:b.width/ratio,height:b.height/ratio};}
+     const nose=alignment.landmarks?.[1],motionStable=!nose||!motion.update(nose.x,nose.y,alignment.scaleRatio,observedAt);
      const telemetry={alignment,quality,width:c.width,height:c.height};a.evidence=telemetry;setEvidence(telemetry);
-     const positioned=alignment.isMediaPipeActive&&alignment.faceCount===1&&alignment.isAligned&&Math.abs(alignment.roll)<=.15&&quality.isValid&&!!alignment.box&&alignment.box.x>=0&&alignment.box.y>=0&&alignment.box.x+alignment.box.width<=c.width&&alignment.box.y+alignment.box.height<=c.height;
-     if(positioned){if(!a.stableSince)a.stableSince=observedAt;if(!a.baseline&&observedAt-a.stableSince>=1000)a.baseline=alignment.scaleRatio;}else a.stableSince=0;
-     a.conditions={observedAt,cameraLive:true,modelActive:alignment.isMediaPipeActive,faceCount:alignment.faceCount||0,qualityValid:quality.isValid,positionValid:positioned&&observedAt-a.stableSince>=1000,relativeScaleChange:a.baseline?(alignment.scaleRatio-a.baseline)/a.baseline:null,...assessEyePixels(ctx,c.width,c.height,alignment)};
+     const positioned=motionStable&&alignment.isMediaPipeActive&&alignment.faceCount===1&&alignment.isAligned&&Math.abs(alignment.roll)<=.15&&!!alignment.box&&alignment.box.x>=0&&alignment.box.y>=0&&alignment.box.x+alignment.box.width<=c.width&&alignment.box.y+alignment.box.height<=c.height;
+     if(positioned){if(!a.stableSince)a.stableSince=observedAt;if(!a.baseline&&quality.isValid&&observedAt-a.stableSince>=1000)a.baseline=alignment.scaleRatio;}else a.stableSince=0;
+     a.conditions={observedAt,cameraLive:v.readyState>=2&&!v.paused&&!v.ended,modelActive:alignment.isMediaPipeActive,faceCount:alignment.faceCount||0,qualityValid:quality.isValid,motionStable,positionValid:positioned&&observedAt-a.stableSince>=1000,relativeScaleChange:a.baseline?(alignment.scaleRatio-a.baseline)/a.baseline:null,...assessEyePixels(ctx,c.width,c.height,alignment)};
+     c.dataset.visionQuality=JSON.stringify(quality);c.dataset.visionMotion=String(!motionStable);c.dataset.visionScale=String(alignment.scaleRatio);c.dataset.visionFrameTime=String(last);c.dataset.visionAnalysisSize=`${analysis.width}x${analysis.height}`;
      c.dataset.visionModelActive=String(a.conditions.modelActive);c.dataset.visionFaceCount=String(a.conditions.faceCount);c.dataset.visionRightEye=a.conditions.right.state;c.dataset.visionLeftEye=a.conditions.left.state;c.dataset.visionObservedAt=String(observedAt);
      inspectConditions();
     }
@@ -144,7 +157,7 @@ export default function SpokenLetterPage(){
  }
  const session=r.current.session;const rotation={upright:0,right:90,down:180,left:270,mirror:0};
  return <div className="space-y-6" data-letter-task-revision={revision}>
-  <div className="flex justify-between gap-3"><h1 className="text-2xl font-bold">Sesli harf tanıma</h1><InformationButton title="Görme görevi ve hizmet bilgisi"><p>Harfi ve yönünü sesle söyleyin. Bu görev klinik görme keskinliği, göz numarası veya reçete ölçmez. Kamera görüntüsü yalnız cihaz belleğinde değerlendirilir. Sabit yönergeler Microsoft Edge it-IT-GiuseppeMultilingualNeural sesiyle +20% hız ve yaklaşık düşük pitch (-10Hz) ile Türkçe okunur; Clipchamp Low ile doğrulanmış eşleşme değildir. Yönerge metni çevrimiçi Edge hizmetine gönderilir; kullanıcı yanıtı bu ses hizmetine gönderilmez. Edge tüketici erişimi Azure ücretsiz kotası değildir.</p><p>Başlat, tarayıcı konuşma tanıma hizmetinin mikrofon kullanımını başlatır; bu hizmet sesinizi buluta aktarabilir. Ham görüntü veya ses uygulamada saklanmaz. Sonuç yalnız Gizlilik ekranındaki saklama izniyle kaydedilir.</p></InformationButton></div>
+  <div className="flex justify-between gap-3"><h1 className="text-2xl font-bold">Sesli harf tanıma</h1><InformationButton title="Görme görevi ve hizmet bilgisi"><p>Harfi ve yönünü sesle söyleyin. Bu görev klinik görme keskinliği, göz numarası veya reçete ölçmez. Kamera görüntüsü yalnız cihaz belleğinde değerlendirilir. Sabit yönergeler Microsoft Edge tr-TR-AhmetNeural sesiyle -10% hız ve yaklaşık düşük pitch (-10Hz) ile Türkçe okunur; Clipchamp Low ile doğrulanmış eşleşme değildir. Yönerge metni çevrimiçi Edge hizmetine gönderilir; kullanıcı yanıtı bu ses hizmetine gönderilmez. Edge tüketici erişimi Azure ücretsiz kotası değildir.</p><p>Başlat, tarayıcı konuşma tanıma hizmetinin mikrofon kullanımını başlatır; bu hizmet sesinizi buluta aktarabilir. Ham görüntü veya ses uygulamada saklanmaz. Sonuç yalnız Gizlilik ekranındaki saklama izniyle kaydedilir.</p></InformationButton></div>
   {!isParked?<p>{syncStatus==='synced'?'Sürüş sırasında görev kapalıdır.':'Araç durumu doğrulanamadı; görev kapalıdır.'}</p>:<>
    {mode==='idle'&&<section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-4"><h2 className="text-xl font-bold">Harfi ve yönünü söyleyin</h2><p>Kamera koşulları otomatik kontrol edilir. Sağ ve sol gözünüz için kısa bir görev tamamlayacaksınız.</p><button onClick={()=>void start()} disabled={!ready} className="min-h-11 rounded-xl bg-togg-turquoise text-togg-darkBlue px-6 font-bold">Başlat</button></section>}
    {(mode==='prepare'||mode==='test')&&<section className="grid lg:grid-cols-2 gap-5 rounded-2xl bg-cockpit-surface border border-white/10 p-5">
