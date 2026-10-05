@@ -8,6 +8,7 @@ import base64
 import sys
 import json
 import math
+import shutil
 import re
 from itertools import combinations
 from pathlib import Path
@@ -31,6 +32,17 @@ source_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(
 source_dirty=bool(subprocess.check_output(['git','status','--porcelain'],text=True).strip())
 build_id=Path('apps/vehicle-app/.next/BUILD_ID').read_text().strip()
 proof=[]
+fixture=Path('audit-fixtures/three-angle.y4m' if LOW else 'audit-fixtures/digital-detail.y4m' if DIGITAL else 'audit-fixtures/high-detail.y4m')
+if LOW:
+    # Retain the original poor source byte-for-byte. Longer transport holds let
+    # cold model initialization and native 200% rendering finish before pose change.
+    extended=fixture.with_name('three-angle-resolution.y4m')
+    ffmpeg=shutil.which('ffmpeg')
+    if not ffmpeg:
+        import imageio_ffmpeg
+        ffmpeg=imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run([ffmpeg,'-hide_banner','-loglevel','error','-y','-i',str(fixture),'-vf','setpts=3*PTS,fps=15','-t','135','-pix_fmt','yuv420p',str(extended)],check=True)
+    fixture=extended
 with sync_playwright() as pw:
     for zoom in (1, 2):
         with tempfile.TemporaryDirectory(prefix='attune-resolution-') as profile:
@@ -38,7 +50,7 @@ with sync_playwright() as pw:
             (prefs/'Preferences').write_text(json.dumps({'partition':{'default_zoom_level': {'x':math.log(zoom)/math.log(1.2)}}}))
             c=pw.chromium.launch_persistent_context(profile,channel='chromium',headless=False,no_viewport=True,permissions=['camera'],args=[
                 '--window-size=1920,1080','--use-fake-device-for-media-stream',
-                '--use-file-for-fake-video-capture='+str(Path('audit-fixtures/three-angle.y4m' if LOW else 'audit-fixtures/digital-detail.y4m' if DIGITAL else 'audit-fixtures/high-detail.y4m').resolve()),
+                '--use-file-for-fake-video-capture='+str(fixture.resolve()),
                 '--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'])
             try:
                 c.add_init_script(OBSERVE);p=c.new_page();errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
@@ -114,5 +126,5 @@ with sync_playwright() as pw:
                 proof.append({'zoom':zoom,'sources':sources,'camera':p.evaluate('cameraSettings'),'segmentation':p.evaluate('segmentResults'),'regions':regions,'quality':result['quality'],'pose':result['capturePose'],'viewport':p.evaluate('({innerWidth,innerHeight,outerWidth,outerHeight,devicePixelRatio})')})
             finally:
                 c.close()
-(OUT/'resolution-proof.json').write_text(json.dumps({'sourceHead':source_head,'sourceTrackedChanges':source_dirty,'buildId':build_id,'technicalChecks':'PASS','visualAcceptance':'FAIL','controlledFixture':True,'userPhotoAcceptance':False,'runs':proof},indent=2),encoding='utf-8')
+(OUT/'resolution-proof.json').write_text(json.dumps({'sourceHead':source_head,'sourceTrackedChanges':source_dirty,'buildId':build_id,'technicalChecks':'PASS','visualAcceptance':'FAIL','controlledFixture':True,'fixtureTransportHoldSeconds':45 if LOW else 3,'userPhotoAcceptance':False,'runs':proof},indent=2),encoding='utf-8')
 print(f'PASS technical chain: native {WIDTH}x{HEIGHT}, actual MediaPipe, six regions, measured browser 100%/200%; visual acceptance remains FAIL')
