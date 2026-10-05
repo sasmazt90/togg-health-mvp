@@ -17,6 +17,7 @@ interface SkinActiveScanProps {
   multiAngle?: boolean;
   fresh?: boolean;
   resolution?: CameraResolution;
+  preparing?:boolean;
 }
 
 export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
@@ -28,7 +29,8 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
   guidanceText,
   multiAngle = false,
   fresh = false,
-  resolution
+  resolution,
+  preparing=false
 }) => {
   const defaultRegion = getRegionData('forehead');
 
@@ -53,7 +55,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
         <div className="lg:col-span-6 space-y-6 max-w-md">
           <div className="space-y-1">
             <h2 className="text-3xl font-extrabold text-white tracking-tight">
-              {analyzing ? 'Analiz Ediliyor' : 'Kamera Hazırlığı'}
+              {preparing ? 'Portre Hazırlanıyor' : analyzing ? 'Analiz Ediliyor' : 'Kamera Hazırlığı'}
             </h2>
             <p className="text-sm text-slate-300">
               {guidanceText || 'Lütfen başınızı sabit tutun.'}
@@ -61,7 +63,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
           </div>
 
           {/* İlerleme Çubuğu */}
-          <div className="space-y-2">
+          {!preparing && <div className="space-y-2">
             <div className="flex justify-between text-xs text-slate-300 font-medium">
               <span>{analyzing ? 'Geçerli kareler değerlendiriliyor' : 'Uygun konum bekleniyor'}</span>
               <span className="font-mono text-togg-turquoise font-bold">%{scanProgress}</span>
@@ -72,7 +74,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
                 style={{ width: `${scanProgress}%` }}
               />
             </div>
-          </div>
+          </div>}
 
           <CameraPreparation alignment={alignment} quality={quality} fresh={fresh} resolution={resolution} position={fresh && alignment?.isAligned ? 'Konum hazır' : guidanceText || 'Ölçüm bekleniyor'}/>
 

@@ -4,16 +4,26 @@ export type SkinMesh={points:MeshPoint[];edges:[number,number][];major:number[];
 type Graph={indices:number[];edges:[number,number][];major:number[];boundary:number[][];excluded:string[]};
 // Every edge is explicit and anatomical; indices refer to actual MediaPipe
 // landmarks in the accepted unmirrored frame, never screen-side mirroring.
+// Adjacent anatomical rows; connections never skip a row or form a fan.
+function rowsGraph(rows:number[][],major:number[],excluded:string[]):Graph {
+ const indices=rows.flat(),edges:[number,number][]=[];let offset=0;
+ for(let r=0;r<rows.length;r++){for(let c=1;c<rows[r].length;c++)edges.push([offset+c-1,offset+c]);if(r){const prev=offset-rows[r-1].length;for(let c=0;c<rows[r].length;c++){const k=Math.round(c*(rows[r-1].length-1)/Math.max(1,rows[r].length-1));edges.push([prev+k,offset+c]);if(c<rows[r].length-1 && c%2===r%2 && k<rows[r-1].length-1)edges.push([prev+k+1,offset+c]);}}offset+=rows[r].length;}
+ return {indices,edges,major:major.map(i=>indices.indexOf(i)).filter(i=>i>=0),boundary:[],excluded};
+}
+function eyeBands():Graph {
+ const rightOuter=[35,46,65,55,193,128,120,111],rightInner=[130,30,27,56,243,26,23,25];
+ const leftOuter=[265,276,295,285,417,357,349,340],leftInner=[359,260,257,286,463,256,253,255];
+ const indices=[...rightOuter,...rightInner,...leftOuter,...leftInner],edges:[number,number][]=[];
+ for(const base of [0,16])for(let i=0;i<8;i++){const j=(i+1)%8;edges.push([base+i,base+j],[base+8+i,base+8+j],[base+i,base+8+i]);if(i%2===0)edges.push([base+i,base+8+j]);}
+ return {indices,edges,major:[0,4,16,20],boundary:[],excluded:['iris','eye-opening','nose-bridge']};
+}
 export const SKIN_GRAPHS:Record<string,Graph>={
- forehead:{indices:[10,109,67,103,54,21,71,63,105,66,107,9,336,296,334,293,301,251,284,332,297,338,151,108,337],boundary:[[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,0]],edges:[[0,22],[22,11],[1,23],[23,22],[23,10],[2,7],[7,23],[3,8],[8,23],[4,7],[21,24],[24,22],[24,12],[20,15],[15,24],[19,14],[14,24],[18,15],[10,22],[12,22],[23,11],[24,11]],major:[0,22,11],excluded:['eyes','nose']},
- // Seven explicit neighbouring anatomical rows span upper, middle and lower
- // cheek. Right/left indices are counterparts in MediaPipe canonical geometry.
- // No runtime triangulation, long row-skipping chord or numerical ROI clipping.
- rightCheek:{indices:[116,117,101,123,50,36,187,205,203,192,216,138,214,212,135,210,202,169,211],boundary:[],edges:[[0,1],[0,3],[1,2],[1,3],[1,4],[2,4],[2,5],[3,4],[3,6],[4,6],[4,7],[5,7],[5,8],[6,7],[6,9],[6,10],[7,8],[7,10],[8,10],[9,10],[9,11],[9,12],[10,12],[10,13],[11,12],[11,14],[12,13],[12,14],[12,15],[13,15],[13,16],[14,15],[14,17],[15,16],[15,17],[15,18],[16,18],[17,18]],major:[4,7,12,15],excluded:['right-eye','nose','lips','ear','occluded-cheek']},
- leftCheek:{indices:[345,346,330,352,280,266,411,425,423,416,436,367,434,432,364,430,422,394,431],boundary:[],edges:[[0,1],[0,3],[1,2],[1,3],[1,4],[2,4],[2,5],[3,4],[3,6],[4,6],[4,7],[5,7],[5,8],[6,7],[6,9],[6,10],[7,8],[7,10],[8,10],[9,10],[9,11],[9,12],[10,12],[10,13],[11,12],[11,14],[12,13],[12,14],[12,15],[13,15],[13,16],[14,15],[14,17],[15,16],[15,17],[15,18],[16,18],[17,18]],major:[4,7,12,15],excluded:['left-eye','nose','lips','ear','occluded-cheek']},
- nose:{indices:[168,193,122,196,3,51,45,48,49,98,97,2,326,327,279,278,275,281,248,419,351,417,6,197,195,5,4,1],boundary:[[0,1,2,3,4,5,6,7,8,9],[0,21,20,19,18,17,16,15,14,13]],edges:[[0,22],[22,23],[23,24],[24,25],[25,26],[26,27],[1,22],[21,22],[2,23],[20,23],[3,24],[19,24],[4,25],[18,25],[5,26],[17,26],[6,26],[16,26],[7,27],[15,27],[8,27],[14,27],[9,10],[13,12]],major:[0,26],excluded:['eyes','nostril-interior','upper-lip','wide-cheek']},
- periorbital:{indices:[130,247,30,29,27,28,56,190,243,112,26,22,23,24,110,25,33,133,359,467,260,259,257,258,286,414,463,341,256,252,253,254,339,255,263,362],boundary:[[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,0],[18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,18]],edges:[[0,16],[1,16],[2,16],[15,16],[14,16],[8,17],[7,17],[6,17],[9,17],[10,17],[3,4],[11,12],[18,34],[19,34],[20,34],[33,34],[32,34],[26,35],[25,35],[24,35],[27,35],[28,35],[21,22],[29,30]],major:[16,17,34,35],excluded:['iris','eye-opening','nose-bridge']},
- chin:{indices:[202,210,214,177,149,148,152,377,378,401,434,430,422,201,200,421,194,204,418,424],boundary:[[0,1,2,3,4,5,6,7,8,9,10,11,12,15,14,13,0]],edges:[[0,16],[16,13],[13,14],[14,15],[15,18],[18,12],[16,17],[17,3],[3,14],[17,14],[14,6],[18,19],[19,9],[9,14],[19,14],[3,5],[9,7],[5,14],[7,14]],major:[14,6],excluded:['lips','mouth','neck']}
+ forehead:rowsGraph([[103,67,109,10,338,297,332],[54,104,108,151,337,333,284],[21,63,66,9,296,293,251]],[10,151,9],['eyes','nose','hair']),
+ rightCheek:rowsGraph([[111,117,119,100],[123,50,36,142],[147,187,205,203],[132,207,216,206],[58,215,192,212],[172,138,214,202]],[117,50,205,192],['right-eye','nose','lips','ear','occluded-cheek']),
+ leftCheek:rowsGraph([[340,346,348,329],[352,280,266,371],[376,411,425,423],[361,427,436,426],[288,435,416,432],[397,367,434,422]],[346,280,425,416],['left-eye','nose','lips','ear','occluded-cheek']),
+ nose:rowsGraph([[193,168,417],[122,6,351],[196,197,419],[3,195,248],[126,51,5,281,355],[129,49,4,279,358],[209,48,1,278,429],[102,98,2,327,331]],[168,4,98,327],['eyes','nostril-interior','upper-lip','wide-cheek']),
+ periorbital:eyeBands(),
+ chin:rowsGraph([[202,106,83,18,313,406,422],[210,194,201,200,421,418,430],[169,170,208,199,428,395,394],[149,176,148,152,377,400,378]],[18,200,152],['lips','mouth','neck'])
 };
 export function buildSkinMesh(id:string,landmarks:MeshPoint[],width:number,height:number):SkinMesh {
  const graph=SKIN_GRAPHS[id];
@@ -37,7 +47,7 @@ export function supportedSkinMesh(mesh:SkinMesh,landmarks:MeshPoint[],width:numb
  const edges=mesh.edges.filter(([a,b])=>{for(let step=1;step<40;step++){const t=step/40,p={x:mesh.points[a].x*(1-t)+mesh.points[b].x*t,y:mesh.points[a].y*(1-t)+mesh.points[b].y*t};if(!supported(p)||holes.some(h=>inside(p,h)))return false;}return supported(mesh.points[a])&&supported(mesh.points[b]);});
  // A turned or noisy projection must not draw crossing cheek chords. Keep
  // shorter supported anatomical connections when two non-node edges cross.
- if(mesh.excluded.includes('occluded-cheek')) {
+ {
    const cross=(a:MeshPoint,b:MeshPoint,c:MeshPoint)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
    const accepted:[number,number][]=[];
    edges.sort(([a,b],[c,d])=>Math.hypot(mesh.points[a].x-mesh.points[b].x,mesh.points[a].y-mesh.points[b].y)-Math.hypot(mesh.points[c].x-mesh.points[d].x,mesh.points[c].y-mesh.points[d].y));

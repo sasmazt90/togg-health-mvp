@@ -39,8 +39,10 @@ export function snapshotSkinFrame(canvas:HTMLCanvasElement, alignment:FaceAlignm
   const metadata={width:canvas.width,height:canvas.height,angle,rois,exclusions:exclusionBoxes,faceContour,meshes,contours:Object.fromEntries(Object.entries(SKIN_CONTOURS).map(([id,indices])=>[id,points(indices)]))};
   if(!segmentation)return {...metadata,dataUrl:'',crop:{x:0,y:0,width:canvas.width,height:canvas.height},visualError:'Arka plan ayrıştırılamadı. Sayısal sonuçlar korundu; yeni taramayla görüntüyü tekrar alabilirsiniz.'};
   try {
-    const {alpha,bounds}=headAlpha(segmentation,alignment,canvas.width,canvas.height);
-    metadata.meshes=Object.fromEntries(Object.entries(meshes).map(([id,mesh])=>[id,supportedSkinMesh(mesh,landmarks,canvas.width,canvas.height,alpha)]));
+    const {alpha,bounds}=segmentation.alpha ? {alpha:segmentation.alpha,bounds:alphaBounds(segmentation.alpha,canvas.width,canvas.height)} : headAlpha(segmentation,alignment,canvas.width,canvas.height);
+    const skinSupport=new Uint8Array(alpha.length);
+    for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++){const i=y*canvas.width+x,m=Math.min(segmentation.height-1,Math.floor(y*segmentation.height/canvas.height))*segmentation.width+Math.min(segmentation.width-1,Math.floor(x*segmentation.width/canvas.width));skinSupport[i]=alpha[i]>230 && (segmentation.faceConfidence ? segmentation.faceConfidence[m]>.35 : segmentation.categories[m]===3) ? 255 : 0;}
+    metadata.meshes=Object.fromEntries(Object.entries(meshes).map(([id,mesh])=>[id,supportedSkinMesh(mesh,landmarks,canvas.width,canvas.height,skinSupport)]));
     const output=document.createElement('canvas');output.width=canvas.width;output.height=canvas.height;
     const ctx=output.getContext('2d');if(!ctx)throw Error('SEGMENTATION_CANVAS');
     const pixels=canvas.getContext('2d')!.getImageData(0,0,canvas.width,canvas.height);
@@ -50,8 +52,9 @@ export function snapshotSkinFrame(canvas:HTMLCanvasElement, alignment:FaceAlignm
     const pad=Math.max(bounds.width,bounds.height)*.065;
     const x=Math.min(...all.map(p=>p.x))-pad,y=Math.min(...all.map(p=>p.y))-pad;
     const bottom=bounds.y+bounds.height;
-    // A short real neck meets the frame bottom instead of a floating jaw cut.
-    const crop={x,y,width:Math.max(...all.map(p=>p.x))-x+pad,height:bottom-y+(segmentation.neckConfidence?0:pad)};
+    // The source neck tapers to transparent inside the portrait, never a hard
+    // horizontal crop. Padding preserves the whole real head at both zooms.
+    const crop={x,y,width:Math.max(...all.map(p=>p.x))-x+pad,height:bottom-y+pad};
     return {...metadata,dataUrl:output.toDataURL('image/png'),crop,segmentationMs:segmentation.elapsedMs,maskWidth:segmentation.width,maskHeight:segmentation.height};
   } catch {return {...metadata,dataUrl:'',crop:{x:0,y:0,width:canvas.width,height:canvas.height},visualError:'Baş görüntüsü güvenilir ayrıştırılamadı. Sayısal sonuçlar korundu; görüntüyü yeni taramayla tekrar alabilirsiniz.'};}
 
@@ -61,7 +64,15 @@ export function snapshotAngleForRegion(id:string,threeAngle:boolean):SkinAngle {
 }
 export const REGION_COLORS:Record<string,string>={forehead:'#67e8f9',rightCheek:'#c4b5fd',leftCheek:'#fda4af',nose:'#fcd34d',chin:'#86efac',periorbital:'#93c5fd'};
 
-export interface HeadSegmentation {width:number;height:number;categories:Uint8Array;confidence?:Float32Array;neckConfidence?:Float32Array;elapsedMs:number}
+export interface HeadSegmentation {width:number;height:number;categories:Uint8Array;confidence?:Float32Array;neckConfidence?:Float32Array;faceConfidence?:Float32Array;alpha?:Uint8Array;elapsedMs:number;loadMs?:number;refinementMs?:number;refinementBytes?:number}
+/** API masks may already be enlarged to the photo size. Connectivity must run
+ * on the actual semantic grid, not millions of duplicated mask pixels. */
+export function compactSkinMask(width:number,height:number,categories:Uint8Array,hair:Float32Array,face:Float32Array,neck:Float32Array):HeadSegmentation {
+ const w=256,h=256,c=new Uint8Array(w*h),confidence=new Float32Array(w*h),faceConfidence=new Float32Array(w*h),neckConfidence=new Float32Array(w*h);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x,k=Math.min(height-1,Math.floor((y+.5)*height/h))*width+Math.min(width-1,Math.floor((x+.5)*width/w));c[i]=categories[k];confidence[i]=Math.min(1,hair[k]+face[k]);faceConfidence[i]=face[k];neckConfidence[i]=neck[k];}
+ return {width:w,height:h,categories:c,confidence,faceConfidence,neckConfidence,elapsedMs:0};
+}
+export function alphaBounds(alpha:Uint8Array,width:number,height:number){let minX=width,minY=height,maxX=-1,maxY=-1;for(let y=0;y<height;y++)for(let x=0;x<width;x++)if(alpha[y*width+x]>0){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}if(maxX<0)throw Error('EMPTY_ALPHA');return {x:minX,y:minY,width:maxX-minX+1,height:maxY-minY+1};}
 /** Presentation completeness only; never manufactures missing forehead pixels. */
 export function assertCompleteFace(a:FaceAlignment,width:number,height:number) {
  const lm=a.landmarks;if(!lm||lm.length<468)throw Error('MISSING_FACE_CONTOUR');
@@ -82,7 +93,7 @@ export function headAlpha(mask:HeadSegmentation,a:FaceAlignment,width:number,hei
  // Body segmentation cannot introduce a room, clothing or invented neck.
  const faceTop=Math.min(...FACE_OUTLINE.map(i=>lm[i].y)),faceBottom=lm[152].y,faceHeight=faceBottom-faceTop;
  const neckCenter=(lm[148].x+lm[377].x)/2,neckHalf=Math.abs(lm[172].x-lm[397].x)*.65;
- const neckTop=Math.min(lm[172].y,lm[397].y)-faceHeight*.12,neckBottom=faceBottom+faceHeight*.28;
+ const neckTop=Math.min(lm[172].y,lm[397].y)-faceHeight*.12,neckBottom=faceBottom+faceHeight*.32;
  const neck=new Uint8Array(mw*mh);
  if(mask.neckConfidence){
    if(mask.neckConfidence.length!==mw*mh)throw Error('INVALID_NECK_CONFIDENCE');
@@ -110,13 +121,22 @@ export function headAlpha(mask:HeadSegmentation,a:FaceAlignment,width:number,hei
  // Enclosed face/eye/lip pixels stay fully opaque. Confidence softening applies
  // only to the narrow silhouette boundary, never to the facial texture.
  const r=edgeRadius,interior=x>=r&&x<mw-r&&y>=r&&y<mh-r&&seen[i-r]&&seen[i+r]&&seen[i-mw*r]&&seen[i+mw*r];
- return interior?1:(neck[i] ? mask.neckConfidence![i] : confidence?.[i]??1);};
+ if(neck[i] || (categories[i]===3 && y/mh>faceBottom))return neck[i] ? mask.neckConfidence![i] : confidence?.[i]??1;
+ return interior?1:(confidence?.[i]??1);};
+ // Probability depends only on semantic cells. Evaluate it once instead of
+ // repeating four neighborhood checks for every full-resolution output pixel.
+ const grid=new Float32Array(mw*mh);
+ for(let y=0;y<mh;y++)for(let x=0;x<mw;x++)grid[y*mw+x]=probability(x,y);
+ const cached=(x:number,y:number)=>grid[Math.max(0,Math.min(mh-1,y))*mw+Math.max(0,Math.min(mw-1,x))];
  const alpha=new Uint8Array(width*height);let minX=width,minY=height,maxX=-1,maxY=-1;
  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
    const sx=(x+.5)*mw/width-.5,sy=(y+.5)*mh/height-.5,x0=Math.floor(sx),y0=Math.floor(sy),fx=sx-x0,fy=sy-y0;
-   const p=(probability(x0,y0)*(1-fx)+probability(x0+1,y0)*fx)*(1-fy)+(probability(x0,y0+1)*(1-fx)+probability(x0+1,y0+1)*fx)*fy;
+   const p=(cached(x0,y0)*(1-fx)+cached(x0+1,y0)*fx)*(1-fy)+(cached(x0,y0+1)*(1-fx)+cached(x0+1,y0+1)*fx)*fy;
    // Remove low confidence background fringe instead of retaining pale pixels.
-   const t=Math.max(0,Math.min(1,(p-.45)/.4)),value=Math.round(255*t*t*(3-2*t));
+   const t=Math.max(0,Math.min(1,(p-.45)/.4));let value=Math.round(255*t*t*(3-2*t));
+   // Layout alpha is applied AFTER semantic confidence thresholding. Otherwise
+   // that threshold chops the lower half of the neck fade back into a cap.
+   if(y/height>faceBottom){const nx=(x/width-neckCenter)/Math.max(neckHalf,.01),portraitEnd=Math.min(neckBottom,1-.008),end=portraitEnd-Math.max(0,portraitEnd-faceBottom)*.75*Math.min(1,nx*nx),fade=Math.max(0,Math.min(1,(end-y/height)/Math.max(.0001,end-faceBottom)));value=Math.round(value*fade*fade*(3-2*fade));}
    alpha[y*width+x]=value;if(value>0){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);}
  }
 

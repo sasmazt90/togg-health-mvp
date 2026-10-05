@@ -25,7 +25,7 @@ const id="""+json.dumps(id)+""",g=M.SKIN_GRAPHS[id],l=Array.from({length:478},(_
 const mesh=M.buildSkinMesh(id,l,640,480);assert(mesh.edges.length>=20);assert(mesh.major.length>=2);assert(mesh.excluded.length>=2);
 assert.equal(mesh.points.length,g.indices.length);mesh.points.forEach((p,i)=>{assert.equal(p.x,l[g.indices[i]].x*640);assert.equal(p.y,l[g.indices[i]].y*480)});
 assert(mesh.edges.every(([a,b])=>a!==b&&a>=0&&b>=0&&a<mesh.points.length&&b<mesh.points.length));
-if(id==='periorbital')assert(mesh.edges.every(([a,b])=>(a<18&&b<18)||(a>=18&&b>=18)),'Eyes may never connect over nose/iris');
+if(id==='periorbital')assert(mesh.edges.every(([a,b])=>(a<16&&b<16)||(a>=16&&b>=16)),'Eyes may never connect over nose/iris');
 assert.equal(S.snapshotAngleForRegion('rightCheek',true),'LEFT');assert.equal(S.snapshotAngleForRegion('leftCheek',true),'RIGHT');
 assert.notDeepEqual(M.SKIN_GRAPHS.rightCheek.indices,M.SKIN_GRAPHS.leftCheek.indices);
 """)
@@ -111,9 +111,32 @@ assert.equal(alpha[30*64+30],255);assert(alpha[47*64+30]>0);assert.equal(alpha[6
 
 def test_cheek_rows_do_not_skip_anatomy_or_draw_non_node_crossings(tmp_path):
  run(tmp_path,"""
-const rows=[0,0,0,1,1,1,2,2,2,3,3,4,4,4,5,5,5,6,6];
-for(const id of ['rightCheek','leftCheek']){const g=M.SKIN_GRAPHS[id];assert.equal(g.indices.length,19);assert(g.edges.length>=35);assert(g.edges.every(([a,b])=>Math.abs(rows[a]-rows[b])<=1));}
+const rows=Array.from({length:24},(_,i)=>Math.floor(i/4));
+for(const id of ['rightCheek','leftCheek']){const g=M.SKIN_GRAPHS[id];assert.equal(g.indices.length,24);assert(g.edges.length>=35);assert(g.edges.every(([a,b])=>Math.abs(rows[a]-rows[b])<=1));}
 const lm=Array.from({length:478},()=>({x:0,y:0})),alpha=new Uint8Array(10000).fill(255);
 const graph={points:[{x:20,y:20},{x:80,y:80},{x:20,y:80},{x:80,y:20}],edges:[[0,1],[2,3]],major:[0,2],boundary:[],excluded:['occluded-cheek']};
 const supported=M.supportedSkinMesh(graph,lm,100,100,alpha);assert.equal(supported.edges.length,1,'Non-node cheek crossing cannot reach the render');assert.equal(supported.points.length,2);
+""")
+
+
+def test_source_color_guides_alpha_without_modifying_face_pixels(tmp_path):
+ run(tmp_path,"""
+const R=load('skinMatte'),w=64,h=64,rgba=new Uint8ClampedArray(w*h*4),alpha=new Uint8Array(w*h);
+for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;rgba[i*4]=x<32?220:20;rgba[i*4+1]=70;rgba[i*4+2]=x<32?20:220;rgba[i*4+3]=255;alpha[i]=x<28?255:x>35?0:128;}
+const before=new Uint8ClampedArray(rgba),m=R.refineSkinMatte(rgba,alpha,w,h,32);
+assert.deepEqual(rgba,before,'Refinement cannot change source RGB');
+assert.equal(m.alpha[32*w+20],255);assert.equal(m.alpha[32*w+45],0);
+assert(m.alpha[32*w+30]>160,'Real foreground colour must sharpen the uncertain semantic boundary');
+assert(m.alpha[32*w+34]<100,'Real background colour must remove an uncertain fringe');
+assert(m.alpha[32*w+31]-m.alpha[32*w+32]>60,'Guide must create a source-aligned colour boundary, not just blur the prior');
+assert(m.elapsedMs>=0 && m.workingBytes<1000000);
+""")
+
+
+def test_native_sized_masks_compact_to_true_semantic_grid(tmp_path):
+ run(tmp_path,"""
+const w=1024,h=1024,c=new Uint8Array(w*h).fill(3),hair=new Float32Array(w*h),face=new Float32Array(w*h).fill(.9),neck=new Float32Array(w*h);
+const mask=S.compactSkinMask(w,h,c,hair,face,neck);
+assert.equal(mask.width,256);assert.equal(mask.height,256);assert.equal(mask.categories.length,65536);assert(mask.confidence.every(v=>Math.abs(v-.9)<1e-6));
+assert.equal(mask.categories.byteLength+mask.confidence.byteLength+mask.faceConfidence.byteLength+mask.neckConfidence.byteLength,851968);
 """)

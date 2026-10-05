@@ -5,10 +5,23 @@ export class SkinInference {
   private worker = new Worker(new URL('./skinInference.worker.ts', import.meta.url));
   private sequence = 0;
   private closed = false;
-  private pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private segmentationReady?: Promise<void>;
+  onPhase?: (phase:string)=>void;
+  private pending = new Map<number, { resolve: (value: any) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; isCurrent:()=>boolean }>();
 
   constructor() {
     this.worker.onmessage = event => {
+      if(event.data.phase){
+        const request=this.pending.get(event.data.id);
+        if(!request)return;
+        // Refinement runs after actual model inference. Give this distinct
+        // CPU stage its own bounded budget instead of consuming inference's.
+        if(event.data.phase==='REFINEMENT'){
+          clearTimeout(request.timer);
+          request.timer=setTimeout(()=>{this.pending.delete(event.data.id);request.reject(new Error('Portre sınırları hazırlanamadı'));},15000);
+        }
+        if(request.isCurrent())this.onPhase?.(event.data.phase);return;
+      }
       const request = this.pending.get(event.data.id);
       if (!request) return;
       clearTimeout(request.timer);
@@ -19,7 +32,7 @@ export class SkinInference {
     this.worker.onerror = () => this.close();
   }
 
-  private request(type: string, frame?: ImageBitmap): Promise<any> {
+  private request(type: string, frame?: ImageBitmap, alignment?: FaceAlignment, isCurrent:()=>boolean=()=>true): Promise<any> {
     if (this.closed) {
       frame?.close();
       return Promise.reject(new Error('Cilt analiz motoru kapatıldı'));
@@ -30,13 +43,23 @@ export class SkinInference {
         this.pending.delete(id);
         reject(new Error('Cilt analiz motoru yanıt vermiyor'));
       }, 15000);
-      this.pending.set(id, { resolve, reject, timer });
-      this.worker.postMessage({ id, type, frame }, frame ? [frame] : []);
+      this.pending.set(id, { resolve, reject, timer, isCurrent });
+      this.worker.postMessage({ id, type, frame, alignment }, frame ? [frame] : []);
     });
   }
 
   async initialize(): Promise<void> {
+    // Start local presentation preparation while the user reads instructions.
+    // One shared promise per worker; retries/scans never reload a ready model.
     await this.request('initialize');
+    // MediaPipe task construction shares WASM setup in this worker. Serialize
+    // construction, then warm segmentation while camera positioning starts.
+    void this.prepareSegmentation().catch(()=>{});
+  }
+
+  private prepareSegmentation():Promise<void>{
+    if(!this.segmentationReady)this.segmentationReady=this.request('initializeSegmentation').then(()=>{}).catch(error=>{this.segmentationReady=undefined;throw error;});
+    return this.segmentationReady;
   }
 
   async assessAlignment(canvas: HTMLCanvasElement): Promise<FaceAlignment> {
@@ -44,14 +67,17 @@ export class SkinInference {
     return (await this.request('frame', frame)).alignment;
   }
 
-  async segmentHead(canvas: HTMLCanvasElement): Promise<HeadSegmentation> {
+  async segmentHead(canvas: HTMLCanvasElement, alignment?:FaceAlignment, isCurrent:()=>boolean=()=>true): Promise<HeadSegmentation> {
     // Freeze the accepted pixels before loading the presentation model. Model
     // loading and inference each have a bounded deadline; cold loading must
     // not consume the native-resolution inference budget.
     const frame = await createImageBitmap(canvas);
-    try { await this.request('initializeSegmentation'); }
+    this.onPhase?.('MODEL');
+    try { await this.prepareSegmentation(); }
     catch (error) { frame.close(); throw error; }
-    return (await this.request('segment', frame)).segmentation;
+    if(!isCurrent()){frame.close();throw new Error('Cilt taraması iptal edildi');}
+    this.onPhase?.('INFERENCE');
+    return (await this.request('segment', frame, alignment, isCurrent)).segmentation;
   }
 
   close(): void {

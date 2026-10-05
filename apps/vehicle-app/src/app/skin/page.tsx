@@ -38,6 +38,10 @@ export default function SkinPage() {
   const { isParked, state } = useVehicle();
 
   const [scanState, setScanState] = useState<'READY' | 'CAMERA_ACTIVE' | 'COMPLETED' | 'ERROR'>('READY');
+  const activeScanRef=useRef(false);activeScanRef.current=scanState==='CAMERA_ACTIVE';
+  const [preparationPhase,setPreparationPhase]=useState<string|null>(null);
+  const [preparationSeconds,setPreparationSeconds]=useState(0);
+  useEffect(()=>{if(!preparationPhase || scanState!=='CAMERA_ACTIVE'){setPreparationSeconds(0);if(scanState!=='CAMERA_ACTIVE')setPreparationPhase(null);return;}const started=performance.now();const timer=setInterval(()=>setPreparationSeconds(Math.floor((performance.now()-started)/1000)),1000);return()=>clearInterval(timer);},[preparationPhase,scanState]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<number>(0);
   const [multiAngle, setMultiAngle] = useState(true);
@@ -140,6 +144,7 @@ export default function SkinPage() {
     try {
       engine = new SkinInference();
       inferenceRef.current = engine;
+      engine.onPhase = phase => { if (mountedRef.current && activeScanRef.current) {setPreparationPhase(phase);setGuidanceText(phase === 'MODEL' ? 'Yerel portre modeli hazırlanıyor… İptal edebilirsiniz.' : phase === 'INFERENCE' ? 'Kabul edilen fotoğrafın arka planı ayrılıyor…' : 'Saç ve cilt sınırları kaynak piksellerinden iyileştiriliyor…');} };
     } catch {
       initializationFailedRef.current = true;
       return;
@@ -371,7 +376,8 @@ export default function SkinPage() {
     let segmentation;
     try { assertCompleteFace(alignToUse, canvas.width, canvas.height); } catch { setErrorMessage('Alın ve çenenin tamamı kadrajda olmalı. İlgili pozu yeniden alın.'); setScanState('ERROR'); return; }
     setGuidanceText('Portre görüntüsü hazırlanıyor...');
-    try { segmentation = await inferenceRef.current?.segmentHead(canvas); } catch { /* Presentation error only. */ }
+    try { segmentation = await inferenceRef.current?.segmentHead(canvas, alignToUse, validCapture); } catch { /* Presentation error only. */ }
+    setPreparationPhase(null);
     if (!validCapture()) return;
     const acceptedSnapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT', segmentation);
 
@@ -602,7 +608,8 @@ export default function SkinPage() {
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
                     let segmentation;
                     setGuidanceText('Portre görüntüsü hazırlanıyor...');
-                    try { segmentation = await inferenceRef.current?.segmentHead(canvas); } catch { /* Numerical result remains available. */ }
+                    try { segmentation = await inferenceRef.current?.segmentHead(canvas, curAlign, ()=>!cancelled && parkedRef.current && isCameraAllowed()); } catch { /* Numerical result remains available. */ }
+                    setPreparationPhase(null);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
                     const snapshot = snapshotSkinFrame(canvas, curAlign, target, segmentation);
                     if (target === 'FRONT') snapshot.rois = snapshot.rois.filter(r => !['rightCheek','leftCheek'].includes(r.id));
@@ -837,8 +844,10 @@ export default function SkinPage() {
       {/* ============================================================ */}
       {scanState === 'CAMERA_ACTIVE' && (
         <>
-        {multiAngle && !isDemoMode() && <div data-angle-progress className="flex flex-wrap items-center gap-3"><p>Aşama {angleIndex + 1}/3: {ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}</p><InformationButton title="Kamera ve pozlar"><p>Önizleme aynasızdır. Yönler anatomik sağ ve solunuzdur. Ön pozdan alın, burun, çene ve göz çevresi; yan pozdan görünen yanak ölçülür. Tamamlanan pozlar: {completedAngles.map(a=>ANGLE_LABELS[a]).join(', ') || 'henüz yok'}. Ekrandaki büyütme yalnız görüntüleme içindir; kalite ham kamera karesinden ölçülür.</p></InformationButton><button onClick={() => { consecutiveValidFramesRef.current = 0; setScanProgress(Math.round(angleIndex * 100 / 3)); setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { setScanState('READY'); setMediaStream(null); }} className="text-sm underline">Taramayı İptal Et</button></div>}
+        {!isDemoMode() && <div data-angle-progress className="flex flex-wrap items-center gap-3"><p>{multiAngle ? `Aşama ${angleIndex + 1}/3: ${ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}` : 'Ön poz'}</p><InformationButton title="Kamera ve pozlar"><p>Önizleme aynasızdır. Yönler anatomik sağ ve solunuzdur. Ön pozdan alın, burun, çene ve göz çevresi; yan pozdan görünen yanak ölçülür. Tamamlanan pozlar: {completedAngles.map(a=>ANGLE_LABELS[a]).join(', ') || 'henüz yok'}. Ekrandaki büyütme yalnız görüntüleme içindir; kalite ham kamera karesinden ölçülür.</p></InformationButton><button onClick={() => { consecutiveValidFramesRef.current = 0; setScanProgress(Math.round(angleIndex * 100 / 3)); setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { acquisitionRef.current++; activeScanRef.current=false; setPreparationPhase(null); setScanState('READY'); setMediaStream(null); }} className="text-sm underline">Taramayı İptal Et</button></div>}
+        {preparationPhase && <div role="status" data-portrait-preparation={preparationPhase} className="flex items-center gap-3 py-3 text-sm text-togg-turquoise"><span aria-hidden="true" className="h-5 w-5 rounded-full border-2 border-current border-r-transparent animate-spin"/><span>{guidanceText} Bu aşamada geçen süre: {preparationSeconds} sn.</span></div>}
         <SkinActiveScan
+          preparing={!!preparationPhase}
           scanProgress={scanProgress}
           videoRef={videoRef}
           isLiveVideo={isLiveVideo}

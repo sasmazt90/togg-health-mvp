@@ -6,6 +6,7 @@ Structural assertions do not confer visual/user acceptance.
 import subprocess
 import base64
 import sys
+import os
 import json
 import math
 import shutil
@@ -19,14 +20,14 @@ from playwright.sync_api import sync_playwright, expect
 LOW='--low-quality' in sys.argv
 DIGITAL='--digital-source' in sys.argv
 WIDTH,HEIGHT=(640,480) if LOW else (1920,2160) if DIGITAL else (1280,960)
-OUT = Path('audit-results/user-followup-20261005/'+('low-detail' if LOW else 'digital-detail' if DIGITAL else 'high-detail')); OUT.mkdir(parents=True, exist_ok=True)
-OBSERVE = """window.acceptedSources=[];window.segmentResults=[];window.cameraSettings=[];
+OUT = Path(os.environ.get('ATTUNE_RESOLUTION_OUT','audit-results/user-followup-20261005')+'/' +('low-detail' if LOW else 'digital-detail' if DIGITAL else 'high-detail')); OUT.mkdir(parents=True, exist_ok=True)
+OBSERVE = """window.acceptedSources=[];window.segmentResults=[];window.cameraSettings=[];window.workerErrors=[];
 const get=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 navigator.mediaDevices.getUserMedia=async(...args)=>{const s=await get(...args),t=s.getVideoTracks()[0],v=t.getSettings(),c=t.getCapabilities();window.cameraSettings.push({width:v.width,height:v.height,resizeMode:v.resizeMode,maxWidth:c.width?.max,maxHeight:c.height?.max});return s;};
 const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(v,...rest){
 if(v.type==='initializeSegmentation')this.segmentationLoadStarted=performance.now();
 if(v.type==='segment'){this.segmentStarted??=new Map();this.segmentStarted.set(v.id,this.segmentationLoadStarted??performance.now());const canvas=document.querySelector('canvas'),video=document.querySelector('video');window.acceptedSources.push({data:canvas.toDataURL('image/png'),width:canvas.width,height:canvas.height,decodedWidth:video.videoWidth,decodedHeight:video.videoHeight,bitmapWidth:v.frame.width,bitmapHeight:v.frame.height,alignment:window.lastAlignment});}
-if(!this.observed){this.observed=true;this.addEventListener('message',e=>{const s=e.data.segmentation;if(e.data.alignment)window.lastAlignment=e.data.alignment;if(s)window.segmentResults.push({width:s.width,height:s.height,elapsedMs:s.elapsedMs,requestToResultMs:performance.now()-this.segmentStarted.get(e.data.id),categories:s.categories.length,confidence:s.confidence.length});});}
+if(!this.observed){this.observed=true;this.addEventListener('message',e=>{const s=e.data.segmentation;if(e.data.error)window.workerErrors.push(e.data.error);if(e.data.alignment)window.lastAlignment=e.data.alignment;if(s)window.segmentResults.push({width:s.width,height:s.height,elapsedMs:s.elapsedMs,loadMs:s.loadMs,refinementMs:s.refinementMs,requestToResultMs:performance.now()-this.segmentStarted.get(e.data.id),categories:s.categories.length,confidence:s.confidence.length});});}
 return post.call(this,v,...rest);};"""
 source_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 source_dirty=bool(subprocess.check_output(['git','status','--porcelain'],text=True).strip())
@@ -69,6 +70,7 @@ with sync_playwright() as pw:
                     (OUT/f'capture-failure-{zoom}.txt').write_text(p.locator('main').inner_text(),encoding='utf-8')
                     raise
                 p.screenshot(path=str(OUT/f'completed-before-assert-{zoom}.png'),full_page=True)
+                (OUT/f'worker-errors-{zoom}.json').write_text(json.dumps(p.evaluate('workerErrors')),encoding='utf-8')
                 (OUT/f'completed-before-assert-{zoom}.txt').write_text(p.locator('main').inner_text(),encoding='utf-8')
                 sources=p.evaluate('acceptedSources');assert len(sources)==(3 if LOW else 1)
                 for index,source in enumerate(sources):
