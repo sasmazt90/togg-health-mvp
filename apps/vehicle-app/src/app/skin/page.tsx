@@ -513,6 +513,9 @@ export default function SkinPage() {
 
     const isDemo = isDemoMode();
 
+    // Match the working 640-wide acquisition scale without degrading the
+    // accepted native photo or using any display crop/zoom in measurement.
+    const analysisCanvas=document.createElement('canvas');
     const loop = async () => {
       if (cancelled) return;
       if (!isCameraAllowed() || !parkedRef.current || mediaStream.getVideoTracks().every(t => t.readyState === 'ended')) {
@@ -557,7 +560,13 @@ export default function SkinPage() {
           }
           let curAlign: FaceAlignment;
           try {
-            curAlign = await inferenceRef.current.assessAlignment(canvas);
+            const ratio=Math.min(1,640/canvas.width);
+            const w=Math.round(canvas.width*ratio),h=Math.round(canvas.height*ratio);
+            if(analysisCanvas.width!==w || analysisCanvas.height!==h){analysisCanvas.width=w;analysisCanvas.height=h;}
+            const analysisCtx=analysisCanvas.getContext('2d',{willReadFrequently:true});
+            if(!analysisCtx)throw Error('CAMERA_ANALYSIS_CANVAS');
+            analysisCtx.drawImage(canvas,0,0,w,h);
+            curAlign = await inferenceRef.current.assessAlignment(analysisCanvas);
           } catch {
             if (!cancelled) {
               setErrorMessage('Cilt analiz motoru yanıt vermiyor. Lütfen yeniden deneyin.');
@@ -567,7 +576,11 @@ export default function SkinPage() {
           }
           // Driving/privacy/unmount may cancel while a real frame is being inferred.
           if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
-          const curQual = SkinAnalyzer.checkQuality(ctx, canvas.width, canvas.height, curAlign.faceDetected, curAlign.box);
+          const analysisCtx=analysisCanvas.getContext('2d',{willReadFrequently:true})!;
+          const curQual = SkinAnalyzer.checkQuality(analysisCtx, analysisCanvas.width, analysisCanvas.height, curAlign.faceDetected, curAlign.box);
+          // Landmarks stay normalized to the complete decoded source. Only
+          // pixel-space bounds must return to native coordinates for capture ROI.
+          if(curAlign.box){const sx=canvas.width/analysisCanvas.width,sy=canvas.height/analysisCanvas.height;curAlign={...curAlign,box:{x:curAlign.box.x*sx,y:curAlign.box.y*sy,width:curAlign.box.width*sx,height:curAlign.box.height*sy}};}
 
           setAlignment(curAlign);
           setQuality(curQual);
