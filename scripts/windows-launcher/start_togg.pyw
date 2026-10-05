@@ -15,7 +15,7 @@ TEST = "--verify-lifecycle" in sys.argv
 HERE = Path(os.environ["ATTUNE_LAUNCHER_TEST_HOME"]) if TEST and "ATTUNE_LAUNCHER_TEST_HOME" in os.environ else Path(__file__).resolve().parent
 HERE.mkdir(parents=True, exist_ok=True)
 HOST_SCRIPT = Path(__file__).resolve().parent / "backend_host.py"
-URL = "http://localhost:3000"
+URL = "http://127.0.0.1:3000"
 PYTHON = Path(r"C:\Users\PC\AppData\Local\Programs\Python\Python311\python.exe")
 NODE = Path(r"C:\nvm4w\nodejs\node.exe")
 CHROME = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
