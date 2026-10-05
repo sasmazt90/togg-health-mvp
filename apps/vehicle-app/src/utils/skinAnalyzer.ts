@@ -80,6 +80,7 @@ export interface SkinAnalysisResult {
   baselineId?: string;
   baselineTimestamp?: string;
   comparisonUnavailable?: boolean;
+  comparisonReasons?: ('legacy-quality-missing'|'capture-conditions-incompatible')[];
   comparisonScope?: string;
   capturePose?: SkinCapturePose;
 }

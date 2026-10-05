@@ -11,10 +11,12 @@ with sync_playwright() as pw:
     context.request.post('http://localhost:8000/api/vehicle/speed',data={'speedKmH':0})
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     captures=[]
+    page.goto('http://localhost:3000/skin');page.screenshot(path=str(OUT/'start.png'),full_page=True)
     for repetition in range(2):
         page.goto('http://localhost:3000/skin')
         page.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click();expect(page.get_by_role('checkbox',name='Üç açılı tarama',exact=True)).to_be_checked();page.keyboard.press('Escape')
         page.get_by_role('button',name='Analizi Başlat',exact=True).click()
+        page.screenshot(path=str(OUT/f'prepare-{repetition}.png'),full_page=True)
         page.wait_for_function('document.querySelector("canvas")?.dataset.completedAngles==="FRONT"',timeout=65000)
         assert page.evaluate('localStorage.getItem("togg_health_latest_skin")') is None if repetition==0 else True
         page.screenshot(path=str(OUT/f'right-stage-{repetition}.png'),full_page=True)
@@ -39,6 +41,19 @@ with sync_playwright() as pw:
         assert page.locator('[data-skin-snapshot]').count()==1 and page.locator('[data-skin-photo-empty]').count()==0
         assert page.locator('[data-skin-roi="rightCheek"]').count()==1 and page.locator('[data-skin-roi="leftCheek"]').count()==0
         assert 'data:image' not in page.evaluate('JSON.stringify(Object.fromEntries(Object.entries(localStorage)))')
+        meshes=[]
+        for _ in range(6):
+            svg=page.locator('[data-skin-snapshot]');mesh=page.locator('[data-skin-mesh]')
+            assert mesh.count()==1,'Only the selected regional graph may render'
+            region=mesh.get_attribute('data-skin-mesh');assert region not in meshes;meshes.append(region)
+            assert mesh.locator('path[data-mesh-edge]').count()>=20
+            assert svg.locator('clipPath').count()==0,'Numerical ROI boxes must not clip the visual graph'
+            assert page.locator('[data-face-panel] button').count()==0,'Navigation must be outside the photo'
+            assert page.locator('[data-skin-navigation]').bounding_box()['y']>=page.locator('[data-face-panel]').bounding_box()['y']+page.locator('[data-face-panel]').bounding_box()['height']-1
+            assert 'Doku Değişimi' not in page.locator('main').inner_text()
+            page.screenshot(path=str(OUT/f'{region}-{repetition}.png'),full_page=True)
+            page.get_by_role('button',name='Sonraki Bölge',exact=True).click()
+        assert len(meshes)==6
         captures.append({'result':result,'reference':reference})
         page.screenshot(path=str(OUT/f'completed-{repetition}.png'),full_page=True)
     assert not errors,errors

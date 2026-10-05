@@ -23,9 +23,10 @@ import { appendHealthRecord } from '../../utils/healthRecords';
 import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
-import { SkinSnapshot, snapshotSkinFrame, snapshotAngleForRegion } from '../../utils/skinSnapshot';
+import { SkinSnapshot, snapshotSkinFrame, snapshotAngleForRegion, assertCompleteFace } from '../../utils/skinSnapshot';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
+import type { CameraResolution } from '../../components/CameraPreparation';
 import { SkinResultView } from '../../components/skin/SkinResultView';
 import { SkinTrendModal } from '../../components/skin/SkinTrendModal';
 import { SkinObservationModal } from '../../components/skin/SkinObservationModal';
@@ -50,6 +51,14 @@ export default function SkinPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const [cameraFresh,setCameraFresh]=useState(false);
+  const [cameraResolution,setCameraResolution]=useState<CameraResolution>();
+  useEffect(()=>{
+    if(!mediaStream || scanState!=='CAMERA_ACTIVE'){setCameraFresh(false);return;}
+    let lastTime=-1,lastChange=0;
+    const timer=setInterval(()=>{const video=videoRef.current,now=performance.now();if(video && video.readyState>=2 && video.currentTime!==lastTime){lastTime=video.currentTime;lastChange=now;}setCameraFresh(lastChange>0 && now-lastChange<750);},150);
+    return()=>clearInterval(timer);
+  },[mediaStream,scanState]);
   const [isMediaPipeLoaded, setIsMediaPipeLoaded] = useState<boolean>(false);
   const isMediaPipeLoadedRef = useRef<boolean>(false);
   const inferenceRef = useRef<SkinInference | null>(null);
@@ -260,7 +269,7 @@ export default function SkinPage() {
       clearInterval(demoTimerRef.current);
       demoTimerRef.current = null;
     }
-    setScanProgress(5);
+    setScanProgress(0);
     setGuidanceText('Demo portre taranıyor...');
     let currentProg = 5;
     demoTimerRef.current = setInterval(() => {
@@ -359,6 +368,13 @@ export default function SkinPage() {
       return;
     }
 
+    let segmentation;
+    try { assertCompleteFace(alignToUse, canvas.width, canvas.height); } catch { setErrorMessage('Alın ve çenenin tamamı kadrajda olmalı. İlgili pozu yeniden alın.'); setScanState('ERROR'); return; }
+    setGuidanceText('Portre görüntüsü hazırlanıyor...');
+    try { segmentation = await inferenceRef.current?.segmentHead(canvas); } catch { /* Presentation error only. */ }
+    if (!validCapture()) return;
+    const acceptedSnapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT', segmentation);
+
     // Baseline kontrolü (İlk tarama mı, sonraki tarama mı?)
     let baselineData: Record<string, RegionMetrics> | null = null;
     try {
@@ -399,6 +415,7 @@ export default function SkinPage() {
       baselineTimestamp: isFirstScan ? undefined : baselineMeta?.timestamp,
       comparisonUnavailable,
       comparisonScope: 'single-front-v1', capturePose,
+      comparisonReasons: comparisonUnavailable ? [!baselineMeta?.quality || !baselineMeta?.pose ? 'legacy-quality-missing' : 'capture-conditions-incompatible'] : [],
       usedMediaPipe: true
     };
 
@@ -421,7 +438,7 @@ export default function SkinPage() {
       return;
     }
 
-    const snapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT');
+    const snapshot = acceptedSnapshot;
     snapshotFrames.current = { FRONT: snapshot }; snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
     setMediaStream(null); setIsLiveVideo(false);
     setAnalysisResult(finalResult);
@@ -450,7 +467,7 @@ export default function SkinPage() {
         usedMediaPipe: true, isBaseline: !prior, highestChangeRegion: comparison.highestChangeRegion,
         highestChangePct: comparison.highestChangePct, referralSuggested: comparison.referralSuggested,
         comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose, baselineId: prior?.id, baselineTimestamp: prior?.timestamp,
-        comparisonUnavailable: comparison.unavailable.length > 0,
+        comparisonUnavailable: comparison.unavailable.length > 0, comparisonReasons: comparison.reasons,
         clinicalNoteTr: !prior ? 'İlk üç açılı referans oluşturuldu. Eski tek açılı referansınız korunur ve bu taramayla karıştırılmaz.' : comparison.unavailable.length ? 'Bazı açılarda ışık/netlik/poz koşulları uyumsuz. İlgili açıların değişimi hesaplanmadı.' : 'Ön, anatomik sağ ve sol pozlar aynı açılardaki ilk referansla karşılaştırıldı. Klinik değerlendirme değildir.'
       };
       if (!SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
@@ -580,18 +597,24 @@ export default function SkinPage() {
               if (progress >= 100) {
                 if (captureState.enabled) {
                   try {
+                    assertCompleteFace(curAlign, canvas.width, canvas.height);
                     const capture = await captureSkinAngle(ctx, curAlign, curQual, target, captureState.captures);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
-                    const snapshot = snapshotSkinFrame(canvas, curAlign, target);
+                    let segmentation;
+                    setGuidanceText('Portre görüntüsü hazırlanıyor...');
+                    try { segmentation = await inferenceRef.current?.segmentHead(canvas); } catch { /* Numerical result remains available. */ }
+                    if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
+                    const snapshot = snapshotSkinFrame(canvas, curAlign, target, segmentation);
                     if (target === 'FRONT') snapshot.rois = snapshot.rois.filter(r => !['rightCheek','leftCheek'].includes(r.id));
                     snapshotFrames.current[target] = snapshot;
                     captureState.captures[target] = capture;
                     setCompletedAngles([...SKIN_ANGLES.slice(0, captureState.index + 1)]);
                     if (captureState.index === 2) { finishMultiRef.current(captureState.captures as Record<SkinAngle, AngleCapture>); return; }
                     captureState.index++; setAngleIndex(captureState.index); consecutiveValidFramesRef.current = 0;
-                  } catch {
+                  } catch (error) {
                     consecutiveValidFramesRef.current = 0;
-                    setGuidanceText('Bu poz güvenilir ölçülemedi veya önceki kareyle aynı. İstenen açıyı yeniden deneyin.');
+                    setScanProgress(Math.round(captureState.index * 100 / 3));
+                    setGuidanceText(error instanceof Error && error.message === 'INCOMPLETE_HEAD_FRAME' ? 'Alın ve çeneniz kadrajda kalacak şekilde biraz geriye gidin; bu poz yeniden alınacak.' : 'Bu poz güvenilir ölçülemedi veya önceki kareyle aynı. İstenen açıyı yeniden deneyin.');
                   }
                   schedule(); return;
                 }
@@ -655,7 +678,7 @@ export default function SkinPage() {
     }
 
     setScanState('CAMERA_ACTIVE');
-    setScanProgress(5);
+    setScanProgress(0);
 
     if (isDemo) {
       setIsLiveVideo(false);
@@ -664,14 +687,17 @@ export default function SkinPage() {
     }
 
     try {
+      const videoConstraints:MediaTrackConstraints & {resizeMode:ConstrainDOMString}={width:{ideal:1920},height:{ideal:1080},resizeMode:{ideal:'none'},facingMode:'user'};
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        video: videoConstraints
       });
       if (!mountedRef.current || acquisition !== acquisitionRef.current || !parkedRef.current || !isCameraAllowed()) {
         stream.getTracks().forEach(track => track.stop());
         return;
       }
       setMediaStream(stream);
+      const track=stream.getVideoTracks()[0],settings=track.getSettings(),capabilities=track.getCapabilities?.();
+      setCameraResolution({width:settings.width||0,height:settings.height||0,maxWidth:capabilities?.width?.max,maxHeight:capabilities?.height?.max});
       setIsLiveVideo(true);
     } catch (err: any) {
       if (!mountedRef.current || acquisition !== acquisitionRef.current) return;
@@ -811,13 +837,15 @@ export default function SkinPage() {
       {/* ============================================================ */}
       {scanState === 'CAMERA_ACTIVE' && (
         <>
-        {multiAngle && !isDemoMode() && <div data-angle-progress className="space-y-2"><p>Aşama {angleIndex + 1}/3: {ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}</p><p className="text-xs">{SKIN_ANGLES.map(a => `${ANGLE_LABELS[a]}: ${completedAngles.includes(a) ? 'tamamlandı' : a === SKIN_ANGLES[angleIndex] ? 'bekleniyor' : 'sırada'}`).join(' • ')}</p><p className="text-xs text-slate-400">Önizleme aynasız ham kamera koordinatlarıyla gösterilir. Yönler sizin anatomik sağ ve solunuzdur. Yan pozda yalnızca görünen yanak ölçülür.</p><button onClick={() => { consecutiveValidFramesRef.current = 0; setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { setScanState('READY'); setMediaStream(null); }} className="text-sm underline ml-4">Taramayı İptal Et</button></div>}
+        {multiAngle && !isDemoMode() && <div data-angle-progress className="flex flex-wrap items-center gap-3"><p>Aşama {angleIndex + 1}/3: {ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}</p><InformationButton title="Kamera ve pozlar"><p>Önizleme aynasızdır. Yönler anatomik sağ ve solunuzdur. Ön pozdan alın, burun, çene ve göz çevresi; yan pozdan görünen yanak ölçülür. Tamamlanan pozlar: {completedAngles.map(a=>ANGLE_LABELS[a]).join(', ') || 'henüz yok'}. Ekrandaki büyütme yalnız görüntüleme içindir; kalite ham kamera karesinden ölçülür.</p></InformationButton><button onClick={() => { consecutiveValidFramesRef.current = 0; setScanProgress(Math.round(angleIndex * 100 / 3)); setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { setScanState('READY'); setMediaStream(null); }} className="text-sm underline">Taramayı İptal Et</button></div>}
         <SkinActiveScan
           scanProgress={scanProgress}
           videoRef={videoRef}
           isLiveVideo={isLiveVideo}
           alignment={multiAngle && !isDemoMode() ? { ...alignment, isAligned: matchesSkinAngle(alignment, SKIN_ANGLES[angleIndex]) } : alignment}
           quality={quality}
+          fresh={cameraFresh}
+          resolution={cameraResolution}
           guidanceText={guidanceText}
           multiAngle={multiAngle && !isDemoMode()}
         />
@@ -829,7 +857,7 @@ export default function SkinPage() {
       {/* ============================================================ */}
       {scanState === 'COMPLETED' && (isDemoMode() || !!analysisResult) && (
         <>
-        <p className="text-xs text-slate-300">{analysisResult?.comparisonScope === 'three-angle-v2' ? 'Üç açılı tarama tamamlandı. Alın, burun, çene ve göz çevresi ön pozdan; yanaklar göründükleri yan pozdan ölçüldü.' : 'Tek karşı açı sonucu; üç açılı tarama değildir.'}</p>
+
         <SkinResultView
           currentRegion={currentRegionData}
           snapshot={snapshots[snapshotAngleForRegion(selectedRegionId, analysisResult?.comparisonScope === 'three-angle-v2')]}
@@ -841,10 +869,12 @@ export default function SkinPage() {
           isLiveVideo={false}
           isBaseline={analysisResult?.isBaseline}
           comparisonUnavailable={analysisResult?.comparisonUnavailable}
+           comparisonReasons={analysisResult?.comparisonReasons}
           baselineTimestamp={analysisResult?.baselineTimestamp}
           baselineId={analysisResult?.baselineId}
           comparisonScope={analysisResult?.comparisonScope === 'three-angle-v2' ? 'three-angle-v2' : 'single-front-v1'}
         />
+        {Object.values(snapshots).some(s=>s?.visualError) && <button onClick={()=>{setMediaStream(null);setIsLiveVideo(false);setScanState('READY');}} className="min-h-11 border border-white/20 rounded-xl px-4">Görüntü için yeni tarama</button>}
         </>
       )}
 

@@ -69,12 +69,13 @@ def test_fixed_vision_route_consent_origin_and_targets(monkeypatch):
 
 def test_all_six_local_contours_crop_and_numeric_pipeline(tmp_path):
  run(tmp_path,"""
-load('skinAnalyzer');load('skinMultiAngle');const S=load('skinSnapshot');
+load('skinAnalyzer');load('skinMultiAngle');load('skinMesh');const S=load('skinSnapshot');
 assert.equal(Object.keys(S.SKIN_CONTOURS).length,6);for(const indices of Object.values(S.SKIN_CONTOURS)){assert(indices.length>=10);assert(indices.every(i=>i>=0&&i<468));}
 const A=require(dir+'/skinAnalyzer.js').SkinAnalyzer;const originalGeometry=A.regionGeometry;A.regionGeometry=()=>({roiDefinitions:[{id:'forehead',nameTr:'Alın',x:20,y:30,w:100,h:60}],exclusionBoxes:[]});
 const landmarks=Array.from({length:478},(_,i)=>({x:.25+(i%20)/40,y:.2+Math.floor(i/20)/50,z:0}));let captures=0;
 const snapshot=S.snapshotSkinFrame({width:640,height:480,toDataURL:()=>{captures++;return 'data:image/png;base64,fixture'}},{landmarks,isMediaPipeActive:true},'FRONT');
-assert.equal(captures,1);assert.equal(snapshot.rois[0].x,20);assert.equal(snapshot.rois[0].w,100);assert(snapshot.crop.width<640&&snapshot.crop.height<480);assert.equal(snapshot.contours.forehead[0].x,landmarks[109].x*640);assert.equal(snapshot.faceContour.length,S.FACE_OUTLINE.length);A.regionGeometry=originalGeometry;
+// Without semantic segmentation no oval/raw-photo fallback is permitted.
+assert.equal(captures,0);assert(snapshot.visualError);assert.equal(snapshot.dataUrl,'');assert.equal(snapshot.rois[0].x,20);assert.equal(snapshot.rois[0].w,100);assert.equal(snapshot.contours.forehead[0].x,landmarks[109].x*640);assert.equal(snapshot.faceContour.length,S.FACE_OUTLINE.length);A.regionGeometry=originalGeometry;
 """)
 
 

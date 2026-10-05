@@ -44,10 +44,11 @@ export function compareMultiAngle(current: MultiAngleReference, prior: MultiAngl
   if (prior && (prior.schemaVersion !== 2 || prior.scope !== 'three-angle-v2' || !SKIN_ANGLES.every(angle => prior.captures?.[angle]?.angle === angle))) throw new Error('INVALID_REFERENCE');
   const regions: Record<string, RegionMetrics> = {};
   const unavailable: SkinAngle[] = [];
+  const reasons: ('legacy-quality-missing'|'capture-conditions-incompatible')[] = [];
   for (const angle of SKIN_ANGLES) {
     const capture = current.captures[angle], base = prior?.captures[angle];
     const comparable = base && canCompareSkinReference({ id: prior!.id, timestamp: prior!.timestamp, schemaVersion: 1, scope: 'single-front-v1', quality: base.quality, pose: base.pose }, capture.quality, capture.pose);
-    if (hasReference && !comparable) unavailable.push(angle);
+    if (hasReference && !comparable) { unavailable.push(angle); reasons.push(!base?.quality || !base?.pose ? 'legacy-quality-missing' : 'capture-conditions-incompatible'); }
     const compared = SkinAnalyzer.compareWithBaseline(capture.regions, comparable ? base!.regions : null);
     // Front measurements for the remaining four regions, cheeks from their exposed side poses.
     for (const [id, metrics] of Object.entries(compared.comparedRegions)) {
@@ -57,5 +58,5 @@ export function compareMultiAngle(current: MultiAngleReference, prior: MultiAngl
   }
   let highestChangeRegion = '', highestChangePct = 0;
   for (const region of Object.values(regions)) if (Math.abs(region.changeFromBaselinePct || 0) > Math.abs(highestChangePct)) { highestChangeRegion = region.nameTr; highestChangePct = region.changeFromBaselinePct!; }
-  return { regions, unavailable, highestChangeRegion, highestChangePct, referralSuggested: Math.abs(highestChangePct) >= 20 };
+  return { regions, unavailable, reasons: [...new Set(reasons)], highestChangeRegion, highestChangePct, referralSuggested: Math.abs(highestChangePct) >= 20 };
 }

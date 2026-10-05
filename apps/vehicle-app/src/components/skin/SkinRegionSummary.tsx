@@ -26,15 +26,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
           <h3 className="text-lg font-bold text-white tracking-wide">
             {currentRegion.nameTr}
           </h3>
-          <span
-            className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border ${
-              currentRegion.isAttentionRequired
-                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                : 'bg-slate-800 text-slate-300 border-slate-700'
-            }`}
-          >
-            {currentRegion.badgeText}
-          </span>
+
         </div>
 
         {/* 4 Gerçek Engine Metriği Göstergeleri */}
@@ -98,7 +90,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
           </div>
 
           {/* 4. Referansa Göre Değişim */}
-          <div className="space-y-1">
+          {/^[-+]?\d/.test(metrics.baselineChange.displayValue) && <div className="space-y-1">
             <div className="flex justify-between text-xs font-medium">
               <span className="text-slate-300">{metrics.baselineChange.label}</span>
               <span
@@ -121,11 +113,11 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
                 style={{ width: `${metrics.baselineChange.score}%` }}
               />
             </div>
-          </div>
+          </div>}
         </div>
       </div>
 
-      <InformationButton title="Görüntü göstergeleri"><p>Renk yoğunluğu: yüksek değer görüntüde daha belirgin kırmızı renk bileşenidir. Parlaklık: yüksek değer daha aydınlık görüntüdür. Doku: yüksek değer komşu görüntü noktalarının daha farklı olmasıdır. Işık, poz ve kamera bu kategorileri etkiler; sağlıklı veya hastalıklı cilt sınıflaması değildir. Referans farkı yalnız uyumlu sonraki taramalarda hesaplanır.</p></InformationButton>
+      <InformationButton title="Görüntü göstergeleri"><p>Renk yoğunluğu: yüksek değer görüntüde daha belirgin kırmızı renk bileşenidir. Parlaklık: yüksek değer daha aydınlık görüntüdür. Doku çeşitliliği: tek kabul edilmiş fotoğrafta komşu cilt piksellerinin farklılığıdır; zaman içindeki değişim değildir. Işık, poz ve kamera bu kategorileri etkiler; sağlıklı veya hastalıklı cilt sınıflaması değildir. Referans farkı yalnız uyumlu sonraki taramalarda hesaplanır.</p></InformationButton>
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button

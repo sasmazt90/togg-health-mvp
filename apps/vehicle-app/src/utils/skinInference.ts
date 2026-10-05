@@ -1,4 +1,5 @@
 import type { FaceAlignment } from './skinAnalyzer';
+import type { HeadSegmentation } from './skinSnapshot';
 
 export class SkinInference {
   private worker = new Worker(new URL('./skinInference.worker.ts', import.meta.url));
@@ -41,6 +42,10 @@ export class SkinInference {
   async assessAlignment(canvas: HTMLCanvasElement): Promise<FaceAlignment> {
     const frame = await createImageBitmap(canvas);
     return (await this.request('frame', frame)).alignment;
+  }
+
+  async segmentHead(canvas: HTMLCanvasElement): Promise<HeadSegmentation> {
+    return (await this.request('segment', await createImageBitmap(canvas))).segmentation;
   }
 
   close(): void {

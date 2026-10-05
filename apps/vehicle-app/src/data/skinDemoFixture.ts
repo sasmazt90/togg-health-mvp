@@ -79,7 +79,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku Değişimi',
+        label: 'Doku çeşitliliği',
         score: 22,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -145,7 +145,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku Değişimi',
+        label: 'Doku çeşitliliği',
         score: 48,
         displayValue: 'Hafif Artış',
         status: 'cyan'
@@ -211,7 +211,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku Değişimi',
+        label: 'Doku çeşitliliği',
         score: 22,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -277,7 +277,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku Değişimi',
+        label: 'Doku çeşitliliği',
         score: 26,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -342,7 +342,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku Değişimi',
+        label: 'Doku çeşitliliği',
         score: 16,
         displayValue: 'Stabil',
         status: 'cyan'
@@ -407,7 +407,7 @@ export const SKIN_REGIONS: Record<SkinRegionId, SkinRegionData> = {
         status: 'cyan'
       },
       texture: {
-        label: 'Doku Değişimi',
+        label: 'Doku çeşitliliği',
         score: 34,
         displayValue: 'Hafif Artış',
         status: 'cyan'
@@ -502,7 +502,7 @@ export function buildSkinRegionViewModel(
           status: 'cyan'
         },
         texture: {
-          label: 'Doku Değişimi',
+          label: 'Doku çeşitliliği',
           score: 0,
           displayValue: '—',
           status: 'cyan'
@@ -535,7 +535,7 @@ export function buildSkinRegionViewModel(
 
   const textScore = typeof real.textureVariance === 'number' ? real.textureVariance : 0;
   const textStatus: 'amber' | 'cyan' | 'emerald' = textScore > 40 ? 'amber' : 'cyan';
-  const textDisplay = textScore > 40 ? 'Belirgin doku farklılığı' : textScore > 20 ? 'Orta doku farklılığı' : 'Düşük doku farklılığı';
+  const textDisplay = textScore > 40 ? 'Yüksek çeşitlilik' : textScore > 20 ? 'Orta çeşitlilik' : 'Düşük çeşitlilik';
 
   const comparable = !analysisResult.isBaseline && !analysisResult.comparisonUnavailable && typeof real.changeFromBaselinePct === 'number';
   const deltaDisplay = !comparable ? (analysisResult.isBaseline ? 'İlk tarama' : 'Karşılaştırılamadı') : `${changePct > 0 ? '+' : ''}${changePct}%`;

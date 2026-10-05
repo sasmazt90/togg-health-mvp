@@ -18,6 +18,7 @@ interface SkinResultViewProps {
   isLiveVideo?: boolean;
   isBaseline?: boolean;
   comparisonUnavailable?: boolean;
+  comparisonReasons?: ('legacy-quality-missing'|'capture-conditions-incompatible')[];
   baselineTimestamp?: string;
   baselineId?: string;
   comparisonScope?: 'single-front-v1' | 'three-angle-v2';
@@ -31,7 +32,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
   onNavigateToCare,
   videoRef,
   isLiveVideo = false,
-  isBaseline, comparisonUnavailable, baselineTimestamp, baselineId, comparisonScope = 'single-front-v1'
+  isBaseline, comparisonUnavailable, comparisonReasons, baselineTimestamp, baselineId, comparisonScope = 'single-front-v1'
 }) => {
   return (
     <div className="bg-[#0c1424]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 w-full">
@@ -43,10 +44,10 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
           </h1>
           <p className="text-xs sm:text-sm text-slate-300">
             {isBaseline ? 'Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.' :
-              comparisonUnavailable ? 'Karşılaştırma yapılamadı: eski referansın kalite bilgisi yok veya ışık/netlik/poz koşulları uyuşmuyor. Referansınız korundu.' :
+              comparisonUnavailable ? 'Karşılaştırılamadı. Referansınız korundu.' :
               `${currentRegion.nameTr}: kızarıklık piksel göstergesinde referansa göre ${currentRegion.changePct > 0 ? '+' : ''}${currentRegion.changePct}% değişim.`}
           </p>
-          <InformationButton title="Referans ve görüntü"><p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p><p>Fotoğraf ve gerçek ölçüm alanları yalnız bellektedir. Renkler bölge kimliğini gösterir; hastalık veya klinik şiddet haritası değildir. Görüntü yerel olarak yüz konturuna kesilir; aynalanmaz. İnce çizgiler gerçek anatomik noktalardır ve sayısal analizin örnekleme sınırları içinde kesilir. Bu işlem metrikleri değiştirmez.</p></InformationButton>
+          <InformationButton title="Referans ve görüntü">{comparisonUnavailable && <p data-comparison-reason>{comparisonReasons?.includes('legacy-quality-missing') ? 'Eski referansın kalite veya poz bilgisi eksik; güvenilir karşılaştırma yapılamadı. Mevcut referans korundu.' : comparisonReasons?.includes('capture-conditions-incompatible') ? 'Yeni çekimin ışık, netlik veya poz koşulları referansla uyumsuz. Benzer koşullarda yeni tarama yapabilirsiniz; referans korundu.' : 'Bu eski kayıtta karşılaştırılamama nedeni ayrıntılı saklanmamış. Referans korundu; neden doğrulanmadan değişim gösterilmez.'}</p>}<p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p><p>Fotoğraf ve gerçek ölçüm alanları yalnız bellektedir. Saç ve yüz cihazdaki MediaPipe segmentasyonuyla arka plandan ayrılır; kusursuz maske veya klinik sınıflama değildir. Fotoğraf aynalanmaz. Turkuaz ağ, kabul edilmiş aynı karenin anatomik noktalarından üretilen görselleştirmedir; ağın tamamı sayısal örnekleme alanı değildir. Hesaplama küçük anatomik cilt dikdörtgenlerinden, göz ve dudak alanları dışlanarak yapılır. Metrikler ve eşikler değişmedi. Ön poz alın, burun, çene ve göz çevresi içindir; anatomik sağ yanak sola dönük, sol yanak sağa dönük kabul edilmiş kareden gelir.</p></InformationButton>
         </div>
 
         <div>
