@@ -15,10 +15,11 @@ export class SkinInference {
         const request=this.pending.get(event.data.id);
         if(!request)return;
         // Refinement runs after actual model inference. Give this distinct
-        // CPU stage its own bounded budget instead of consuming inference's.
+        // CPU stage and native bitmap transfer their own bounded budget.
+        // A 15s client deadline dropped completed output under UI/IPC load.
         if(event.data.phase==='REFINEMENT'){
           clearTimeout(request.timer);
-          request.timer=setTimeout(()=>{this.pending.delete(event.data.id);request.reject(new Error('Portre sınırları hazırlanamadı'));},15000);
+          request.timer=setTimeout(()=>{this.pending.delete(event.data.id);request.reject(new Error('Portre sınırları hazırlanamadı'));},30000);
         }
         if(request.isCurrent())this.onPhase?.(event.data.phase);return;
       }
@@ -42,7 +43,7 @@ export class SkinInference {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('Cilt analiz motoru yanıt vermiyor'));
-      }, type === 'segment' ? 30000 : 15000);
+      }, (type === 'segment' || type === 'initializeSegmentation') ? 30000 : 15000);
       this.pending.set(id, { resolve, reject, timer, isCurrent });
       this.worker.postMessage({ id, type, frame, alignment }, frame ? [frame] : []);
     });
