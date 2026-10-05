@@ -12,23 +12,26 @@ import { LETTER_PATHS, LETTER_PROTOCOL, LetterConditions, LetterResult, Rendered
 import { appendHealthRecord } from '../../utils/healthRecords';
 import { isCameraAllowed, isMicrophoneAllowed, isVisionSavingAllowed, isDemoMode } from '../../utils/attuneMode';
 import { streamSpeech } from '../../utils/streamSpeech';
+import { CameraPreview, CameraPreparation } from '../../components/CameraPreparation';
+import { PreparationEvidence, visionPreparationCode, PREPARATION_TEXT } from '../../utils/visionPreparation';
 
-const WARNINGS={camera:'Kameranın önünde, iyi ışıkta durun.',position:'Başlangıç konumunuza dönün ve kameraya bakın.',eye:'Yönergede istenen göz açık, diğer göz kapalı kalmalı.',uncertain:'Gözlerinizi kameranın görebileceği şekilde tutun.'};
+
 export default function SpokenLetterPage(){
  const {isParked,syncStatus}=useVehicle();const parked=useRef(isParked);parked.current=isParked;
  const [ready,setReady]=useState(false);
  const [mode,setMode]=useState<'idle'|'prepare'|'test'|'result'>('idle'),[revision,setRevision]=useState(0);
  const [status,setStatus]=useState(''),[error,setError]=useState(''),[dialog,setDialog]=useState<string|null>(null),[result,setResult]=useState<LetterResult|null>(null);
+ const [evidence,setEvidence]=useState<PreparationEvidence|null>(null);
  const [muted,setMuted]=useState(false),[live,setLive]=useState(false),[voice,setVoice]=useState<'quiet'|'loading'|'playing'|'listening'|'failed'>('quiet');
  const symbol=useRef<SVGSVGElement>(null);
  const video=useRef<HTMLVideoElement>(null),canvas=useRef<HTMLCanvasElement>(null);
- const r=useRef({mounted:false,epoch:0,active:false,stream:null as MediaStream|null,engine:null as SkinInference|null,raf:0,timer:null as ReturnType<typeof setInterval>|null,baseline:null as number|null,stableSince:0,conditions:null as LetterConditions|null,session:null as SpokenLetterSession|null,recognition:null as any,audio:null as HTMLAudioElement|null,controller:null as AbortController|null,streamCancel:null as (()=>void)|null,url:null as string|null,voiceWaiting:false,muted:false,audioFailed:false,modal:false,restart:null as ReturnType<typeof setTimeout>|null,paused:false,fault:null as string|null,faultSince:0,announcedFault:null as string|null,eyeAnnounced:null as string|null,partial:{} as ParsedAnswer,saving:false});
+ const r=useRef({mounted:false,epoch:0,active:false,stream:null as MediaStream|null,engine:null as SkinInference|null,raf:0,timer:null as ReturnType<typeof setInterval>|null,baseline:null as number|null,stableSince:0,conditions:null as LetterConditions|null,evidence:null as PreparationEvidence|null,session:null as SpokenLetterSession|null,recognition:null as any,audio:null as HTMLAudioElement|null,controller:null as AbortController|null,streamCancel:null as (()=>void)|null,url:null as string|null,voiceWaiting:false,muted:false,audioFailed:false,modal:false,restart:null as ReturnType<typeof setTimeout>|null,paused:false,fault:null as string|null,faultSince:0,announcedFault:null as string|null,eyeAnnounced:null as string|null,partial:{} as ParsedAnswer,saving:false});
  const actions=useRef({listen:()=>{},receive:(_text:string,_confidence:number)=>{},speak:async(_code:string)=>{},stop:()=>{}});
  function timing(stage:string){window.dispatchEvent(new CustomEvent('attune-vision-speech-timing',{detail:{stage,atMs:performance.now(),clock:'browser-performance'}}));}
  function current(epoch:number){return r.current.mounted&&r.current.active&&r.current.epoch===epoch&&parked.current&&isCameraAllowed()&&isMicrophoneAllowed();}
  function abortRecognition(){const old=r.current.recognition;r.current.recognition=null;if(old){try{old.abort();}catch{}}}
  function stopVoice(){const a=r.current;abortRecognition();if(a.restart)clearTimeout(a.restart);a.restart=null;a.controller?.abort();a.controller=null;a.streamCancel?.();a.streamCancel=null;if(a.audio){a.audio.onplaying=a.audio.onended=a.audio.onerror=null;a.audio.pause();a.audio.removeAttribute('src');a.audio.load();a.audio=null;}if(a.url)URL.revokeObjectURL(a.url);a.url=null;a.voiceWaiting=false;}
- function stop(){const a=r.current;a.epoch++;a.active=false;stopVoice();cancelAnimationFrame(a.raf);if(a.timer)clearInterval(a.timer);a.timer=null;a.stream?.getTracks().forEach(t=>t.stop());a.stream=null;a.engine?.close();a.engine=null;a.conditions=null;a.baseline=null;a.stableSince=0;a.session=null;if(video.current)video.current.srcObject=null;if(a.mounted){setLive(false);setVoice('quiet');}}
+ function stop(){const a=r.current;a.epoch++;a.active=false;stopVoice();cancelAnimationFrame(a.raf);if(a.timer)clearInterval(a.timer);a.timer=null;a.stream?.getTracks().forEach(t=>t.stop());a.stream=null;a.engine?.close();a.engine=null;a.conditions=null;a.evidence=null;a.baseline=null;a.stableSince=0;a.session=null;if(video.current)video.current.srcObject=null;if(a.mounted){setLive(false);setVoice('quiet');}}
  function listen(){
   const a=r.current,epoch=a.epoch;if(!current(epoch)||a.recognition||a.voiceWaiting||a.muted||a.audioFailed)return;
   const SR=(window as any).SpeechRecognition||(window as any).webkitSpeechRecognition;
@@ -57,17 +60,20 @@ export default function SpokenLetterPage(){
  function inspectConditions(){
   const a=r.current;if(!a.active||!a.session)return;
   const failure=letterConditionFailure(a.conditions,a.eyeAnnounced?a.session.eye:null,performance.now());
+  const preparation=visionPreparationCode(a.conditions,a.evidence,performance.now());
+  const code=failure==='eye'||failure==='uncertain'?failure:preparation;
+  const guidance=PREPARATION_TEXT[code];
   if(failure){
-   if(a.fault!==failure){a.fault=failure;a.faultSince=performance.now();}
-   setStatus(WARNINGS[failure]);
+   if(a.fault!==code){a.fault=code;a.faultSince=performance.now();}
+   setStatus(guidance);
    // Immediate scoring gate; delayed warning avoids treating a brief blink as
    // a persistent condition violation. Acknowledgement never changes evidence.
-   if(a.session.presentationId&&performance.now()-a.faultSince>=800&&a.announcedFault!==failure){a.session.invalidate(failure,a.conditions,performance.now(),measureSymbol());setRevision(n=>n+1);a.partial={};a.announcedFault=failure;a.modal=true;setDialog(WARNINGS[failure]);void actions.current.speak(failure);}
+   if(a.session.presentationId&&performance.now()-a.faultSince>=800&&a.announcedFault!==code){a.session.invalidate(failure,a.conditions,performance.now(),measureSymbol());setRevision(n=>n+1);a.partial={};a.announcedFault=code;a.modal=true;setDialog(guidance);void actions.current.speak(code);}
    return;
   }
   a.fault=null;a.faultSince=0;a.announcedFault=null;
   if(a.paused||a.muted){setStatus('Duraklatıldı');return;}
-  if(a.eyeAnnounced!==a.session.eye){a.eyeAnnounced=a.session.eye;setStatus(a.session.eye==='RIGHT'?'Sağ göz açık · sol göz kapalı':'Sol göz açık · sağ göz kapalı');void actions.current.speak(a.session.eye==='RIGHT'?'right':'left');return;}
+  if(a.eyeAnnounced!==a.session.eye){a.eyeAnnounced=a.session.eye;setStatus(a.session.eye==='RIGHT'?'Konum hazır · sağ göz açık, sol göz kapalı':'Konum hazır · sol göz açık, sağ göz kapalı');void actions.current.speak(a.session.eye==='RIGHT'?'right':'left');return;}
   if(!a.session.presentationId&&!a.voiceWaiting&&!a.audioFailed&&!a.modal){a.session.present();setMode('test');setRevision(n=>n+1);setStatus('Harfi ve yönünü söyleyin');}
  }
  async function complete(cancelled=false){
@@ -124,6 +130,7 @@ export default function SpokenLetterPage(){
     if(!v||!c||stream.getVideoTracks().some(t=>t.readyState!=='live'))throw Error('Camera ended');
     if(v.readyState>=2&&v.currentTime!==last){last=v.currentTime;c.width=v.videoWidth;c.height=v.videoHeight;const ctx=c.getContext('2d',{willReadFrequently:true});if(!ctx)throw Error('Canvas');ctx.drawImage(v,0,0,c.width,c.height);const observedAt=performance.now();
      const alignment=await engine.assessAlignment(c);if(!current(epoch))return;const quality=SkinAnalyzer.checkQuality(ctx,c.width,c.height,alignment.faceDetected,alignment.box);
+     const telemetry={alignment,quality,width:c.width,height:c.height};a.evidence=telemetry;setEvidence(telemetry);
      const positioned=alignment.isMediaPipeActive&&alignment.faceCount===1&&alignment.isAligned&&Math.abs(alignment.roll)<=.15&&quality.isValid&&!!alignment.box&&alignment.box.x>=0&&alignment.box.y>=0&&alignment.box.x+alignment.box.width<=c.width&&alignment.box.y+alignment.box.height<=c.height;
      if(positioned){if(!a.stableSince)a.stableSince=observedAt;if(!a.baseline&&observedAt-a.stableSince>=1000)a.baseline=alignment.scaleRatio;}else a.stableSince=0;
      a.conditions={observedAt,cameraLive:true,modelActive:alignment.isMediaPipeActive,faceCount:alignment.faceCount||0,qualityValid:quality.isValid,positionValid:positioned&&observedAt-a.stableSince>=1000,relativeScaleChange:a.baseline?(alignment.scaleRatio-a.baseline)/a.baseline:null,...assessEyePixels(ctx,c.width,c.height,alignment)};
@@ -141,11 +148,11 @@ export default function SpokenLetterPage(){
   {!isParked?<p>{syncStatus==='synced'?'Sürüş sırasında görev kapalıdır.':'Araç durumu doğrulanamadı; görev kapalıdır.'}</p>:<>
    {mode==='idle'&&<section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-4"><h2 className="text-xl font-bold">Harfi ve yönünü söyleyin</h2><p>Kamera koşulları otomatik kontrol edilir. Sağ ve sol gözünüz için kısa bir görev tamamlayacaksınız.</p><button onClick={()=>void start()} disabled={!ready} className="min-h-11 rounded-xl bg-togg-turquoise text-togg-darkBlue px-6 font-bold">Başlat</button></section>}
    {(mode==='prepare'||mode==='test')&&<section className="grid lg:grid-cols-2 gap-5 rounded-2xl bg-cockpit-surface border border-white/10 p-5">
-    <div className="space-y-3"><video ref={video} autoPlay playsInline muted data-vision-camera className="w-full rounded-xl bg-black aspect-[4/3] object-contain"/><p role="status" data-letter-condition={r.current.fault||'valid'}>{status}</p><p className="text-sm text-togg-turquoise" data-vision-voice={voice}>{voice==='playing'?'Yönerge okunuyor':voice==='loading'?'Yönerge hazırlanıyor':voice==='listening'?'Dinliyor':''}</p></div>
+    <div className="space-y-3"><CameraPreview videoRef={video} landmarks={evidence?.alignment.landmarks} vision/><CameraPreparation alignment={evidence?.alignment} quality={evidence?.quality} position={status} fresh={!!r.current.conditions && performance.now()-r.current.conditions.observedAt<=750}/><p role="status" data-letter-condition={r.current.fault||'valid'}>{status}</p><p className="text-sm text-togg-turquoise" data-vision-voice={voice}>{voice==='playing'?'Yönerge okunuyor':voice==='loading'?'Yönerge hazırlanıyor':voice==='listening'?'Dinliyor':''}</p></div>
     <div className="flex flex-col items-center justify-center gap-5 min-h-64">
      {mode==='test'&&session?.presentationId&&<svg ref={symbol} data-letter-optotype role="img" aria-label="Yanıtlanacak harf" viewBox="0 0 100 100" style={{width:session.sizePx,height:session.sizePx,maxWidth:'100%'}}><g transform={`translate(50 50) rotate(${rotation[session.orientation]}) scale(${session.orientation==='mirror'?-1:1} 1) translate(-50 -50)`}><path d={LETTER_PATHS[session.letter]} stroke="white" strokeWidth="10" strokeLinecap="square" strokeLinejoin="miter" fill="none"/></g></svg>}
      <p>{session?`${session.eye==='RIGHT'?'Sağ':'Sol'} göz · ${session.trials.length%12+1}/12`:''}</p><p className="text-sm text-slate-300">“Tekrar”, “göremiyorum”, “duraklat”, “devam et” veya “bitir” diyebilirsiniz.</p>
-     <div className="flex flex-wrap gap-3"><button onClick={()=>{r.current.paused=!r.current.paused;setRevision(n=>n+1);inspectConditions();}} className="min-h-11 rounded-xl border border-white/20 px-4">{r.current.paused?'Devam et':'Duraklat'}</button><button onClick={()=>{const a=r.current;a.muted=!a.muted;setMuted(a.muted);if(a.muted){stopVoice();setVoice('quiet');setStatus('Ses kapalı; görev duraklatıldı');}else {a.eyeAnnounced=null;inspectConditions();}}} className="min-h-11 rounded-xl border border-white/20 px-4">{muted?'Sesi aç':'Sesi kapat'}</button><button onClick={()=>void complete(true)} className="min-h-11 rounded-xl border border-white/20 px-4">Bitir</button></div>
+     <div className="flex flex-wrap gap-3"><button onClick={()=>void start()} className="min-h-11 rounded-xl border border-white/20 px-4">Yeni konumla yeniden başlat</button><button onClick={()=>{r.current.paused=!r.current.paused;setRevision(n=>n+1);inspectConditions();}} className="min-h-11 rounded-xl border border-white/20 px-4">{r.current.paused?'Devam et':'Duraklat'}</button><button onClick={()=>{const a=r.current;a.muted=!a.muted;setMuted(a.muted);if(a.muted){stopVoice();setVoice('quiet');setStatus('Ses kapalı; görev duraklatıldı');}else {a.eyeAnnounced=null;inspectConditions();}}} className="min-h-11 rounded-xl border border-white/20 px-4">{muted?'Sesi aç':'Sesi kapat'}</button><button onClick={()=>void complete(true)} className="min-h-11 rounded-xl border border-white/20 px-4">Bitir</button></div>
     </div>
    </section>}
    {error&&<p role="alert" className="text-amber-200">{error}</p>}

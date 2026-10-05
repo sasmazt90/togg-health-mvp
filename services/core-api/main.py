@@ -276,6 +276,11 @@ def converse_mental_assistant(payload: ConversePayload):
             "clinicalDisclaimer": crisis_check.get("clinicalDisclaimer")
         }
 
+    from conversation_control import conversation_control
+    control = conversation_control(user_msg) if not is_driving else None
+    if control:
+        return control
+
     # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
     if payload.cloudConsent and not os.getenv('OPENAI_API_KEY', '').strip():
         raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')

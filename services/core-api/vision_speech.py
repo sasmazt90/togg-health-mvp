@@ -2,6 +2,7 @@
 The vision route accepts fixed instructions only; mental text requires consent.
 """
 import asyncio
+import unicodedata
 from time import monotonic
 import edge_tts
 from fastapi import HTTPException
@@ -17,7 +18,17 @@ PROMPTS={
  'orientation':'Hangi yöne dönük olduğunu da söyler misiniz?',
  'reverse':'Ters derken baş aşağı mı, aynalı mı demek istediniz?',
  'repeat':'Harfi ve yönünü söyleyin. Düz, baş aşağı, sağa veya sola yatmış diyebilirsiniz.',
- 'position':'Başlangıç konumunuza dönün ve kameraya bakın.',
+ 'position':'Kameraya doğru bakın.',
+ 'approach':'Biraz yaklaşın.',
+ 'recede':'Biraz geriye gidin.',
+ 'pose':'Kameraya doğru bakın.',
+ 'framing':'Alın ve çeneniz kadrajda kalacak şekilde yüzünüzü ortalayın.',
+ 'light':'Yüzünüzü daha iyi aydınlatın.',
+ 'bright':'Yüzünüzdeki parlamayı azaltın.',
+ 'blur':'Sabit durun ve kameranın netliğini kontrol edin.',
+ 'face':'Yüzünüzü kameraya gösterin.',
+ 'preparing':'Konumunuz doğrulanıyor. Kısa süre sabit durun.',
+ 'ready':'Konum hazır.',
  'camera':'Kameranın önünde, iyi ışıkta durun.',
  'eye':'Yönergede istenen göz açık, diğer göz kapalı kalmalı.',
  'uncertain':'Gözlerinizi kameranın görebileceği şekilde tutun.',
@@ -40,6 +51,9 @@ async def mental_response(text,moving):
 async def speech_response(text,profile,moving):
  global _catalogue
  iterator=None
+ # Normalize once for the whole utterance; transport frames never trigger a
+ # second voice request. No hidden language hints, extra text or MP3 joins.
+ text=unicodedata.normalize('NFC',text).strip()
  try:
   if monotonic()-_catalogue[0]>300 or not _catalogue[1]:
    voices=await asyncio.wait_for(edge_tts.list_voices(),12)
