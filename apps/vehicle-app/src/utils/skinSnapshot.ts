@@ -64,7 +64,7 @@ export function snapshotAngleForRegion(id:string,threeAngle:boolean):SkinAngle {
 }
 export const REGION_COLORS:Record<string,string>={forehead:'#67e8f9',rightCheek:'#c4b5fd',leftCheek:'#fda4af',nose:'#fcd34d',chin:'#86efac',periorbital:'#93c5fd'};
 
-export interface HeadSegmentation {width:number;height:number;categories:Uint8Array;confidence?:Float32Array;neckConfidence?:Float32Array;faceConfidence?:Float32Array;alpha?:Uint8Array;elapsedMs:number;loadMs?:number;refinementMs?:number;refinementBytes?:number}
+export interface HeadSegmentation {width:number;height:number;categories:Uint8Array;confidence?:Float32Array;neckConfidence?:Float32Array;faceConfidence?:Float32Array;alpha?:Uint8Array;elapsedMs:number;loadMs?:number;refinementMs?:number;refinementBytes?:number;modelMaskWidth?:number;modelMaskHeight?:number}
 /** API masks may already be enlarged to the photo size. Connectivity must run
  * on the actual semantic grid, not millions of duplicated mask pixels. */
 export function compactSkinMask(width:number,height:number,categories:Uint8Array,hair:Float32Array,face:Float32Array,neck:Float32Array):HeadSegmentation {

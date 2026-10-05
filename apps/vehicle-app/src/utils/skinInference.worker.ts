@@ -34,7 +34,14 @@ self.onmessage = async (event: MessageEvent) => {
     if (type === 'segment') {
       const model = await getSegmenter();
       const start = performance.now();
-      const result = model.segment(canvas);
+      // The model has a 256-square semantic tensor. Asking the SDK to resize
+      // six confidence maps to a multi-megapixel photo adds no model detail.
+      // Keep accepted RGB/metrics at native resolution and guide the matte
+      // with that source; only the segmentation input is the actual grid.
+      const modelInput=new OffscreenCanvas(256,256),modelCtx=modelInput.getContext('2d');
+      if(!modelCtx)throw Error('SEGMENTATION_INPUT_CANVAS');
+      modelCtx.drawImage(canvas,0,0,256,256);
+      const result = model.segment(modelInput);
       let masksClosed=false;
       try {
         const mask = result.categoryMask;
@@ -44,7 +51,7 @@ self.onmessage = async (event: MessageEvent) => {
         const hair = confidenceMasks[1].getAsFloat32Array(), face = confidenceMasks[3].getAsFloat32Array();
         const compact=compactSkinMask(mask.width,mask.height,mask.getAsUint8Array(),hair,face,confidenceMasks[2].getAsFloat32Array());
         const {categories,confidence,neckConfidence,faceConfidence}=compact;
-        const segmentation={...compact,elapsedMs:performance.now()-start,loadMs};
+        const segmentation={...compact,elapsedMs:performance.now()-start,loadMs,modelMaskWidth:mask.width,modelMaskHeight:mask.height};
         // All retained mask arrays now own small buffers. Release native
         // confidence maps before source-resolution alpha processing.
         result.close();masksClosed=true;

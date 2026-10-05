@@ -10,7 +10,10 @@ OpenAI çağrısı yoktur.
 Yerel TFLite dosyasının tensorları `[1,256,256,3]` → `[1,256,256,6]`.
 MediaPipe API fotoğraf boyunda olasılık haritaları döndürebilir; bunlar yeni
 segmentasyon ayrıntısı değildir. `compactSkinMask` bu yinelenen haritaları
-256 semantik gride alır. Bağlantılı baş/saç alanı ve boşluk koruma bu gridde
+256 semantik gride alır. Segmenter girdisi de doğrudan 256×256 model grididir;
+SDK altı confidence haritasını gereksiz yere fotoğraf boyuna açmaz. Aynı
+beş kare karşılaştırmasında category uyumu %98,84–99,38, probability ortalama
+farkı 0,0038–0,0054 idi; bu doğruluk/ground truth iddiası değildir. Bağlantılı baş/saç alanı ve boşluk koruma bu gridde
 hesaplanır; yalnız 851.968 bayt semantik veri aktarılır. Kamera bitmap'i ve
 PNG kaynak çözünürlüğünde kalır.
 

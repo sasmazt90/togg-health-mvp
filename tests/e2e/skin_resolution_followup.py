@@ -27,7 +27,7 @@ navigator.mediaDevices.getUserMedia=async(...args)=>{const s=await get(...args),
 const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(v,...rest){
 if(v.type==='initializeSegmentation')this.segmentationLoadStarted=performance.now();
 if(v.type==='segment'){this.segmentStarted??=new Map();this.segmentStarted.set(v.id,this.segmentationLoadStarted??performance.now());const canvas=document.querySelector('canvas'),video=document.querySelector('video');window.acceptedSources.push({data:canvas.toDataURL('image/png'),width:canvas.width,height:canvas.height,decodedWidth:video.videoWidth,decodedHeight:video.videoHeight,bitmapWidth:v.frame.width,bitmapHeight:v.frame.height,alignment:window.lastAlignment});}
-if(!this.observed){this.observed=true;this.addEventListener('message',e=>{const s=e.data.segmentation;if(e.data.error)window.workerErrors.push(e.data.error);if(e.data.alignment)window.lastAlignment=e.data.alignment;if(s)window.segmentResults.push({width:s.width,height:s.height,elapsedMs:s.elapsedMs,loadMs:s.loadMs,refinementMs:s.refinementMs,requestToResultMs:performance.now()-this.segmentStarted.get(e.data.id),categories:s.categories.length,confidence:s.confidence.length});});}
+if(!this.observed){this.observed=true;this.addEventListener('message',e=>{const s=e.data.segmentation;if(e.data.error)window.workerErrors.push(e.data.error);if(e.data.alignment)window.lastAlignment=e.data.alignment;if(s)window.segmentResults.push({width:s.width,height:s.height,elapsedMs:s.elapsedMs,loadMs:s.loadMs,refinementMs:s.refinementMs,modelMaskWidth:s.modelMaskWidth,modelMaskHeight:s.modelMaskHeight,requestToResultMs:performance.now()-this.segmentStarted.get(e.data.id),categories:s.categories.length,confidence:s.confidence.length});});}
 return post.call(this,v,...rest);};"""
 source_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
 source_dirty=bool(subprocess.check_output(['git','status','--porcelain'],text=True).strip())
@@ -125,6 +125,7 @@ with sync_playwright() as pw:
                 if zoom==1: baseDpr=p.evaluate('devicePixelRatio')
                 else: assert p.evaluate('devicePixelRatio')/baseDpr>1.99,'200% browser zoom must be measured, not assumed'
                 assert 'data:image' not in p.evaluate('JSON.stringify(Object.fromEntries(Object.entries(localStorage)))')
+                assert all(s['modelMaskWidth']==256 and s['modelMaskHeight']==256 for s in p.evaluate('segmentResults')),'SDK confidence maps must stay on the actual tensor grid'
                 proof.append({'zoom':zoom,'sources':sources,'camera':p.evaluate('cameraSettings'),'segmentation':p.evaluate('segmentResults'),'regions':regions,'quality':result['quality'],'pose':result['capturePose'],'viewport':p.evaluate('({innerWidth,innerHeight,outerWidth,outerHeight,devicePixelRatio})')})
             finally:
                 c.close()
