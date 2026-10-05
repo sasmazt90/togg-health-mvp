@@ -79,8 +79,10 @@ yüksek detaylı üç poz kabulü olarak sunulmaz.
 MediaPipe task construction aynı worker'da sıralıdır; yüz modeli hazır olunca
 segmentasyon kullanıcı konumlanırken ısınır. Worker başına tek başarılı
 hazırlık promise'i saklanır; tekrar tarama başarılı modeli yeniden yüklemez.
-Yükleme, inference ve sonraki alpha/refinement aşaması ayrı 15 saniye
-bounded bütçeler kullanır. Refinement ölçümü coarse alpha hesabını da içerir. Büyük confidence maskeleri
+Yükleme 15, inference 30 ve sonraki alpha/refinement aşaması ayrı 15 saniye
+bounded bütçeler kullanır. Native yüksek detaylı karede sistem yükü altında
+15 saniyelik inference sınırı portreyi düşürebildiği için inference bütçesi
+30 saniyedir; bu bir hızlanma değildir. Refinement ölçümü coarse alpha hesabını da içerir. Büyük confidence maskeleri
 matting'den önce bırakılır; native boyda semantik flood/transfer kaldırıldı.
 
 Model/inference/refinement aşaması, animasyon, gerçek aşama süresi ve tek/üç
