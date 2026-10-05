@@ -4,16 +4,23 @@ visible Chrome windows are inventoried and preserved. No user storage changes.
 """
 import hashlib,json,os,socket,subprocess,time,urllib.request
 from pathlib import Path
-import psutil,win32com.client,win32gui,win32process,win32con
+import psutil,pythoncom,win32gui,win32process,win32con
+from win32com.shell import shell
 ROOT=Path(__file__).resolve().parents[1]
 HOME=Path(r'C:\Users\PC\Desktop\YENİ İŞ\Applications\7. TOGG\.launcher')
 LINK=HOME.parent/'TOGG Başlat.lnk';OUT=ROOT/'audit-results/postmeeting/delivery.json';OUT.parent.mkdir(parents=True,exist_ok=True)
 def git(*args):return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
 assert git('status','--porcelain')=='','Commit verified source before delivery proof'
 head=git('rev-parse','HEAD');build=(ROOT/'apps/vehicle-app/.next/BUILD_ID').read_text().strip()
-shortcut=win32com.client.Dispatch('WScript.Shell').CreateShortcut(str(LINK))
-assert str(HOME/'start_togg.pyw').lower() in shortcut.Arguments.lower()
-assert Path(shortcut.TargetPath).name.lower()=='pythonw.exe'
+# WScript.CreateShortcut transliterates this host's Turkish path to a missing
+# ASCII path. Native IPersistFile loads the actual Unicode LNK without editing it.
+shortcut=pythoncom.CoCreateInstance(shell.CLSID_ShellLink,None,pythoncom.CLSCTX_INPROC_SERVER,shell.IID_IShellLink)
+shortcut.QueryInterface(pythoncom.IID_IPersistFile).Load(str(LINK))
+target=shortcut.GetPath(0)[0];arguments=shortcut.GetArguments()
+# The installed shortcut intentionally uses the existing 8.3 path. Compare
+# filesystem identity instead of assuming its spelling matches the long path.
+assert Path(arguments.strip('"')).samefile(HOME/'start_togg.pyw')
+assert Path(target).name.lower()=='pythonw.exe'
 installed=(HOME/'start_togg.pyw').read_text('utf8')
 expected=(ROOT/'scripts/windows-launcher/start_togg.pyw').read_text('utf8').replace('ROOT = Path(__file__).resolve().parents[2]','ROOT = Path('+repr(str(ROOT))+')')
 assert installed==expected
@@ -69,5 +76,5 @@ assert all(row['preserved'] for row in preserved),'Pre-existing Chrome window ch
 os.startfile(str(LINK));reopened=wait(lambda:state() if state().get('status')=='running' else None)
 for rel,digest in hashes.items():
  with urllib.request.urlopen('http://127.0.0.1:3000/_next/'+rel,timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==digest
-proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':shortcut.TargetPath,'shortcutArguments':shortcut.Arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
+proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':target,'shortcutArguments':arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
 OUT.write_text(json.dumps(proof,indent=2),'utf8');print(json.dumps({k:proof[k] for k in ['status','sourceHead','buildId','branch','productRoot','leftRunning']}))
