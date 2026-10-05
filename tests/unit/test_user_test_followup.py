@@ -140,3 +140,15 @@ const mask=S.compactSkinMask(w,h,c,hair,face,neck);
 assert.equal(mask.width,256);assert.equal(mask.height,256);assert.equal(mask.categories.length,65536);assert(mask.confidence.every(v=>Math.abs(v-.9)<1e-6));
 assert.equal(mask.categories.byteLength+mask.confidence.byteLength+mask.faceConfidence.byteLength+mask.neckConfidence.byteLength,851968);
 """)
+
+
+def test_nostril_opening_blocks_upper_void_but_keeps_surrounding_skin(tmp_path):
+ run(tmp_path,"""
+const lm=Array.from({length:478},()=>({x:0,y:0}));
+for(const [id,x,y] of [[48,.3,.35],[1,.55,.32],[19,.55,.55],[97,.5,.65],[98,.32,.65],[64,.28,.5],[99,.36,.63],[278,.7,.35],[326,.6,.65],[327,.78,.65],[294,.82,.5]])lm[id]={x,y};
+const input={points:[{x:15,y:45},{x:60,y:45},{x:15,y:20},{x:85,y:20}],edges:[[0,1],[2,3]],major:[],boundary:[],excluded:[]};
+const output=M.supportedSkinMesh(input,lm,100,100,new Uint8Array(10000).fill(255));
+assert.equal(output.edges.length,1,'The opening above the old tiny lower triangle is not visible skin');
+assert(output.points.every(p=>p.y===20),'Surrounding supported skin remains connected');
+assert.equal(input.edges.length,2,'Filtering cannot mutate the source graph');
+""")

@@ -34,7 +34,7 @@ export function buildSkinMesh(id:string,landmarks:MeshPoint[],width:number,heigh
  return {points,edges,major:graph.major,boundary:graph.boundary,excluded:graph.excluded};
 }
 
-export const MESH_HOLES={rightEye:[33,160,158,133,153,145,163],leftEye:[263,387,385,362,380,374,390],lips:[61,40,37,0,267,270,291,321,314,17,84,91],rightNostril:[98,97,99],leftNostril:[327,326,328]};
+export const MESH_HOLES={rightEye:[33,160,158,133,153,145,163],leftEye:[263,387,385,362,380,374,390],lips:[61,40,37,0,267,270,291,321,314,17,84,91],rightNostril:[48,1,19,97,98,64],leftNostril:[278,1,19,326,327,294]};
 function inside(p:MeshPoint,polygon:MeshPoint[]) {
  let hit=false;for(let i=0,j=polygon.length-1;i<polygon.length;j=i++) {const a=polygon[i],b=polygon[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)hit=!hit;}return hit;
 }

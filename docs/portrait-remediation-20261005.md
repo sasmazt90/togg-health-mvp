@@ -66,7 +66,9 @@ Alın üç komşu sıra, her yanak altı komşu sıra; çene dört yerel sıra k
 Burun kanadı/çevre düğümleri genişletildi. İki göz bandı ayrı halkalarla genişler;
 göz açıklığı/iris/burun üzerinden birbirine bağlanmaz. Saç ve desteklenmeyen
 cilt yüzeyi üzerinde çizgi gösterilmez. Güvensiz göz, dudak ve burun deliği
-kenarları ve düğüm dışı kesişimler elenir. Yalnız seçili bölge render edilir.
+kenarları ve düğüm dışı kesişimler elenir. Burun deliği açıklıkları, eski
+küçük alt üçgen yerine gerçek kanat/columella çevresindeki altı landmark ile
+dışlanır; karanlık açıklığın içinden çizgi geçirilmez. Yalnız seçili bölge render edilir.
 Farklı yüzün referans kadınla aynı şeklini değil, görünür anatomi, komşu temiz
 bağlantılar ve mevcut turkuaz çizgi/düğüm/diamond dilini doğrularız.
 
