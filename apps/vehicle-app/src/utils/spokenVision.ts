@@ -32,15 +32,15 @@ export function parseLetterAnswer(text:string):ParsedAnswer {
 export function equivalentOrientation(letter:Letter,a:Orientation,b:Orientation) {
  return a===b || (letter==='E' && [a,b].every(o=>o==='down'||o==='mirror')) || (letter==='A' && [a,b].every(o=>o==='upright'||o==='mirror'));
 }
-export type EyePixelEvidence={state:'open'|'closed'|'uncertain';ear:number;darkFraction:number;contrast:number;method:'lid-geometry-and-current-pixels'};
-export type LetterConditions={observedAt:number;cameraLive:boolean;modelActive:boolean;faceCount:number;qualityValid:boolean;positionValid:boolean;relativeScaleChange:number|null;motionStable?:boolean;right:EyePixelEvidence;left:EyePixelEvidence};
+export type EyePixelEvidence={state:'open'|'closed'|'covered'|'uncertain';ear:number|null;darkFraction:number|null;contrast:number|null;method:string;baselineEar?:number;blinkCoefficient?:number|null;heldMs?:number;appearanceChange?:number;templateCorrelation?:number};
+export type LetterConditions={observedAt:number;cameraLive:boolean;modelActive:boolean;faceCount:number;qualityValid:boolean;positionValid:boolean;relativeScaleChange:number|null;motionStable?:boolean;right:EyePixelEvidence;left:EyePixelEvidence;distancePolicy?:'head-anchors-hysteresis-v1';distanceState?:'learning'|'stable'|'near'|'far'|'unknown';blocker?:string|null;trackingMethod?:string};
 export function letterConditionFailure(c:LetterConditions|null,eye:Eye|null,now:number):'camera'|'position'|'eye'|'uncertain'|null {
  if(!c||now-c.observedAt>750||now<c.observedAt||!c.cameraLive||!c.modelActive||c.faceCount!==1||!c.qualityValid)return 'camera';
- if(c.motionStable===false||!c.positionValid||c.relativeScaleChange===null||Math.abs(c.relativeScaleChange)>.08)return 'position';
+ if(!c.positionValid||c.relativeScaleChange===null||(c.distancePolicy!=='head-anchors-hysteresis-v1'&&(c.motionStable===false||Math.abs(c.relativeScaleChange)>.08)))return 'position';
  if(!eye)return null;
  const opened=eye==='RIGHT'?c.right:c.left,closed=eye==='RIGHT'?c.left:c.right;
  if(opened.state==='uncertain'||closed.state==='uncertain')return 'uncertain';
- return opened.state==='open'&&closed.state==='closed'?null:'eye';
+ return opened.state==='open'&&(closed.state==='closed'||closed.state==='covered')?null:'eye';
 }
 
 // UX bounds, not validated clinical thresholds. A 0.1 log step is 10^0.1.
@@ -51,7 +51,7 @@ export interface LetterTrial {
  renderedGeometry:RenderedSymbolGeometry|null;parsedAnswer:ParsedAnswer;answer:{letter:Letter;orientation:Orientation}|null;
  letterCorrect:boolean|null;orientationCorrect:boolean|null;combinedCorrect:boolean|null;correct:boolean;notVisible:boolean;
  valid:boolean;invalidReason:string|null;conditions:LetterConditions|null;answeredAt:string;responseTimeMs:number;
- distanceEvidence:{method:'relative-face-scale-only';relativeScaleChange:number|null;absoluteDistanceCm:null;confidence:'unverified-absolute'};
+ distanceEvidence:{method:'relative-face-scale-only'|'relative-head-anchors';relativeScaleChange:number|null;absoluteDistanceCm:null;confidence:'unverified-absolute'};
 }
 export function scoreLetterTrial(t:Pick<LetterTrial,'valid'|'letter'|'orientation'|'answer'|'notVisible'>){
  if(!t.valid)return {letterCorrect:null,orientationCorrect:null,combinedCorrect:null};
@@ -72,23 +72,24 @@ export function performanceBySize(trials:LetterTrial[],eye:Eye){
 function random(max:number){const a=new Uint32Array(1);crypto.getRandomValues(a);return Math.floor(a[0]/4294967296*max);}
 export class SpokenLetterSession {
  trials:LetterTrial[]=[];invalidTrials:LetterTrial[]=[];id=crypto.randomUUID();trialId='';presentationId='';letter:Letter='E';orientation:Orientation='upright';sizePx:number=LETTER_RULES.startPx;
- private streak=0;private presentedAt=0;private pending=false;private sequence=0;
+ private streak=0;private presentedAt=0;private elapsed=0;private timing=false;private pending=false;private sequence=0;
  get completed(){return this.trials.length>=LETTER_RULES.maxValid;}
  get eye():Eye{return this.trials.length<LETTER_RULES.perEye?'RIGHT':'LEFT';}
  get ledger(){return [...this.trials,...this.invalidTrials].sort((a,b)=>a.sequence-b.sequence);}
- beginResponse(now=performance.now()){if(this.presentationId)this.presentedAt=now;}
+ beginResponse(now=performance.now()){if(this.presentationId&&!this.timing){this.presentedAt=now;this.timing=true;}}
+ suspendResponse(now=performance.now()){if(this.timing){this.elapsed+=Math.max(0,now-this.presentedAt);this.timing=false;}}
  present(now=performance.now()){
   if(this.completed||this.presentationId)return;
   if(!this.pending){this.trialId=crypto.randomUUID();const letters=Object.keys(LETTER_PATHS) as Letter[];this.letter=letters[random(letters.length)];
    // One representative per distinct rendered orientation, retaining symmetric
    // answer equivalence. A mirrored A is upright; mirrored E is upside-down E.
    const orientations:Orientation[]=this.letter==='A'||this.letter==='E'?['upright','right','down','left']:['upright','right','down','left','mirror'];this.orientation=orientations[random(orientations.length)];}
-  this.pending=false;this.presentationId=crypto.randomUUID();this.presentedAt=now;
+  this.pending=false;this.presentationId=crypto.randomUUID();this.presentedAt=now;this.elapsed=0;this.timing=false;
  }
  private record(answer:ParsedAnswer,c:LetterConditions|null,now:number,geometry:RenderedSymbolGeometry|null,reason:string|null):LetterTrial {
   const notVisible=answer.command==='not-visible';const parsed=notVisible||!answer.letter||!answer.orientation?null:{letter:answer.letter,orientation:answer.orientation};
   const base={valid:reason===null,letter:this.letter,orientation:this.orientation,answer:parsed,notVisible};const scores=scoreLetterTrial(base);
-  return {id:this.trialId,presentationId:this.presentationId,sequence:++this.sequence,protocolVersion:LETTER_PROTOCOL,eye:this.eye,...base,sizePx:this.sizePx,renderedGeometry:geometry?structuredClone(geometry):null,parsedAnswer:structuredClone(answer),...scores,correct:scores.combinedCorrect===true,invalidReason:reason,conditions:c?structuredClone(c):null,answeredAt:new Date().toISOString(),responseTimeMs:Math.max(0,now-this.presentedAt),distanceEvidence:{method:'relative-face-scale-only',relativeScaleChange:c?.relativeScaleChange??null,absoluteDistanceCm:null,confidence:'unverified-absolute'}};
+  return {id:this.trialId,presentationId:this.presentationId,sequence:++this.sequence,protocolVersion:LETTER_PROTOCOL,eye:this.eye,...base,sizePx:this.sizePx,renderedGeometry:geometry?structuredClone(geometry):null,parsedAnswer:structuredClone(answer),...scores,correct:scores.combinedCorrect===true,invalidReason:reason,conditions:c?structuredClone(c):null,answeredAt:new Date().toISOString(),responseTimeMs:this.elapsed+(this.timing?Math.max(0,now-this.presentedAt):0),distanceEvidence:{method:c?.distancePolicy==='head-anchors-hysteresis-v1'?'relative-head-anchors':'relative-face-scale-only',relativeScaleChange:c?.relativeScaleChange??null,absoluteDistanceCm:null,confidence:'unverified-absolute'}};
  }
  unscored(reason:string,c:LetterConditions|null,now:number,geometry:RenderedSymbolGeometry|null,parsed:ParsedAnswer={}){if(this.presentationId)this.invalidTrials.push(this.record(parsed,c,now,geometry,reason));}
  invalidate(reason:string,c:LetterConditions|null,now:number,geometry:RenderedSymbolGeometry|null){
@@ -105,4 +106,4 @@ export class SpokenLetterSession {
   return true;
  }
 }
-export interface LetterResult {id:string;date:string;protocolVersion:typeof LETTER_PROTOCOL;trials:LetterTrial[];deviceContext:{width:number;height:number;dpr:number};profileVerification:'unverified';distanceMethod:'relative-face-scale-only';physicalScale:null;completed:boolean}
+export interface LetterResult {id:string;date:string;protocolVersion:typeof LETTER_PROTOCOL;trials:LetterTrial[];deviceContext:{width:number;height:number;dpr:number};profileVerification:'unverified';distanceMethod:'relative-face-scale-only'|'relative-head-anchors';physicalScale:null;completed:boolean}

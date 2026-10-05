@@ -23,7 +23,8 @@ def test_speech_preserves_transport_chunks_and_closes(monkeypatch):
     assert response.status_code==200 and response.content==b'firstsecond'
     assert closed==[True] and len(calls)==1
     assert calls[0]==(vision_speech.PROMPTS['right'],'tr-TR-AhmetNeural','-10%','-10Hz')
-    assert 'harf' in calls[0][0].lower() and 'E' not in calls[0][0]
+    assert 'harf' not in calls[0][0].lower() and 'veya örtün' in calls[0][0]
+    assert 'Harfi ve yönünü söyleyin' in vision_speech.PROMPTS['repeat']
     assert response.headers['cache-control']=='no-store'
 
 

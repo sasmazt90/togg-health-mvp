@@ -2,13 +2,14 @@
 Closes only windows belonging to its verified product Chrome profile. Other
 visible Chrome windows are inventoried and preserved. No user storage changes.
 """
-import hashlib,json,os,socket,subprocess,time,urllib.request
+import argparse,hashlib,json,os,socket,subprocess,time,urllib.request
 from pathlib import Path
 import psutil,pythoncom,win32gui,win32process,win32con
 from win32com.shell import shell
 ROOT=Path(__file__).resolve().parents[1]
 HOME=Path(r'C:\Users\PC\Desktop\YENİ İŞ\Applications\7. TOGG\.launcher')
-LINK=HOME.parent/'TOGG Başlat.lnk';OUT=ROOT/'audit-results/postmeeting/delivery.json';OUT.parent.mkdir(parents=True,exist_ok=True)
+parser=argparse.ArgumentParser();parser.add_argument('--output',default='audit-results/postmeeting/delivery.json');args=parser.parse_args()
+LINK=HOME.parent/'TOGG Başlat.lnk';OUT=(ROOT/args.output).resolve();assert OUT.is_relative_to(ROOT/'audit-results');OUT.parent.mkdir(parents=True,exist_ok=True)
 def git(*args):return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
 assert git('status','--porcelain')=='','Commit verified source before delivery proof'
 head=git('rev-parse','HEAD');build=(ROOT/'apps/vehicle-app/.next/BUILD_ID').read_text().strip()
@@ -30,7 +31,7 @@ for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/wi
  source[rel]=hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()
 assert (ROOT/'apps/vehicle-app/.next/BUILD_ID').stat().st_mtime>=max((ROOT/p).stat().st_mtime for p in source)
 manifest=json.loads((ROOT/'apps/vehicle-app/.next/app-build-manifest.json').read_text())['pages']
-chunks=sorted({p for route,paths in manifest.items() for p in paths})
+chunks=sorted({p for route,paths in manifest.items() for p in paths}|{p.relative_to(ROOT/'apps/vehicle-app/.next').as_posix() for p in (ROOT/'apps/vehicle-app/.next/static/chunks').rglob('*.js')})
 hashes={rel:hashlib.sha256((ROOT/'apps/vehicle-app/.next'/rel).read_bytes()).hexdigest() for rel in chunks}
 def state():return json.loads((HOME/'session.json').read_text())
 def wait(check,seconds=45):

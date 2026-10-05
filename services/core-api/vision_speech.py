@@ -11,17 +11,17 @@ from fastapi.responses import StreamingResponse
 from tts_profiles import VISION_TTS_PROFILE, MENTAL_WELLBEING_TTS_PROFILE
 VOICE=VISION_TTS_PROFILE.voice
 PROMPTS={
- 'prepare':'Kamera hazırlanıyor. Kameraya bakın ve bulunduğunuz konumu koruyun.',
- 'right':'Sağ gözünüz açık kalsın. Sol gözünüzü kapatın. Harfi ve yönünü söyleyin.',
- 'left':'Sol gözünüz açık kalsın. Sağ gözünüzü kapatın. Harfi ve yönünü söyleyin.',
+ 'prepare':'Kamera hazırlanıyor. İki gözünüz açık, yüzünüz görüntüde olsun. Bulunduğunuz mesafeyi koruyun.',
+ 'right':'Sağ gözünüzü test ediyoruz. Sağ gözünüz açık kalsın. Sol gözünüzü kapatın veya örtün.',
+ 'left':'Sol gözünüzü test ediyoruz. Sol gözünüz açık kalsın. Sağ gözünüzü kapatın veya örtün.',
  'letter':'Harfi Adana, Bursa gibi kodlayarak tekrar söyler misiniz?',
  'orientation':'Hangi yöne dönük olduğunu da söyler misiniz?',
  'reverse':'Ters derken baş aşağı mı, aynalı mı demek istediniz?',
  'repeat':'Harfi ve yönünü söyleyin. Düz, baş aşağı, sağa veya sola yatmış diyebilirsiniz.',
- 'position':'Kameraya doğru bakın.',
+ 'position':'Başlangıç mesafenizi koruyun. Harf alanına bakabilirsiniz.',
  'approach':'Biraz yaklaşın.',
  'recede':'Biraz geriye gidin.',
- 'pose':'Kameraya doğru bakın.',
+ 'pose':'Başlangıç mesafenizi koruyun. Harf alanına bakabilirsiniz.',
  'framing':'Alın ve çeneniz kadrajda kalacak şekilde yüzünüzü ortalayın.',
  'light':'Yüzünüzü daha iyi aydınlatın.',
  'bright':'Yüzünüzdeki parlamayı azaltın.',
@@ -31,8 +31,8 @@ PROMPTS={
  'preparing':'Konumunuz doğrulanıyor. Kısa süre sabit durun.',
  'ready':'Konum hazır.',
  'camera':'Kameranın önünde, iyi ışıkta durun.',
- 'eye':'Yönergede istenen göz açık, diğer göz kapalı kalmalı.',
- 'uncertain':'Gözlerinizi kameranın görebileceği şekilde tutun.',
+ 'eye':'Test edilen göz açık, diğer göz kapalı veya örtülü kalmalı.',
+ 'uncertain':'Göz örtüsünü veya göz açıklığını kontrol edemiyorum.',
  'paused':'Görev duraklatıldı. Devam et diyerek sürdürebilirsiniz.',
  'complete':'Harf tanıma görevi tamamlandı.'
 }

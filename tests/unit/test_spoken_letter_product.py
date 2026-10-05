@@ -81,7 +81,7 @@ assert.equal(captures,0);assert(snapshot.visualError);assert.equal(snapshot.data
 
 def test_component_metrics_log_steps_and_recomputation(tmp_path):
  run(tmp_path,"""
-const s=new V.SpokenLetterSession();s.present(1000);s.letter='P';s.orientation='right';const size=s.sizePx;
+const s=new V.SpokenLetterSession();s.present(1000);s.beginResponse(1000);s.letter='P';s.orientation='right';const size=s.sizePx;
 assert(s.respond({letter:'P',orientation:'left'},c,1100,s.presentationId));assert.equal(s.sizePx,size);assert.deepEqual(V.scoreLetterTrial(s.trials[0]),{letterCorrect:true,orientationCorrect:false,combinedCorrect:false});
 s.present(1100);s.letter='P';s.orientation='right';assert(s.respond({letter:'P',orientation:'down'},c,1150,s.presentationId));assert(Math.abs(s.sizePx-size/10**.1)<1e-10);
 s.present(1200);s.letter='P';s.orientation='right';assert(s.respond({letter:'F',orientation:'right'},c,1300,s.presentationId));assert.deepEqual(V.scoreLetterTrial(s.trials[2]),{letterCorrect:false,orientationCorrect:true,combinedCorrect:false});
