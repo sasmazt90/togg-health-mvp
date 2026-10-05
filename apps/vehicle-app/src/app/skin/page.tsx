@@ -41,7 +41,7 @@ export default function SkinPage() {
   const activeScanRef=useRef(false);activeScanRef.current=scanState==='CAMERA_ACTIVE';
   const [preparationPhase,setPreparationPhase]=useState<string|null>(null);
   const [preparationSeconds,setPreparationSeconds]=useState(0);
-  useEffect(()=>{if(!preparationPhase || scanState!=='CAMERA_ACTIVE'){setPreparationSeconds(0);if(scanState!=='CAMERA_ACTIVE')setPreparationPhase(null);return;}const started=performance.now();const timer=setInterval(()=>setPreparationSeconds(Math.floor((performance.now()-started)/1000)),1000);return()=>clearInterval(timer);},[preparationPhase,scanState]);
+  useEffect(()=>{if(!preparationPhase || scanState!=='CAMERA_ACTIVE'){setPreparationSeconds(0);if(scanState!=='CAMERA_ACTIVE')setPreparationPhase(null);return;}setPreparationSeconds(0);const started=performance.now();const timer=setInterval(()=>setPreparationSeconds(Math.floor((performance.now()-started)/1000)),1000);return()=>clearInterval(timer);},[preparationPhase,scanState]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<number>(0);
   const [multiAngle, setMultiAngle] = useState(true);
