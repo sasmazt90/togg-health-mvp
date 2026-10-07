@@ -1,13 +1,13 @@
 import { FaceLandmarker, HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 import { VisionTracker } from './visionTracking';
 import type { Eye } from './spokenVision';
-let face:FaceLandmarker,hand:HandLandmarker,tracker=new VisionTracker(),delegate:'CPU'|'GPU'='CPU';
+let face:FaceLandmarker,hand:HandLandmarker,tracker=new VisionTracker(),delegate:'CPU'|'GPU'='GPU';
 let canvas:OffscreenCanvas,ctx:OffscreenCanvasRenderingContext2D;
 self.onmessage=async(event:MessageEvent)=>{
  const {id,type,frame,frameTime,eye}=event.data;
  try{
   if(type==='initialize'){
-   delegate=event.data.delegate==='GPU'?'GPU':'CPU';
+   delegate=event.data.delegate==='CPU'?'CPU':'GPU';
    const files=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm');
    face=await FaceLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate},runningMode:'IMAGE',numFaces:2,outputFaceBlendshapes:true});
    hand=await HandLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate},runningMode:'IMAGE',numHands:2});

@@ -9,6 +9,23 @@ export const LETTER_PATHS:Record<Letter,string>={
  P:'M20 90V10H55C90 10 90 50 55 50H20', R:'M20 90V10H55C90 10 90 50 55 50H20M55 50L85 90'
 };
 export type ParsedAnswer={command?:'not-visible'|'repeat'|'pause'|'resume'|'finish';letter?:Letter;orientation?:Orientation;clarify?:'letter'|'orientation'|'reverse'};
+/** Native recognition may finalize a letter and its direction separately.
+ * Join only explicit fragments from the same live presentation; never infer
+ * either field from its target. Reverse ambiguity still needs clarification. */
+export function mergeLetterAnswer(partial:ParsedAnswer,answer:ParsedAnswer):ParsedAnswer{
+ const merged={...answer,letter:answer.letter||partial.letter,orientation:answer.orientation||partial.orientation};
+ if(merged.letter&&merged.orientation&&answer.clarify!=='reverse')delete merged.clarify;
+ return merged;
+}
+/** Fixed guidance never names the displayed target. Ignore its imperative
+ * phrases if the microphone hears the speaker, while retaining short user
+ * answers and commands, including either letter/direction order. */
+export function isLetterInstructionEcho(text:string){
+ const value=text.toLocaleLowerCase('tr-TR').normalize('NFKC').replace(/[^a-zçğıöşü ]/g,' ').replace(/\s+/g,' ').trim();
+ if(/harf alanına bakın|harfi ve yönünü söyleyin|harfi şehir adıyla|yönünü ekleyebilirsiniz|yönünü belirtin|ters ifadesi belirsiz|sırası önemli değil|diyebilirsiniz|söyler misiniz|demek istediniz/.test(value))return true;
+ const instructions=['harf alanına bakın harfi ve yönünü söyleyin sırası önemli değil düz baş aşağı sağa veya sola yatmış diyebilirsiniz','harfi şehir adıyla kodlayarak söyleyin yönünü ekleyebilirsiniz','hangi yöne dönük olduğunu da söyler misiniz','ters derken baş aşağı mı aynalı mı demek istediniz'];
+ return value.split(' ').length>=3&&instructions.some(line=>line.includes(value));
+}
 export function parseLetterAnswer(text:string):ParsedAnswer {
  const value=text.toLocaleLowerCase('tr-TR').normalize('NFKC').replace(/[^a-zçğıöşü ]/g,' ').replace(/\s+/g,' ').trim();
  if(/göremiyorum|ayırt edemiyorum/.test(value))return {command:'not-visible'};
@@ -32,7 +49,7 @@ export function parseLetterAnswer(text:string):ParsedAnswer {
 export function equivalentOrientation(letter:Letter,a:Orientation,b:Orientation) {
  return a===b || (letter==='E' && [a,b].every(o=>o==='down'||o==='mirror')) || (letter==='A' && [a,b].every(o=>o==='upright'||o==='mirror'));
 }
-export type EyePixelEvidence={state:'open'|'closed'|'covered'|'uncertain';ear:number|null;darkFraction:number|null;contrast:number|null;method:string;baselineEar?:number;blinkCoefficient?:number|null;heldMs?:number;appearanceChange?:number;templateCorrelation?:number};
+export type EyePixelEvidence={state:'open'|'closed'|'covered'|'uncertain';ear:number|null;darkFraction:number|null;contrast:number|null;method:string;baselineEar?:number;blinkCoefficient?:number|null;heldMs?:number;appearanceChange?:number;templateCorrelation?:number;palmCoverage?:number;wideTemplateCorrelation?:number;candidateState?:'open'|'closed'|'covered'|'uncertain'};
 export type LetterConditions={observedAt:number;cameraLive:boolean;modelActive:boolean;faceCount:number;qualityValid:boolean;positionValid:boolean;relativeScaleChange:number|null;motionStable?:boolean;right:EyePixelEvidence;left:EyePixelEvidence;distancePolicy?:'head-anchors-hysteresis-v1';distanceState?:'learning'|'stable'|'near'|'far'|'unknown';blocker?:string|null;trackingMethod?:string};
 export function letterConditionFailure(c:LetterConditions|null,eye:Eye|null,now:number):'camera'|'position'|'eye'|'uncertain'|null {
  if(!c||now-c.observedAt>750||now<c.observedAt||!c.cameraLive||!c.modelActive||c.faceCount!==1||!c.qualityValid)return 'camera';
@@ -107,3 +124,9 @@ export class SpokenLetterSession {
  }
 }
 export interface LetterResult {id:string;date:string;protocolVersion:typeof LETTER_PROTOCOL;trials:LetterTrial[];deviceContext:{width:number;height:number;dpr:number};profileVerification:'unverified';distanceMethod:'relative-face-scale-only'|'relative-head-anchors';physicalScale:null;completed:boolean}
+/** Read the displayed geometry before sampling the response clock. Passing a
+ * clock sampled first makes the real DOM measurement appear to be in the
+ * future, which respond correctly rejects. Keep that strict guard intact. */
+export function respondToVisibleLetter(session:SpokenLetterSession,answer:ParsedAnswer,conditions:LetterConditions|null,presentationId:string,measure:()=>RenderedSymbolGeometry|null,clock:()=>number=()=>performance.now()){
+ const geometry=measure();return session.respond(answer,conditions,clock(),presentationId,geometry);
+}

@@ -28,6 +28,7 @@ export interface FaceAlignment {
   isAligned: boolean;
   guidanceTextTr: string;
   landmarks?: NormalizedLandmark[];
+  sourceFramed?: boolean;
 }
 
 export interface ImageQuality {
@@ -36,6 +37,16 @@ export interface ImageQuality {
   blurScore: number; // Piksel gradyan varyansı proxy'si
   status: 'OPTIMAL' | 'TOO_DARK' | 'TOO_BRIGHT' | 'BLURRY' | 'NO_FACE';
   warningMessageTr?: string;
+}
+
+/** Acquisition framing uses the complete decoded source, independent of
+ * display zoom or the fraction occupied in a wide cabin camera. Actual face
+ * ROI illumination/detail is still checked separately by checkQuality. */
+export function skinSourceFramed(points:{x:number;y:number}[],width:number,height:number){
+ if(points.length<468||!points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)))return false;
+ const face=points.slice(0,468),xs=face.map(p=>p.x),ys=face.map(p=>p.y);
+ const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
+ return minX>.005&&maxX<.995&&minY>.005&&maxY<.995&&(maxX-minX)*width>=4&&(maxY-minY)*height>=4;
 }
 
 export type SkinCapturePose = Pick<FaceAlignment, 'yaw' | 'pitch' | 'roll' | 'scaleRatio'>;
@@ -238,11 +249,9 @@ export class SkinAnalyzer {
     let guidance = 'Hizalama uygun';
     let isAligned = true;
 
-    if (scaleRatio < 0.28) {
-      guidance = 'Lütfen kameraya biraz yaklaşın';
-      isAligned = false;
-    } else if (scaleRatio > 0.68) {
-      guidance = 'Lütfen biraz geriye çekilin';
+    const sourceFramed=skinSourceFramed(lms,width,height);
+    if (!sourceFramed) {
+      guidance = 'Alın ve çeneniz dahil yüzünüz kamera görüntüsünde olsun';
       isAligned = false;
     } else if (yaw > 0.20) {
       guidance = 'Kameraya dönün; başınızı karşıya hizalayın';
@@ -268,7 +277,8 @@ export class SkinAnalyzer {
       scaleRatio: Math.round(scaleRatio * 100) / 100,
       isAligned,
       guidanceTextTr: guidance,
-      landmarks: lms
+      landmarks: lms,
+      sourceFramed
     };
   }
 

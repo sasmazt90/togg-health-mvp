@@ -6,6 +6,8 @@ import { SkinSnapshot } from '../../utils/skinSnapshot';
 import Image from 'next/image';
 import { useId } from 'react';
 import { SkinRegionNavigator } from './SkinRegionNavigator';
+import { cameraCrop } from '../CameraPreparation';
+import { StablePreviewCrop } from '../../utils/cameraStability';
 
 interface SkinFacePanelProps {
   currentRegion: SkinRegionData;
@@ -30,6 +32,8 @@ export const SkinFacePanel: React.FC<SkinFacePanelProps> = ({
 }) => {
   const maskId = useId();
   const [videoRatio,setVideoRatio]=useState(4/3);
+  const previewCrop=React.useRef(new StablePreviewCrop());
+  const crop=isLiveVideo&&mode==='scan'?previewCrop.current.update(cameraCrop(landmarks),performance.now()):{x:0,y:0,width:1,height:1};
   const updateVideoRatio=(event:React.SyntheticEvent<HTMLVideoElement>)=>{const v=event.currentTarget;if(v.videoWidth && v.videoHeight)setVideoRatio(v.videoWidth/v.videoHeight);};
   const [dpr,setDpr]=useState(1);
   useEffect(()=>{const update=()=>setDpr(window.devicePixelRatio||1);update();window.addEventListener('resize',update);return()=>window.removeEventListener('resize',update);},[]);
@@ -37,10 +41,10 @@ export const SkinFacePanel: React.FC<SkinFacePanelProps> = ({
   return (
     <div className="flex flex-col items-center justify-center w-full">
       {/* Natural portrait pixels; no outline or shadow on the photo. */}
-      <div className={`relative w-full ${isLiveVideo && mode === 'scan' || snapshot ? 'max-w-[480px]' : 'max-w-[360px]'} rounded-2xl overflow-hidden select-none`} style={snapshot ? { aspectRatio: snapshot.crop.width / snapshot.crop.height, maxWidth: Math.min(400,snapshot.crop.width/dpr) } : isLiveVideo && mode === 'scan' ? {aspectRatio:videoRatio} : undefined} data-face-panel data-source-pixel-width={snapshot?.crop.width} data-display-dpr={dpr}>
+      <div className={`relative w-full ${isLiveVideo && mode === 'scan' || snapshot ? 'max-w-[480px]' : 'max-w-[360px]'} rounded-2xl overflow-hidden select-none`} style={snapshot ? { aspectRatio: snapshot.crop.width / snapshot.crop.height, maxWidth: Math.min(400,snapshot.crop.width/dpr) } : isLiveVideo && mode === 'scan' ? {aspectRatio:videoRatio*crop.width/crop.height,maxWidth:`min(480px,${65*videoRatio*crop.width/crop.height}vh)`} : undefined} data-face-panel data-preview-crop={isLiveVideo&&mode==='scan'?JSON.stringify(crop):undefined} data-source-pixel-width={snapshot?.crop.width} data-display-dpr={dpr}>
         {/* Actual decoded video dimensions keep landmarks aligned without cropping. */}
         {isLiveVideo && mode === 'scan' ? (
-          <><video ref={videoRef} onLoadedMetadata={updateVideoRatio} onLoadedData={updateVideoRatio} autoPlay playsInline muted className="w-full h-full object-contain object-center" data-skin-live-video />{landmarks && <svg data-skin-live-landmarks viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none" aria-label="Gerçek yüz noktaları">{landmarks.map((point,index)=><circle key={index} cx={point.x*100} cy={point.y*100} r=".15" fill="#67e8f9" />)}</svg>}</>
+          <div data-skin-preview-source className="absolute" style={{width:`${100/crop.width}%`,height:`${100/crop.height}%`,left:`${-100*crop.x/crop.width}%`,top:`${-100*crop.y/crop.height}%`}}><video ref={videoRef} onLoadedMetadata={updateVideoRatio} onLoadedData={updateVideoRatio} autoPlay playsInline muted className="w-full h-full object-fill" data-skin-live-video />{landmarks && <svg data-skin-live-landmarks viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none" aria-label="Gerçek yüz noktaları">{landmarks.map((point,index)=><circle key={index} cx={point.x*100} cy={point.y*100} r=".15" fill="#67e8f9" />)}</svg>}</div>
         ) : (
           mode === 'start' ? <Image src="/assets/skin-preparation.png" alt="Cilt taraması hazırlık görseli" width={600} height={800} className="w-full h-auto" /> : snapshot ? snapshot.visualError ? <div role="alert" data-skin-segmentation-error className="min-h-64 p-6 flex items-center text-center text-sm text-amber-200">{snapshot.visualError}</div> : <svg data-skin-snapshot data-snapshot-width={snapshot.width} data-snapshot-height={snapshot.height} data-mask-width={snapshot.maskWidth} data-mask-height={snapshot.maskHeight} data-segmentation-ms={snapshot.segmentationMs} viewBox={`${snapshot.crop.x} ${snapshot.crop.y} ${snapshot.crop.width} ${snapshot.crop.height}`} className="w-full h-full" role="img" aria-label={`${currentRegion.nameTr} kabul edilmiş tarama görüntüsü`}>
             <defs><filter id={maskId} x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation={snapshot.crop.width / 700}/></filter></defs>

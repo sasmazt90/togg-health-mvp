@@ -12,12 +12,12 @@ from tts_profiles import VISION_TTS_PROFILE, MENTAL_WELLBEING_TTS_PROFILE
 VOICE=VISION_TTS_PROFILE.voice
 PROMPTS={
  'prepare':'Kamera hazırlanıyor. İki gözünüz açık, yüzünüz görüntüde olsun. Bulunduğunuz mesafeyi koruyun.',
- 'right':'Sağ gözünüzü test ediyoruz. Sağ gözünüz açık kalsın. Sol gözünüzü kapatın veya örtün.',
- 'left':'Sol gözünüzü test ediyoruz. Sol gözünüz açık kalsın. Sağ gözünüzü kapatın veya örtün.',
- 'letter':'Harfi Adana, Bursa gibi kodlayarak tekrar söyler misiniz?',
- 'orientation':'Hangi yöne dönük olduğunu da söyler misiniz?',
- 'reverse':'Ters derken baş aşağı mı, aynalı mı demek istediniz?',
- 'repeat':'Harfi ve yönünü söyleyin. Düz, baş aşağı, sağa veya sola yatmış diyebilirsiniz.',
+ 'right':'Sağ gözünüzü test ediyoruz. Sağ gözünüz açık kalsın. Sol gözünüzü kapatın veya örtün. Açık gözünüzle harf alanına bakın.',
+ 'left':'Sol gözünüzü test ediyoruz. Sol gözünüz açık kalsın. Sağ gözünüzü kapatın veya örtün. Açık gözünüzle harf alanına bakın.',
+ 'letter':'Harfi şehir adıyla kodlayarak söyleyin; yönünü ekleyebilirsiniz.',
+ 'orientation':'Harfin yönünü belirtin.',
+ 'reverse':'Ters ifadesi belirsiz. Harfin yönünü belirtin.',
+ 'repeat':'Harf alanına bakın. Harfi ve yönünü söyleyin; sırası önemli değil.',
  'position':'Başlangıç mesafenizi koruyun. Harf alanına bakabilirsiniz.',
  'approach':'Biraz yaklaşın.',
  'recede':'Biraz geriye gidin.',

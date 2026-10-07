@@ -76,7 +76,7 @@ export const SkinActiveScan: React.FC<SkinActiveScanProps> = ({
             </div>
           </div>}
 
-          <CameraPreparation previewCropped={false} alignment={alignment} quality={quality} fresh={fresh} resolution={resolution} position={fresh && alignment?.isAligned ? 'Konum hazır' : guidanceText || 'Ölçüm bekleniyor'}/>
+          <CameraPreparation alignment={alignment} quality={quality} fresh={fresh} resolution={resolution} position={fresh && alignment?.isAligned ? 'Konum hazır' : guidanceText || 'Ölçüm bekleniyor'}/>
 
         </div>
       </div>

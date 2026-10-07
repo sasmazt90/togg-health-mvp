@@ -1,4 +1,5 @@
-"""Actual MediaPipe/pixel evidence on licensed virtual camera, no fake transcript.
+"""Actual MediaPipe/pixel evidence on existing Google portrait virtual camera.
+Fixture license is unverified; this is a local technical negative-path check.
 Negative-path stale, permission, route and driving lifecycle. Positive eye/voice
 personal acceptance is deliberately reported pending, not fabricated.
 """
@@ -28,6 +29,6 @@ with sync_playwright() as pw:
     start();p.evaluate('localStorage.setItem("attune_privacy_camera_allowed","false");window.dispatchEvent(new Event("attune-privacy"))');p.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))');expect(p.locator('p[role=alert]')).to_contain_text('tercihi kapalı')
     p.evaluate('localStorage.removeItem("attune_privacy_camera_allowed")');start();c.request.post('http://127.0.0.1:8000/api/vehicle/speed',data={'speedKmH':75});p.wait_for_function('window.actualStreams.every(s=>s.getTracks().every(t=>t.readyState==="ended"))');expect(p.get_by_role('button',name='Başlat',exact=True)).to_have_count(0)
     assert p.evaluate('window.physicalAttempts')==0 and not errors,errors
-    proof={'status':'PASS','virtualCamera':True,'actualProductionMediaPipe':True,'staleFrameBlocked':True,'voiceFailureDoesNotAdvance':True,'routePrivacyDrivingEndTracks':True,'scoredRecords':0,'fakeSTTEvents':0,'physicalCapture':0,'paidCalls':0,'positiveEyeAndSpokenAcceptance':'user manual test pending'}
+    proof={'status':'PASS','virtualCamera':True,'actualProductionMediaPipe':True,'staleFrameBlocked':True,'voiceFailureDoesNotAdvance':True,'routePrivacyDrivingEndTracks':True,'scoredRecords':0,'fakeSTTEvents':0,'physicalCapture':0,'paidCalls':0,'positiveEyeAndSpokenAcceptance':'not evaluated by this negative fixture; separate physical evidence required'}
     (OUT/'proof.json').write_text(json.dumps(proof,indent=2));c.request.post('http://127.0.0.1:8000/api/vehicle/speed',data={'speedKmH':0});c.close();b.close()
 print(json.dumps(proof))

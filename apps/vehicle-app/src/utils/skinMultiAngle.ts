@@ -17,13 +17,14 @@ export interface MultiAngleReference {
 export function matchesSkinAngle(a: FaceAlignment, angle: SkinAngle): boolean {
   if (!a.faceDetected || !a.isMediaPipeActive || ![a.yaw, a.pitch, a.roll, a.scaleRatio].every(Number.isFinite)) return false;
   const actualScale = a.landmarks?.length ? Math.max(...a.landmarks.map(p => p.x)) - Math.min(...a.landmarks.map(p => p.x)) : a.scaleRatio;
-  if (actualScale < .28 || actualScale > .68 || Math.abs(a.pitch) > .22 || Math.abs(a.roll) > .15) return false;
+  if ((a.sourceFramed===undefined ? actualScale < .28 || actualScale > .68 : !a.sourceFramed) || Math.abs(a.pitch) > .22 || Math.abs(a.roll) > .15) return false;
   return angle === 'FRONT' ? Math.abs(a.yaw) <= .20 : angle === 'RIGHT' ? a.yaw <= -.28 && a.yaw >= -.65 : a.yaw >= .28 && a.yaw <= .65;
 }
 export function angleGuidance(a: FaceAlignment, angle: SkinAngle): string {
   if (!a.faceDetected) return 'Yüz algılanamadı. Kameranın karşısına geçin.';
-  if (a.scaleRatio < .28) return 'Lütfen kameraya biraz yaklaşın';
-  if (a.scaleRatio > .68) return 'Lütfen biraz geriye çekilin';
+  if (a.sourceFramed===false) return 'Alın ve çeneniz dahil yüzünüz kamera görüntüsünde olsun';
+  if (a.sourceFramed===undefined&&a.scaleRatio < .28) return 'Lütfen kameraya biraz yaklaşın';
+  if (a.sourceFramed===undefined&&a.scaleRatio > .68) return 'Lütfen biraz geriye çekilin';
   if (Math.abs(a.pitch) > .22 || Math.abs(a.roll) > .15) return 'Başınızı dik tutun; yukarı veya aşağı eğmeyin.';
   if (matchesSkinAngle(a, angle)) return 'Poz uygun. Lütfen sabit durun...';
   if (angle === 'FRONT') return 'Doğrudan kameraya bakın.';

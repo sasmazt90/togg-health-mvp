@@ -23,4 +23,6 @@ with sync_playwright() as pw:
  p.screenshot(path=str(OUT/'motion-source.png'));b.close()
  valid=[r for r in rows if r['conditions']['relativeScaleChange'] is not None]
  summary={'delegate':'CPU','controlledPixels':True,'physicalCamera':False,'realDepthChange':False,'source':'https://commons.wikimedia.org/wiki/File:Head_Shake.webm','license':'CC BY-SA 4.0','author':'NMu11er','baselineReady':any(a['conditions']['positionValid'] for a in baseline),'minRelativeScale':min((r['conditions']['relativeScaleChange'] for r in valid),default=None),'maxRelativeScale':max((r['conditions']['relativeScaleChange'] for r in valid),default=None),'states':{s:sum(r['conditions']['distanceState']==s for r in rows) for s in ['stable','near','far','unknown']},'closedEyeFrames':{s:sum(r['conditions'][s]['state']=='closed' for r in rows) for s in ['right','left']},'rows':rows}
+ summary['coveredEyeFrames']={s:sum(r['conditions'][s]['state']=='covered' for r in rows) for s in ['right','left']}
  (OUT/'motion-pixels.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),'utf8');print(json.dumps({k:v for k,v in summary.items() if k!='rows'}));assert summary['baselineReady'],'Actual source baseline did not become ready'
+ assert not any(summary['coveredEyeFrames'].values()),'Natural open-eye motion incorrectly classified as an opaque cover'

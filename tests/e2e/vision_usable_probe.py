@@ -13,7 +13,9 @@ with sync_playwright() as pw:
  requested=[];p.on('request',lambda r:requested.append(r.post_data_json['text']) if '/api/vision/speech' in r.url and r.method=='POST' else None)
  c.request.post('http://127.0.0.1:8000/api/vehicle/speed',data={'speedKmH':0});p.goto('http://127.0.0.1:3000/vision');p.get_by_role('button',name='Başlat',exact=True).click()
  rows=[]
- for i in range(30):
+ # Physical GPU startup plus the explicit screen-gaze eye instruction took
+ # about 40 seconds. Bound the complete negative startup, not just inference.
+ for i in range(45):
   p.wait_for_timeout(1000);row=p.evaluate("()=>({at:performance.now(),evidence:JSON.parse(document.querySelector('canvas')?.dataset.visionEvidence||'null'),stage:document.querySelector('[data-vision-stage]')?.dataset.visionStage,letter:!!document.querySelector('[data-letter-optotype]'),placeholder:document.querySelector('[data-letter-placeholder]')?.textContent})");rows.append(row)
   if row['stage']=='idle' or row['stage']=='error':
    (OUT/'startup-failure.json').write_text(json.dumps({'row':row,'body':p.locator('body').inner_text(),'errors':errors,'failure':p.locator('canvas').get_attribute('data-vision-failure')},ensure_ascii=False,indent=2),'utf8');raise AssertionError('Production startup failed; see startup-failure.json')
