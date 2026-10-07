@@ -46,6 +46,11 @@ def wait(check,seconds=45):
 def free(port):
  with socket.socket() as s:s.settimeout(.2);return s.connect_ex(('127.0.0.1',port))!=0
 assert free(3000) and free(8000),'Refuse to adopt/stop another service'
+def live_state():
+ value=state()
+ if value.get('status')!='running' or not all(psutil.pid_exists(value.get(k,-1)) for k in ['frontend_pid','backend_pid','browser_pid']):return None
+ if free(3000) or free(8000):return None
+ return value
 def windows():
  rows=[]
  def collect(hwnd,_):
@@ -55,7 +60,7 @@ def windows():
    if psutil.Process(pid).name().lower()=='chrome.exe':rows.append({'hwnd':hwnd,'pid':pid})
   except psutil.Error:pass
  win32gui.EnumWindows(collect,None);return rows
-other=windows();os.startfile(str(LINK));running=wait(lambda:state() if state().get('status')=='running' else None)
+other=windows();os.startfile(str(LINK));running=wait(live_state)
 assert running['url']=='http://127.0.0.1:3000' and Path(running['profile']).resolve()==(HOME/'chrome-profile').resolve()
 assert Path(psutil.Process(running['frontend_pid']).cwd()).resolve()==ROOT/'apps/vehicle-app'
 assert str(ROOT/'services/core-api').lower() in ' '.join(psutil.Process(running['backend_pid']).cmdline()).lower()
@@ -74,7 +79,7 @@ assert closed,'No owned product window found'
 wait(lambda:state().get('status')=='stopped');wait(lambda:free(3000) and free(8000))
 preserved=[{**row,'preserved':bool(win32gui.IsWindow(row['hwnd']) and win32process.GetWindowThreadProcessId(row['hwnd'])[1]==row['pid'])} for row in other]
 assert all(row['preserved'] for row in preserved),'Pre-existing Chrome window changed; inspect before claiming preservation'
-os.startfile(str(LINK));reopened=wait(lambda:state() if state().get('status')=='running' else None)
+os.startfile(str(LINK));reopened=wait(live_state)
 for rel,digest in hashes.items():
  with urllib.request.urlopen('http://127.0.0.1:3000/_next/'+rel,timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==digest
 proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':target,'shortcutArguments':arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
