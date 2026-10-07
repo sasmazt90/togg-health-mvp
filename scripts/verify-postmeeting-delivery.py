@@ -27,7 +27,7 @@ expected=(ROOT/'scripts/windows-launcher/start_togg.pyw').read_text('utf8').repl
 assert installed==expected
 assert (HOME/'backend_host.py').read_bytes()==(ROOT/'scripts/windows-launcher/backend_host.py').read_bytes()
 source={}
-for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/windows-launcher').splitlines():
+for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/windows-launcher','package.json','package-lock.json','apps/vehicle-app/package.json').splitlines():
  source[rel]=hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()
 assert (ROOT/'apps/vehicle-app/.next/BUILD_ID').stat().st_mtime>=max((ROOT/p).stat().st_mtime for p in source)
 manifest=json.loads((ROOT/'apps/vehicle-app/.next/app-build-manifest.json').read_text())['pages']
