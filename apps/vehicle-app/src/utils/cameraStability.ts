@@ -1,4 +1,14 @@
 export type Crop={x:number;y:number;width:number;height:number};
+/** Face framing shared by live preview and accepted raw-photo presentation. */
+export function cameraCrop(points?:{x:number;y:number}[]):Crop {
+ if(!points || points.length<468)return {x:0,y:0,width:1,height:1};
+ const face=points.slice(0,468);
+ const minX=Math.min(...face.map(p=>p.x)),maxX=Math.max(...face.map(p=>p.x));
+ const minY=Math.min(...face.map(p=>p.y)),maxY=Math.max(...face.map(p=>p.y));
+ const w=maxX-minX,h=maxY-minY;
+ const x=Math.max(0,minX-w*.32),y=Math.max(0,minY-h*.35);
+ return {x,y,width:Math.min(1,maxX+w*.32)-x,height:Math.min(1,maxY+h*.16)-y};
+}
 export const CAMERA_STABILITY={cropTauMs:160,centerDeadband:.005,scaleDeadband:.02,largeChange:.08,motionFaceWidthsPerSecond:.45,positionHoldMs:1000} as const;
 /** Display only. No smoothed coordinate is passed to inference or scoring. */
 export class StablePreviewCrop {

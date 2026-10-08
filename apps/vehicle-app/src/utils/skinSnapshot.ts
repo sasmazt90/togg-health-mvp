@@ -1,6 +1,7 @@
 import { FaceAlignment, SkinAnalyzer } from './skinAnalyzer';
 import { SkinAngle } from './skinMultiAngle';
 import { buildSkinMesh, supportedSkinMesh, SkinMesh } from './skinMesh';
+import { cameraCrop, type Crop } from './cameraStability';
 /** Volatile only: never pass these objects to history/reference writers. */
 export interface SkinSnapshot {
   dataUrl:string; width:number; height:number; angle:SkinAngle;
@@ -10,6 +11,8 @@ export interface SkinSnapshot {
   faceContour:{x:number;y:number}[];
   contours:Record<string,{x:number;y:number}[]>;
   crop:{x:number;y:number;width:number;height:number};
+  /** Normalized display rectangle only; source pixels and measurement stay full-frame. */
+  previewCrop?:Crop;
 }
 // Anatomical indices in the unmirrored accepted MediaPipe frame. Sampling ROIs
 // remain unchanged; presentation graphs are NOT clipped to sampling ROIs.
@@ -65,7 +68,7 @@ export function snapshotSkinFrame(canvas:HTMLCanvasElement, alignment:FaceAlignm
  * segmenter, neck fade, beauty operation or display crop enters this path. */
 export function snapshotRawSkinFrame(canvas:HTMLCanvasElement,alignment:FaceAlignment,angle:SkinAngle):SkinSnapshot {
  const metadata=snapshotSkinFrame(canvas,alignment,angle);
- return {...metadata,visualError:undefined,dataUrl:canvas.toDataURL('image/png'),crop:{x:0,y:0,width:canvas.width,height:canvas.height}};
+ return {...metadata,visualError:undefined,dataUrl:canvas.toDataURL('image/png'),crop:{x:0,y:0,width:canvas.width,height:canvas.height},previewCrop:cameraCrop(alignment.landmarks)};
 }
 export function snapshotAngleForRegion(id:string,threeAngle:boolean):SkinAngle {
   return !threeAngle?'FRONT':id==='rightCheek'?'LEFT':id==='leftCheek'?'RIGHT':'FRONT';

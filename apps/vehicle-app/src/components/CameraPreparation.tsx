@@ -1,17 +1,10 @@
 'use client';
 import { useRef, useState, type RefObject } from 'react';
-import { StablePreviewCrop } from '../utils/cameraStability';
+import { cameraCrop, StablePreviewCrop } from '../utils/cameraStability';
 import { InformationButton } from './InformationButton';
 import type { FaceAlignment, ImageQuality } from '../utils/skinAnalyzer';
 
-export function cameraCrop(points?:{x:number;y:number}[]) {
- if(!points || points.length<468)return {x:0,y:0,width:1,height:1};
- const minX=Math.min(...points.slice(0,468).map(p=>p.x)),maxX=Math.max(...points.slice(0,468).map(p=>p.x));
- const minY=Math.min(...points.slice(0,468).map(p=>p.y)),maxY=Math.max(...points.slice(0,468).map(p=>p.y));
- const w=maxX-minX,h=maxY-minY;
- const x=Math.max(0,minX-w*.32),y=Math.max(0,minY-h*.35);
- return {x,y,width:Math.min(1,maxX+w*.32)-x,height:Math.min(1,maxY+h*.16)-y};
-}
+export { cameraCrop } from '../utils/cameraStability';
 /** Display crop only. Analysis always reads the native uncropped camera. */
 export function CameraPreview({videoRef,landmarks,vision=false}:{videoRef:RefObject<HTMLVideoElement|null>;landmarks?:{x:number;y:number}[];vision?:boolean}) {
  const [ratio,setRatio]=useState(4/3),stable=useRef(new StablePreviewCrop());

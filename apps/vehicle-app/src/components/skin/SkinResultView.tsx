@@ -43,11 +43,11 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
             Cilt Analizi Tamamlandı
           </h1>
           <p className="text-xs sm:text-sm text-slate-300">
-            {currentRegion.indicators ? (isBaseline?'Yeni bölgesel ölçüm referansı oluşturuldu. Eski kayıt ve referanslar korundu.':'Bölgesel fotoğraf göstergeleri. Değerlendirilemeyen kriterler boş gösterilir.') : isBaseline ? 'Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.' :
+            {currentRegion.indicators ? (isBaseline?'Yeni bölgesel ölçüm referansı oluşturuldu. Eski kayıt ve referanslar korundu.':'Bölgesel fotoğraf göstergeleri. Ölçülemeyen kriterler ayrı belirtilir.') : isBaseline ? 'Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.' :
               comparisonUnavailable ? 'Karşılaştırılamadı. Referansınız korundu.' :
               `${currentRegion.nameTr}: kızarıklık piksel göstergesinde referansa göre ${currentRegion.changePct > 0 ? '+' : ''}${currentRegion.changePct}% değişim.`}
           </p>
-          <InformationButton title="Referans ve görüntü">{comparisonUnavailable && <p data-comparison-reason>{comparisonReasons?.includes('legacy-quality-missing') ? 'Eski referansın kalite veya poz bilgisi eksik; güvenilir karşılaştırma yapılamadı. Mevcut referans korundu.' : comparisonReasons?.includes('capture-conditions-incompatible') ? 'Yeni çekimin ışık, netlik veya poz koşulları referansla uyumsuz. Benzer koşullarda yeni tarama yapabilirsiniz; referans korundu.' : 'Bu eski kayıtta karşılaştırılamama nedeni ayrıntılı saklanmamış. Referans korundu; neden doğrulanmadan değişim gösterilmez.'}</p>}<p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p><p>Fotoğraf arka planıyla birlikte kaynak çözünürlüğünde ve yalnız bellekte kalır; baş/saç kesimi, alpha dekupe veya güzelleştirme uygulanmaz. Fotoğraf aynalanmaz. Yeni renk ölçümleri aynı ağın görünür üçgenlerinden gelir. Eski kayıtların sayısal örnekleme kutuları yeni cilt kriterlerine dönüştürülmez. Yanaklar ilgili kabul edilmiş yan pozdan, diğer bölgeler ön pozdan gelir.</p></InformationButton>
+          <InformationButton title="Referans ve görüntü">{comparisonUnavailable && <p data-comparison-reason>{comparisonReasons?.includes('legacy-quality-missing') ? 'Eski referansın kalite veya poz bilgisi eksik; güvenilir karşılaştırma yapılamadı. Mevcut referans korundu.' : comparisonReasons?.includes('capture-conditions-incompatible') ? 'Yeni çekimin ışık, netlik veya poz koşulları referansla uyumsuz. Benzer koşullarda yeni tarama yapabilirsiniz; referans korundu.' : 'Bu eski kayıtta karşılaştırılamama nedeni ayrıntılı saklanmamış. Referans korundu; neden doğrulanmadan değişim gösterilmez.'}</p>}<p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Referans, ilk geçerli taramanızın sayısal bölge metrikleridir; saklanmış yüz fotoğrafı veya hasta veri tabanı değildir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p><p>Fotoğraf arka planıyla birlikte kaynak çözünürlüğünde ve yalnız bellekte kalır; baş/saç kesimi, alpha dekupe veya güzelleştirme uygulanmaz. Gösterim, taramadaki gibi kabul edilen yüzün çevresine yakınlaştırılır; kaynak fotoğraf değişmez. Fotoğraf aynalanmaz. Yeni renk ölçümleri aynı ağın görünür üçgenlerinden gelir. Eski kayıtların sayısal örnekleme kutuları yeni cilt kriterlerine dönüştürülmez. Yanaklar ilgili kabul edilmiş yan pozdan, diğer bölgeler ön pozdan gelir.</p></InformationButton>
         </div>
 
         <div>
@@ -58,9 +58,9 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
       </div>
 
       {/* İKİ KOLON ANA DÜZEN (FIRST VIEWPORT ONLY - NO PAGE SCROLL) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start" data-skin-result-layout>
         {/* SOL KOLON (~45%): Yüz Portresi + Karusel Okları + Organik Maske Vurgusu + İndikatör */}
-        <div className="lg:col-span-5 flex flex-col items-center justify-center">
+        <div className="lg:col-span-5 min-w-0 flex flex-col items-center">
           <SkinFacePanel
             currentRegion={currentRegion}
             snapshot={snapshot}
@@ -73,7 +73,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
         </div>
 
         {/* SAĞ KOLON (~55%): Bölge Başlığı + 4 Metrik Çubuğu + 3 İkincil Buton + Ana CTA */}
-        <div className="lg:col-span-7">
+        <div className="lg:col-span-7 min-w-0">
           <SkinRegionSummary
             currentRegion={currentRegion}
             onOpenModal={onOpenModal}
