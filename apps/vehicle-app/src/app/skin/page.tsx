@@ -24,7 +24,8 @@ import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
 import { SkinSnapshot, snapshotRawSkinFrame as snapshotSkinFrame, snapshotAngleForRegion, assertCompleteFace } from '../../utils/skinSnapshot';
-import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators } from '../../utils/skinIndicators';
+import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators, canCompareIndicator } from '../../utils/skinIndicators';
+import { SkinLocalAnalysis } from '../../utils/skinLocalMaps';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
 import type { CameraResolution } from '../../components/CameraPreparation';
@@ -35,6 +36,12 @@ import { SkinActionsModal } from '../../components/skin/SkinActionsModal';
 import { AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
 
 export default function SkinPage() {
+  const localAnalysis=useRef<SkinLocalAnalysis|null>(null);
+  const addLocalMaps=async(snapshot:SkinSnapshot,ctx:CanvasRenderingContext2D,valid:boolean,current:()=>boolean,expected?:string)=>{
+    localAnalysis.current??=new SkinLocalAnalysis();
+    try {const result=await localAnalysis.current.analyze(snapshot,ctx.getImageData(0,0,snapshot.width,snapshot.height).data,valid,current,expected);if(current()){snapshot.photoId=result.photoId;snapshot.localMaps=result.maps;snapshot.localAnalysis={loadMs:result.loadMs,analysisMs:result.analysisMs,allocatedBytes:result.allocatedBytes};}} catch {/* Optional local layer failure never fabricates a map or discards numerical capture. */}
+  };
+  useEffect(()=>()=>{localAnalysis.current?.cancel();},[]);
   const router = useRouter();
   const { isParked, state } = useVehicle();
 
@@ -380,6 +387,8 @@ export default function SkinPage() {
     if (!validCapture()) return;
     const acceptedSnapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT');
     const indicators=measureSkinIndicators(ctx,acceptedSnapshot,qualToUse);
+    await addLocalMaps(acceptedSnapshot,ctx,qualToUse.isValid,validCapture);
+    if(!validCapture())return;
 
     // Baseline kontrolü (İlk tarama mı, sonraki tarama mı?)
     let baselineData: Record<string, RegionMetrics> | null = null;
@@ -410,7 +419,7 @@ export default function SkinPage() {
     const isFirstScan=!signsPrior;
     const comparisonUnavailable=!!signsPrior && !canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:signsPrior.quality,pose:signsPrior.pose},qualToUse,capturePose);
     if(signsPrior&&!comparisonUnavailable)for(const [region,rows] of Object.entries(indicators))for(const row of rows){
-      const previous=signsPrior.indicators?.[region]?.find((v:any)=>v.id===row.id&&v.method===row.method);
+      const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));
       if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;
     }
     // Legacy metrics remain available to old records; they do not drive V3 claims.
@@ -482,7 +491,7 @@ export default function SkinPage() {
         const angle=snapshotAngleForRegion(region,true),base=signsPrior.captures?.[angle],capture=captures[angle];
         const compatible=base&&canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:base.quality,pose:base.pose},capture.quality,capture.pose);
         if(!compatible){incompatible.push(region);continue;}
-        for(const row of rows){const previous=signsPrior.indicators?.[region]?.find((v:any)=>v.id===row.id&&v.method===row.method);if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;}
+        for(const row of rows){const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;}
       }
       const finalResult: SkinAnalysisResult = {
         schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,
@@ -642,6 +651,8 @@ export default function SkinPage() {
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
                     const snapshot = snapshotSkinFrame(canvas, curAlign, target);
                     capture.indicators=measureSkinIndicators(ctx,snapshot,curQual);
+                    await addLocalMaps(snapshot,ctx,curQual.isValid,()=>!cancelled&&parkedRef.current&&isCameraAllowed(),capture.frameToken);
+                    if(cancelled||!parkedRef.current||!isCameraAllowed())return;
                     if(target==='FRONT'){delete capture.indicators.rightCheek;delete capture.indicators.leftCheek;}
                     if (target === 'FRONT') snapshot.rois = snapshot.rois.filter(r => !['rightCheek','leftCheek'].includes(r.id));
                     snapshotFrames.current[target] = snapshot;
@@ -679,7 +690,7 @@ export default function SkinPage() {
 
     schedule();
     return () => {
-      cancelled = true;
+      cancelled = true; localAnalysis.current?.cancel();
       if (frameId !== null) cancelAnimationFrame(frameId);
       video.srcObject = null;
       mediaStream.getTracks().forEach(track => track.stop());

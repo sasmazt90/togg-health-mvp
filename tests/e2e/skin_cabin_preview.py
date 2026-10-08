@@ -1,6 +1,7 @@
 """Actual production camera/model with licensed small-face pixels.
 Controlled fixture, no physical user acceptance, no model/gate substitutions.
-Defer only portrait preparation so the acquisition display can be inspected.
+Use the real three-pose flow; the fixed front fixture naturally waits for a side
+pose, allowing preview inspection and cancellation without a gate override.
 """
 import json,math,tempfile,base64
 from pathlib import Path
@@ -8,7 +9,7 @@ from playwright.sync_api import sync_playwright,expect
 OUT=Path('audit-results/vision-physical-20261007/skin-cabin');OUT.mkdir(parents=True,exist_ok=True)
 INIT="""window.previewAlignments=[];window.previewStreams=[];
 const gum=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);navigator.mediaDevices.getUserMedia=async(...args)=>{const s=await gum(...args);window.previewStreams.push(s);return s};
-const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m,...args){if(!this.previewObserved){this.previewObserved=true;this.addEventListener('message',e=>{if(e.data.alignment)window.previewAlignments.push(e.data.alignment);});}if(m.type==='initializeSegmentation')return;return post.call(this,m,...args);};"""
+const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m,...args){if(!this.previewObserved){this.previewObserved=true;this.addEventListener('message',e=>{if(e.data.alignment)window.previewAlignments.push(e.data.alignment);});}return post.call(this,m,...args);};"""
 rows=[]
 with sync_playwright() as pw:
  for zoom in [1,2]:
@@ -18,7 +19,7 @@ with sync_playwright() as pw:
    try:
     c.add_init_script(INIT);p=c.new_page();errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
     c.request.post('http://127.0.0.1:8000/api/vehicle/speed',data={'speedKmH':0});p.goto('http://127.0.0.1:3000/skin')
-    p.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click();p.get_by_role('checkbox',name='Üç açılı tarama',exact=True).uncheck();p.get_by_role('button',name='Bilgi penceresini kapat',exact=True).click()
+    p.get_by_role('button',name='Cilt taraması hakkında bilgi',exact=True).click();p.get_by_role('checkbox',name='Üç açılı tarama',exact=True).check();p.get_by_role('button',name='Bilgi penceresini kapat',exact=True).click()
     p.get_by_role('button',name='Analizi Başlat',exact=True).click()
     p.wait_for_function('previewAlignments.some(a=>a.landmarks?.length>=468)',timeout=45000)
     p.locator('[data-skin-live-landmarks] circle').first.wait_for(state='attached')
@@ -37,5 +38,5 @@ with sync_playwright() as pw:
     rows.append({'zoom':zoom,'geometry':geometry,'actualAlignment':{k:a[k] for k in ['sourceFramed','scaleRatio','isAligned','yaw','pitch','roll']},'tracksEnded':True,'errors':errors})
    finally:c.close()
 assert rows[1]['geometry']['viewport']['dpr']/rows[0]['geometry']['viewport']['dpr']>1.99
-proof={'status':'PASS','physicalCameraAcceptance':False,'fixture':'CC BY-SA 4.0 NMu11er Head_Shake full source first frame, aspect-preserving fit 640x480','modelOutputReplaced':False,'sourceQualityGatesChanged':False,'portraitPreparationDeferredForDisplayInspection':True,'buildId':Path('apps/vehicle-app/.next/BUILD_ID').read_text().strip(),'runs':rows}
+proof={'status':'PASS','physicalCameraAcceptance':False,'fixture':'CC BY-SA 4.0 NMu11er Head_Shake full source first frame, aspect-preserving fit 640x480','modelOutputReplaced':False,'sourceQualityGatesChanged':False,'portraitPreparationDeferredForDisplayInspection':False,'buildId':Path('apps/vehicle-app/.next/BUILD_ID').read_text().strip(),'runs':rows}
 (OUT/'proof.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps({k:v for k,v in proof.items() if k!='runs'}))

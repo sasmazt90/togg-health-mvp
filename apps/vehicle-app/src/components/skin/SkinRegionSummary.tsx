@@ -9,12 +9,14 @@ interface SkinRegionSummaryProps {
   currentRegion: SkinRegionData;
   onOpenModal: (modal: 'trend' | 'observation' | 'actions') => void;
   onNavigateToCare: () => void;
+  selectedCriterion?:string|null;
+  onSelectCriterion?:(criterion:string)=>void;
 }
 
 export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
   currentRegion,
   onOpenModal,
-  onNavigateToCare
+  onNavigateToCare,selectedCriterion,onSelectCriterion
 }) => {
   const { metrics } = currentRegion;
 
@@ -35,7 +37,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
             {currentRegion.indicators.filter(indicator=>indicator.score!==null).map(indicator=>{
               const score=Math.round(indicator.score!);
               const delta=indicator.referenceDelta===undefined?undefined:Math.round(indicator.referenceDelta);
-              return <div key={indicator.id} data-skin-indicator={indicator.id} className="rounded-2xl border border-sky-400/15 bg-slate-900/60 p-4 space-y-3">
+              return <div key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-2xl border border-sky-400/15 bg-slate-900/60 p-4 space-y-3">
                 <div className="text-sm text-slate-300">{indicator.label}</div>
                 <div className="flex items-baseline gap-2"><span className="text-3xl font-semibold text-white tabular-nums" data-skin-score>{score}</span><span className="text-xs text-slate-400">/ 100 · renk indeksi</span></div>
                 <div className="h-2 rounded-full bg-slate-800 overflow-hidden" role="meter" aria-label={indicator.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={score}><div className="h-full rounded-full bg-togg-turquoise" style={{width:`${score}%`}}/></div>
@@ -46,7 +48,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
           {currentRegion.indicators.every(indicator=>indicator.score===null)&&<p className="rounded-2xl border border-slate-700/60 p-4 text-sm text-slate-300">Bu bölge için doğrulanmış bir fotoğraf ölçümü bulunmuyor.</p>}
           {currentRegion.indicators.some(indicator=>indicator.score===null)&&<div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4 space-y-3">
             <p className="text-xs text-slate-400">Bu taramada ölçülemeyenler</p>
-            <div className="flex flex-wrap gap-2">{currentRegion.indicators.filter(indicator=>indicator.score===null).map(indicator=><span key={indicator.id} data-skin-indicator={indicator.id} className="rounded-lg bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{indicator.label}<span className="sr-only">: Değerlendirilemiyor</span></span>)}</div>
+            <div className="flex flex-wrap gap-2">{currentRegion.indicators.filter(indicator=>indicator.score===null).map(indicator=><span key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-lg bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{indicator.label}<span className="sr-only">: Değerlendirilemiyor</span></span>)}</div>
             <details className="text-xs text-slate-400"><summary className="cursor-pointer text-slate-300">Neden ölçülemiyor?</summary><dl className="mt-3 space-y-3">{currentRegion.indicators.filter(indicator=>indicator.score===null).map(indicator=><div key={indicator.id}><dt className="font-medium text-slate-300">{indicator.label}</dt><dd className="mt-1 leading-relaxed">{indicator.reason}</dd></div>)}</dl></details>
           </div>}
         </div> : <div className="space-y-2.5">
@@ -136,7 +138,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         </div>}
       </div>
 
-      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Yalnız renk indeksleri ölçülür: yüksek indeks fotoğrafta daha belirgin renk farkıdır. Yüzde, hastalık olasılığı veya kalibre edilmiş belirti şiddeti değildir. Işık, gölge, ten tonu ve sakal renk ölçümünü etkiler. Diğer başlıklar için doğrulanmış ölçüm bulunmadığında puan ve çubuk gösterilmez. Örnekleme, aynı anatomik ağdaki üçgenlerin içindedir; göz, dudak ve burun deliği kesişimleri çıkarılır.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
+      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Yalnız renk indeksleri ölçülür: yüksek indeks fotoğrafta daha belirgin renk farkıdır. Yüzde, hastalık olasılığı veya kalibre edilmiş belirti şiddeti değildir. Işık, gölge, ten tonu ve sakal renk ölçümünü etkiler. Seçilen kızarıklık kartındaki dolgu yerel piksel renk indeksidir; klinik şiddet değildir. Haritası olmayan kriterde yalnız ağ gösterilir. Yağlı Görünüm hedefi yüzey parlaklığıdır; sebum miktarı değildir, yöntem bağımsız doğrulanmadan sonuca açılmaz. Diğer başlıklar için doğrulanmış ölçüm bulunmadığında puan ve çubuk gösterilmez. Örnekleme, aynı anatomik ağdaki üçgenlerin içindedir; göz, dudak ve burun deliği kesişimleri çıkarılır.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button

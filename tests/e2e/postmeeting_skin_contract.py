@@ -5,8 +5,15 @@ import json,time,sys,os,math,tempfile
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
 OUT=Path(os.environ.get('SKIN_RESULT_AUDIT_DIR','audit-results/postmeeting/skin'));OUT.mkdir(parents=True,exist_ok=True)
-INIT="window.workerMessages=[];const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m,...args){window.workerMessages.push({type:m.type,at:performance.now()});return post.call(this,m,...args);};"
+INIT="window.workerMessages=[];window.surfaceRequests=[];window.surfaceResults=[];const post=Worker.prototype.postMessage;Worker.prototype.postMessage=function(m,...args){window.workerMessages.push({type:m.type,at:performance.now()});if(m.pixels&&m.meshes){window.surfaceRequests.push({id:m.id,width:m.width,height:m.height,pose:m.pose,meshes:m.meshes,exclusions:m.exclusions,qualityValid:m.qualityValid});if(!this.surfaceObserved){this.surfaceObserved=true;this.addEventListener('message',({data})=>{if(data.maps)window.surfaceResults.push(data);});}}return post.call(this,m,...args);};"
 profile=None;native200=None
+def capture(page,context,path,native=False):
+ if not native:page.screenshot(path=str(path),full_page=True);return
+ import base64,struct
+ cdp=context.new_cdp_session(page);metrics=cdp.send('Page.getLayoutMetrics');bounds=metrics['contentSize'];base_scale=page.evaluate('devicePixelRatio')/metrics['cssVisualViewport']['zoom']
+ png=cdp.send('Page.captureScreenshot',{'format':'png','captureBeyondViewport':True,'clip':{'x':0,'y':0,'width':bounds['width']/base_scale,'height':bounds['height']/base_scale,'scale':1}})
+ pixels=base64.b64decode(png['data']);size=struct.unpack('>II',pixels[16:24]);assert abs(size[0]-bounds['width'])<=2 and abs(size[1]-bounds['height'])<=2,(size,bounds)
+ path.write_bytes(pixels);cdp.detach()
 with sync_playwright() as pw:
  gpu=['--use-gl=angle','--use-angle=swiftshader'] if '--software-gpu' in sys.argv else []
  b=pw.chromium.launch(channel='chrome',headless=True,args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(Path('audit-fixtures/three-angle.y4m').resolve()),'--enable-unsafe-swiftshader',*gpu])
@@ -68,6 +75,30 @@ with sync_playwright() as pw:
 
    alpha=p.evaluate('''async()=>{const image=new Image();image.src=document.querySelector('[data-skin-snapshot] image').getAttribute('href');await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;let nonopaque=0;for(let i=3;i<data.length;i+=4)if(data[i]!==255)nonopaque++;return {nonopaque,width:canvas.width,height:canvas.height};}''')
    assert alpha['nonopaque']==0
+   photo_id=svg.get_attribute('data-snapshot-photoid');assert photo_id
+   surface=p.evaluate('(id)=>window.surfaceResults.find(v=>v.photoId===id)',photo_id);assert surface
+   request=p.evaluate('(id)=>window.surfaceRequests.find(v=>v.id===id)',surface['id']);assert request
+   import base64
+   source=svg.locator('image').first.get_attribute('href');(OUT/f'source-{n}-{region}.png').write_bytes(base64.b64decode(source.split(',')[1]))
+   (OUT/f'source-{n}-{region}.json').write_text(json.dumps({**request,'region':region,'photoId':photo_id,'localAnalysis':json.loads(svg.get_attribute('data-local-analysis'))}),'utf8')
+   if region!='periorbital':
+    mapping=surface['maps'][region];assert mapping['photoId']==photo_id and mapping['region']==region and mapping['pose']==request['pose']
+    # Real user-facing card interaction, no fabricated map or model result.
+    source_before=svg.locator('image').first.get_attribute('href')
+    p.locator('[data-skin-indicator="redness"]').click()
+    fill=p.locator('[data-skin-local-fill]');assert fill.count()==1 and fill.get_attribute('data-skin-local-fill')=='redness' and fill.get_attribute('data-map-photo')==photo_id
+    assert svg.locator('clipPath').count()==1 and svg.locator('mask').count()==1
+    assert svg.evaluate('(s)=>s.querySelector("[data-skin-local-fill]").compareDocumentPosition(s.querySelector("[data-skin-mesh]"))&Node.DOCUMENT_POSITION_FOLLOWING')
+    source_after=svg.locator('image').first.get_attribute('href');assert source_after==source_before
+    raw=p.evaluate('(m)=>({values:Object.values(m.values),valid:Object.values(m.validMask),rgba:m.dataUrl,mask:m.validMaskUrl,width:m.width,height:m.height,x:m.x,y:m.y,step:m.step})',mapping)
+    # Typed arrays cross evaluate as indexed objects; use Object.values below.
+    (OUT/f'map-{n}-{region}.json').write_text(json.dumps(raw),'utf8')
+    capture(p,c,OUT/f'fill-{n}-{region}.png',n==1)
+    raster=p.evaluate('''async()=>{const s=document.querySelector('[data-skin-snapshot]').cloneNode(true);s.querySelector('image').remove();s.querySelector('[data-skin-mesh]').remove();const width=+s.dataset.snapshotWidth,height=+s.dataset.snapshotHeight;s.setAttribute('xmlns','http://www.w3.org/2000/svg');s.setAttribute('viewBox',`0 0 ${width} ${height}`);s.setAttribute('width',width);s.setAttribute('height',height);const u=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(s)],{type:'image/svg+xml'}));try{const i=new Image();i.src=u;await i.decode();const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;canvas.getContext('2d').drawImage(i,0,0);return canvas.toDataURL('image/png');}finally{URL.revokeObjectURL(u);}}''')
+    (OUT/f'rendered-map-{n}-{region}.png').write_bytes(base64.b64decode(raster.split(',')[1]))
+    p.locator('[data-skin-indicator="tone"]').focus();p.keyboard.press('Enter');assert p.locator('[data-skin-local-fill]').count()==0
+    p.locator('[data-skin-indicator="oil"]').click();assert p.locator('[data-skin-local-fill]').count()==0
+
    if region=='nose':assert p.get_by_role('heading',name='T-Bölgesi',exact=True).count()==1 and p.locator('[data-skin-indicator]').count()==5
    if region=='periorbital':assert p.locator('[data-skin-indicator]').count()==4
    for indicator in value['indicators'][region]:
@@ -91,16 +122,14 @@ with sync_playwright() as pw:
   assert len(set(graphs))==6
   runs.append({'seconds':time.monotonic()-start,'result':value,'reference':ref,'sourcePhotoOpaque':True,'graphs':graphs})
   (OUT/f'completed-{n}.json').write_text(json.dumps(runs[-1],ensure_ascii=False,indent=2),'utf8')
-  p.set_viewport_size({'width':720,'height':900});p.screenshot(path=str(OUT/f'narrow-{n}.png'),full_page=True);assert p.evaluate('document.documentElement.scrollWidth<=innerWidth')
-  p.set_viewport_size({'width':1600,'height':1000});p.evaluate("document.documentElement.style.zoom='2'");p.screenshot(path=str(OUT/f'zoom200-{n}.png'),full_page=True);assert p.evaluate('document.documentElement.scrollWidth<=innerWidth');p.evaluate("document.documentElement.style.zoom='1'")
   if n==0:
+   p.set_viewport_size({'width':720,'height':900});capture(p,c,OUT/'narrow.png');assert p.evaluate('document.documentElement.scrollWidth<=innerWidth')
+   p.set_viewport_size({'width':1600,'height':1000})
    legacy={'id':'fixture-legacy-preserved','timestamp':ref['timestamp'],'schemaVersion':2,'scope':'three-angle-v2','captures':ref['captures']}
    p.evaluate('(value)=>localStorage.setItem("togg_health_skin_multi_baseline_v2",JSON.stringify(value))',legacy);legacy_raw=p.evaluate('localStorage.getItem("togg_health_skin_multi_baseline_v2")')
   else:assert p.evaluate('localStorage.getItem("togg_health_skin_multi_baseline_v2")')==legacy_raw and ref['id']==runs[0]['reference']['id']
- p.set_viewport_size({'width':720,'height':900});p.screenshot(path=str(OUT/'narrow.png'),full_page=True);assert p.evaluate('document.documentElement.scrollWidth<=innerWidth')
- p.evaluate("document.documentElement.style.zoom='2'");p.set_viewport_size({'width':1600,'height':1000});p.screenshot(path=str(OUT/'zoom200.png'),full_page=True);assert p.evaluate('document.documentElement.scrollWidth<=innerWidth')
  assert not errors,errors
- proof={'status':'PASS','controlledFixture':True,'physicalCamera':False,'poseMock':False,'qualityOverride':False,'segmentationRequests':model_requests,'legacyReferencePreserved':True,'sourcePhotoOpaque':True,'faceFraming':True,'integerScores':True,'unavailableBars':False,'native200':native200,'pageErrors':errors,'runs':runs}
+ proof={'status':'PASS','controlledFixture':True,'physicalCamera':False,'poseMock':False,'qualityOverride':False,'segmentationRequests':model_requests,'legacyReferencePreserved':True,'sourcePhotoOpaque':True,'faceFraming':True,'integerScores':True,'unavailableBars':False,'native200':native200,'localMaps':'actual fixed-scale RGB redness only; shine research gate closed','pageErrors':errors,'runs':runs}
  (OUT/'proof.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),'utf8');c.close()
  if profile:profile.cleanup()
 print('PASS: V3 source photo, actual three fixture poses, six selected meshes, responsive layout, separate references')

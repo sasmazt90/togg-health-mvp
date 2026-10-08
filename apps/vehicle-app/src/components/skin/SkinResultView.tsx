@@ -34,6 +34,10 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
   isLiveVideo = false,
   isBaseline, comparisonUnavailable, comparisonReasons, baselineTimestamp, baselineId, comparisonScope = 'single-front-v1'
 }) => {
+  const [selection,setSelection]=React.useState<{region:string;criterion:string}|null>(null);
+  React.useEffect(()=>setSelection(null),[currentRegion.id,snapshot?.photoId]);
+  const selectedCriterion=selection?.region===currentRegion.id?selection.criterion:null;
+  const selectCriterion=(criterion:string)=>setSelection(selectedCriterion===criterion?null:{region:currentRegion.id,criterion});
   return (
     <div className="bg-[#0c1424]/90 border border-slate-800/90 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 w-full">
       {/* Üst Bilgi Satırı: Başlık, Dinamik Özet Cümlesi, Yasal Rozet */}
@@ -69,6 +73,7 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
             onNext={onNext}
             videoRef={videoRef}
             isLiveVideo={isLiveVideo}
+            selectedCriterion={selectedCriterion}
           />
         </div>
 
@@ -78,6 +83,8 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
             currentRegion={currentRegion}
             onOpenModal={onOpenModal}
             onNavigateToCare={onNavigateToCare}
+            selectedCriterion={selectedCriterion}
+            onSelectCriterion={selectCriterion}
           />
         </div>
       </div>

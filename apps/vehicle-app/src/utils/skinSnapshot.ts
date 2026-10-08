@@ -13,6 +13,9 @@ export interface SkinSnapshot {
   crop:{x:number;y:number;width:number;height:number};
   /** Normalized display rectangle only; source pixels and measurement stay full-frame. */
   previewCrop?:Crop;
+  photoId?:string;
+  localMaps?:Record<string,import('./skinLocalMaps').SkinLocalMap>;
+  localAnalysis?:{loadMs:number;analysisMs:number;allocatedBytes:number};
 }
 // Anatomical indices in the unmirrored accepted MediaPipe frame. Sampling ROIs
 // remain unchanged; presentation graphs are NOT clipped to sampling ROIs.

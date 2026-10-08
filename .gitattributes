@@ -1,0 +1,2 @@
+# Preserve the exact upstream license bytes referenced by SHA256 notices.
+third-party/skin-research/*.txt -text
