@@ -60,21 +60,21 @@ with sync_playwright() as pw:
         renders=[initial];answers=[]
         for index in range(6):
             previous,current=respond(page);answers.append(previous);renders.append(current)
-            if PHASE=='after': assert abs(current['svg']['width']-120*.7**((index+1)//2))<.02,(index,current)
+            if PHASE=='after': assert abs(current['svg']['width']-120*.5**((index+1)//2))<.02,(index,current)
         smaller=target(page);assert smaller['path']==initial['path'] and smaller['transform']==initial['transform']
         capture(page,f'{PHASE}-{name}-six-correct.png');capture(page,f'{PHASE}-{name}-six-correct-full.png',True)
         page.locator('[data-letter-area]').screenshot(path=str(OUT/f'{PHASE}-{name}-letter-smaller.png'))
         if PHASE=='after':
             resized=frames(page)
             assert all(resized[frame][dimension]==layout[frame][dimension] for frame in ['camera','letter'] for dimension in ['width','height'])
-            assert abs(smaller['pathBounds']['width']/initial['pathBounds']['width']-.7**3)<.001
-            assert abs(smaller['pathBounds']['height']/initial['pathBounds']['height']-.7**3)<.001
-            assert abs(smaller['stroke']/initial['stroke']-.7**3)<.001
+            assert abs(smaller['pathBounds']['width']/initial['pathBounds']['width']-.5**3)<.001
+            assert abs(smaller['pathBounds']['height']/initial['pathBounds']['height']-.5**3)<.001
+            assert abs(smaller['stroke']/initial['stroke']-.5**3)<.001
             page.get_by_role('button',name='Duraklat',exact=True).click();page.get_by_role('button',name='Devam et',exact=True).click();active(page);assert abs(target(page)['svg']['width']-smaller['svg']['width'])<.01
             page.evaluate("probe.current.emit('tekrar')");page.wait_for_timeout(100);assert target(page)['svg']['width']==smaller['svg']['width']
-            # One wrong leaves size; two wrong undo precisely one .70 step.
+            # One wrong leaves size; two wrong undo precisely one .50 step.
             old,one=respond(page,False);answers.append(old);assert abs(one['svg']['width']-old['svg']['width'])<.01
-            old,two=respond(page,False);answers.append(old);assert abs(two['svg']['width']-old['svg']['width']/.7)<.02
+            old,two=respond(page,False);answers.append(old);assert abs(two['svg']['width']-old['svg']['width']/.5)<.02
             wrongSizes=[one['svg']['width'],two['svg']['width']]
             # Opposite answers reset the streak, not the size.
             old,c1=respond(page);answers.append(old);old,w1=respond(page,False);answers.append(old);old,c2=respond(page);answers.append(old)
@@ -88,7 +88,7 @@ with sync_playwright() as pw:
                 expect(page.get_by_role('dialog',name='Görme bildirimi')).to_be_visible();page.get_by_role('button',name='Tamam',exact=True).click()
                 record=page.evaluate("JSON.parse(localStorage.getItem('togg_health_vision_history'))[0]")
                 trials=[t for t in record['trials'] if t['valid']];assert len(trials)==len(answers)==24
-                assert record['methodVersion']=='mirror-x-then-rotate-two-up-two-down-step70-v3'
+                assert record['methodVersion']=='mirror-x-then-rotate-two-up-two-down-step50-min15-v4'
                 for t,render in zip(trials,answers):
                     assert abs(t['renderedGeometry']['viewportWidthCssPx']-render['svg']['width'])<.01
                     assert abs(t['sizePx']-render['svg']['width'])<.02

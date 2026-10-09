@@ -130,7 +130,13 @@ export default function SpokenLetterPage(){
    a.answerTimer=setTimeout(()=>{a.answerTimer=null;if(current(epoch)&&flow.current.matches(token)&&s.presentationId===id&&!failure())prompt(code);},1200);
    return;
   }
+  const before=s.adaptationState;
   if(respondToVisibleLetter(s,merged,a.evidence?.conditions||null,id,measureSymbol)){
+   // Opt-in, local diagnostic for the production score -> size -> DOM audit.
+   // No transcript/audio, storage writes or user-facing technical content.
+   try{if(sessionStorage.getItem('attune_vision_size_diagnostics')==='1'){
+    const t=s.trials[s.trials.length-1];window.dispatchEvent(new CustomEvent('attune-vision-size-diagnostic',{detail:{presentationId:t.presentationId,target:{letter:t.letter,transform:t.transform},parsed:t.answer,letterCorrect:t.letterCorrect,orientationCorrect:t.orientationCorrect,combinedCorrect:t.combinedCorrect,before,after:s.adaptationState,renderedGeometry:t.renderedGeometry}}));
+   }}catch{/* Diagnostics must never interrupt an accepted response. */}
    stopVoice();setLastHeard('');setAnswerNotice('');flow.current.presentationId='';a.partial={};a.clarifications=0;
    if(s.completed)void complete();else{stage('eye-check');inspect();}
   }
@@ -138,7 +144,14 @@ export default function SpokenLetterPage(){
  actions.current={inspect,receive,listen,stop,measure:measureSymbol,prompt,current,timing,canPresent:()=>!failure(),renderError:()=>{discardPresentation('STIMULUS_NOT_VISIBLE');stage('error','Harf alanı görünür değil. Alanı ekrana getirip tekrar deneyin.');setError('Harf gösterilemedi; yanıt istenmedi veya puanlanmadı.');}};
  const renderStage=flow.current.stage,renderToken=flow.current.token();
  // Require a painted, nonzero, unclipped stimulus before any response prompt.
- useEffect(()=>{if(renderStage!=='rendering')return;const token=renderToken,epoch=r.current.epoch;let cancelled=false,raf=0;const startedAt=performance.now();const verify=()=>{if(cancelled||!actions.current.current(epoch)||!flow.current.matches(token))return;if(actions.current.measure()&&actions.current.canPresent()){actions.current.timing('letter-rendered');actions.current.prompt();}else if(performance.now()-startedAt<2000)raf=requestAnimationFrame(verify);else actions.current.renderError();};raf=requestAnimationFrame(()=>{const box=symbol.current?.getBoundingClientRect();if(box&&(box.top<0||box.bottom>innerHeight||box.left<0||box.right>innerWidth))symbol.current!.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});raf=requestAnimationFrame(verify);});return()=>{cancelled=true;cancelAnimationFrame(raf);};},[renderStage,renderToken]);
+ useEffect(()=>{if(renderStage!=='rendering')return;const token=renderToken,epoch=r.current.epoch;let cancelled=false,raf=0;const startedAt=performance.now();const verify=()=>{if(cancelled||!actions.current.current(epoch)||!flow.current.matches(token))return;if(actions.current.measure()&&actions.current.canPresent()){actions.current.timing('letter-rendered');actions.current.prompt();}else if(performance.now()-startedAt<2000)raf=requestAnimationFrame(verify);else actions.current.renderError();};raf=requestAnimationFrame(()=>{
+  const svg=symbol.current,box=svg?.getBoundingClientRect(),header=document.querySelector<HTMLElement>('[data-cockpit-header]');
+  const visibleTop=header&&getComputedStyle(header).position==='sticky'?Math.max(0,header.getBoundingClientRect().bottom):0;
+  // A glyph can be inside the viewport but hidden behind the sticky header
+  // after using controls. Scroll it into the unobscured area, without scaling.
+  if(svg&&box&&(box.top<visibleTop||box.bottom>innerHeight||box.left<0||box.right>innerWidth)){svg.style.scrollMarginTop=`${visibleTop}px`;svg.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});}
+  raf=requestAnimationFrame(verify);
+ });return()=>{cancelled=true;cancelAnimationFrame(raf);};},[renderStage,renderToken]);
  useEffect(()=>{const state=r.current;state.mounted=true;setReady(true);const revoke=()=>{if(!isCameraAllowed()||!isMicrophoneAllowed()){actions.current.stop();setError('Kamera veya mikrofon tercihi kapalı; görev durduruldu.');}};window.addEventListener('storage',revoke);window.addEventListener('attune-privacy',revoke);return()=>{state.mounted=false;actions.current.stop();window.removeEventListener('storage',revoke);window.removeEventListener('attune-privacy',revoke);};},[]);
  useEffect(()=>{if(!isParked){actions.current.stop();setDialog(null);}},[isParked]);
  useEffect(()=>{if(video.current&&r.current.stream&&video.current.srcObject!==r.current.stream){video.current.srcObject=r.current.stream;void video.current.play().catch(()=>{});}});

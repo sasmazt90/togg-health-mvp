@@ -1,6 +1,6 @@
 /** Target-independent Turkish parsing and a nonclinical letter task. */
 export const LETTER_PROTOCOL='spoken-letter-v2';
-export const LETTER_METHOD='mirror-x-then-rotate-two-up-two-down-step70-v3';
+export const LETTER_METHOD='mirror-x-then-rotate-two-up-two-down-step50-min15-v4';
 export type Orientation='upright'|'right'|'down'|'left'|'mirror';
 export type Letter='A'|'B'|'E'|'F'|'P'|'R';
 export type Eye='RIGHT'|'LEFT';
@@ -111,8 +111,8 @@ export function letterConditionFailure(c:LetterConditions|null,eye:Eye|null,now:
  return opened.state==='open'&&(closed.state==='closed'||closed.state==='covered')?null:'eye';
 }
 
-// Product adaptation: two full correct shrink to 70%; two errors undo one step.
-export const LETTER_RULES={startPx:120,minPx:18,maxPx:180,shrinkRatio:.70,perEye:12,maxValid:24} as const;
+// Product adaptation: two full correct halve each dimension; two errors undo one step.
+export const LETTER_RULES={startPx:120,minPx:15,maxPx:180,shrinkRatio:.50,perEye:12,maxValid:24} as const;
 export interface RenderedSymbolGeometry {viewportWidthCssPx:number;viewportHeightCssPx:number;pathWidthCssPx:number;pathHeightCssPx:number;strokeWidthCssPx:number;measuredAt:number;method:'dom-svg-css-pixels'}
 export interface LetterTrial {
  id:string;presentationId:string;sequence:number;protocolVersion:typeof LETTER_PROTOCOL|typeof LEGACY_LETTER_PROTOCOL;transform?:LetterTransform;methodVersion?:string;eye:Eye;letter:Letter;orientation:Orientation;sizePx:number;
@@ -148,6 +148,7 @@ export class SpokenLetterSession {
  get completed(){return this.trials.length>=LETTER_RULES.maxValid;}
  get eye():Eye{return this.trials.length<LETTER_RULES.perEye?'RIGHT':'LEFT';}
  get ledger(){return [...this.trials,...this.invalidTrials].sort((a,b)=>a.sequence-b.sequence);}
+ get adaptationState(){return {correctStreak:this.streak,wrongStreak:this.wrongStreak,sizePx:this.sizePx};}
  beginResponse(now=performance.now()){if(this.presentationId&&!this.timing){this.presentedAt=now;this.timing=true;}}
  suspendResponse(now=performance.now()){if(this.timing){this.elapsed+=Math.max(0,now-this.presentedAt);this.timing=false;}}
  present(now=performance.now()){
