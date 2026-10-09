@@ -1,5 +1,5 @@
 'use client';
-import { HEALTH_MODULES } from '../utils/healthModules';
+import { HEALTH_MODULES, HEALTH_MODULE_IDS } from '../utils/healthModules';
 
 import { HealthHistoryOverview } from '../components/HealthHistoryOverview';
 import { InformationButton } from '../components/InformationButton';
@@ -34,7 +34,7 @@ export default function CockpitDashboard() {
         <div className="absolute -bottom-12 -left-12 w-64 h-64 bg-cyan-900/20 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-3 max-w-2xl">
+          <div className="space-y-3 min-w-0 max-w-2xl">
             <div className="flex items-center gap-2 text-[11px] font-semibold text-togg-turquoise tracking-wider uppercase">
               <span className="w-2 h-2 rounded-full bg-togg-turquoise animate-pulse" />
               <span>Kişisel Önleyici Sağlık Kokpiti</span>
@@ -51,26 +51,23 @@ export default function CockpitDashboard() {
                 <span className="text-togg-turquoise">.more</span>
               </h1><InformationButton title="Attune kokpiti"><p>Kontroller yalnız park halinde kullanılabilir. Bu uygulama klinik tanı sağlamaz. Araç durumu simülasyondur; gerçek araç, rota veya donanım bağlantısı yoktur. Gerçek kayıt yoksa sonuç ve geçmiş üretilmez.</p></InformationButton></div>
               <p className="text-sm md:text-base text-slate-300 leading-relaxed">
-                Park halinde görme, cilt ve iyi oluş kontrollerinizi başlatın.
+                Park halinde göz, cilt, diş, işitme ve ruh sağlığı değerlendirmelerinizi başlatın.
               </p>
             </div>
 
             {/* Modül Kategorileri Bandı */}
             <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-400">
-              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
-                Görme
-              </span>
+              {HEALTH_MODULE_IDS.map((id, index) => (
+                <React.Fragment key={id}>
+                  {index > 0 && <span className="text-slate-600">•</span>}
+                  <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
+                    {HEALTH_MODULES[id].name}
+                  </span>
+                </React.Fragment>
+              ))}
               <span className="text-slate-600">•</span>
               <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
-                Cilt
-              </span>
-              <span className="text-slate-600">•</span>
-              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
-                {HEALTH_MODULES.mental.name}
-              </span>
-              <span className="text-slate-600">•</span>
-              <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
-                Uzman Erişimi
+                Uzman & Randevu
               </span>
             </div>
           </div>

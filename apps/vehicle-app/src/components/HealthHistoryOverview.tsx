@@ -43,7 +43,7 @@ function HistoryChart({ series, kind }: { series: HistorySeries; kind: 'line' | 
       </g>)}
     </svg>
     {active && <div id={tooltipId} role="tooltip" className="pointer-events-none absolute left-3 right-3 top-3 z-10 max-w-md rounded-xl border border-togg-turquoise/40 bg-slate-950/95 p-3 text-sm shadow-xl">
-      <p className="text-slate-400">{datetime(active.time)}</p><p>{series.label}{series.regionLabel && ` · ${series.regionLabel}`}: <strong>{formatHistoryValue(active.value!, series.unit)}</strong></p><p className="text-xs text-slate-400">{[active.detail, series.source, series.method].filter(Boolean).join(' · ')}</p>
+      <p className="text-slate-400">{datetime(active.time)}</p><p>{series.label}{series.regionLabel && ` · ${series.regionLabel}`}: <strong>{formatHistoryValue(active.value!, series.unit)}</strong></p>
     </div>}
     </div>
     <p className="text-xs text-slate-400">Ayrıntı için bir noktaya dokunun veya klavyeyle odaklanın.{valid.length === 1 && ' Tek ölçüm değişim eğilimi göstermez.'}</p>
