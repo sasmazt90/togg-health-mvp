@@ -31,8 +31,9 @@ export function eyeOnAnatomicalSide(side:Eye,x:number,y:number,bridge:{x:number;
 }
 export function sourceFaceFramed(minX:number,maxX:number,minY:number,maxY:number,eyePixelsAvailable:boolean){return minX>.005&&maxX<.995&&minY>.005&&maxY<.995&&eyePixelsAvailable;}
 const eyeIds={RIGHT:[33,160,158,133,153,144],LEFT:[362,385,387,263,373,380]};
-const anchors=[10,168,1,4,2,17,152,172,397,234,454];
-const pairs=[[10,152],[10,1],[1,152],[168,17],[4,17],[234,454],[172,397]];
+const anchors=[10,168,1,4,2,234,454,127,356,93,323];
+// Forehead, nose bridge and temples; exclude mouth/chin distances.
+const pairs=[[10,168],[10,1],[168,2],[234,454],[127,356],[93,323]];
 type Patch={gray:number[];rgb:number[];mean:number;gradient:number};
 type Box={x:number;y:number;width:number;height:number};
 const median=(v:number[])=>[...v].sort((a,b)=>a-b)[Math.floor(v.length/2)];
@@ -88,7 +89,7 @@ export interface VisionEvidence {alignment:FaceAlignment;quality:ReturnType<type
  * close. No image, identity embedding or absolute camera distance is stored. */
 export class VisionTracker {
  private baseline:Record<Eye,{ear:number;blink:number;patch:Patch;wide:Patch}>|null=null;
- private baselinePairs:number[]|null=null;private samples:{ears:number[];blinks:number[];narrow:Patch[];wide:Patch[];lengths:number[]}[]=[];private baselineSince=0;private lastFrame=0;
+ private baselinePairs:number[]|null=null;private baselinePoseHeight=0;private baselineTempleWidth=0;private samples:{ears:number[];blinks:number[];narrow:Patch[];wide:Patch[];lengths:number[]}[]=[];private baselineSince=0;private lastFrame=0;
  private eyeHold={RIGHT:new SustainedEyeState(),LEFT:new SustainedEyeState()};
  private distance:'learning'|'stable'|'near'|'far'|'unknown'='learning';private distanceHold=new HeadDistanceHysteresis();
  private lastPoints:NormalizedLandmark[]|null=null;private trustedPatches:{id:number;image:Patch;box:Box}[]=[];private trackedScaleReliable=false;
@@ -114,7 +115,10 @@ export class VisionTracker {
   if(!p){this.eyeHold.RIGHT.update('uncertain',now);this.eyeHold.LEFT.update('uncertain',now);this.distanceHold.update(null,now);}
   if(!p){const a:FaceAlignment={faceDetected:false,isMediaPipeActive:true,faceCount:model.landmarks.length,box:undefined,yaw:0,pitch:0,roll:0,scaleRatio:0,isAligned:false,guidanceTextTr:'Yüzünüzü kamera görüntüsünde tutun.'};return {alignment:a,quality:SkinAnalyzer.checkQuality(ctx,w,h,false),conditions:{observedAt:now,cameraLive:true,modelActive:true,faceCount:model.landmarks.length,qualityValid:false,positionValid:false,relativeScaleChange:null,right:absent,left:absent,distancePolicy:'head-anchors-hysteresis-v1',distanceState:'unknown',blocker:'face'},distanceSamples:this.samples.length,distanceRatios:[],inferenceMs:model.inferenceMs,width:w,height:h};}
   const xs=p.slice(0,468).map(v=>v.x),ys=p.slice(0,468).map(v=>v.y),minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-  const yaw=(p[1].x-(p[33].x+p[263].x)/2)/Math.max(.01,Math.abs(p[33].x-p[263].x)),pitch=(p[1].y-p[10].y)/Math.max(.01,p[152].y-p[10].y),roll=Math.atan2((p[263].y-p[33].y)*h,(p[263].x-p[33].x)*w);
+  const templeWidth=Math.hypot((p[454].x-p[234].x)*w,(p[454].y-p[234].y)*h);
+  // After neutral preparation, jaw opening cannot change the pitch denominator.
+  const poseHeight=this.baselinePoseHeight?this.baselinePoseHeight*templeWidth/this.baselineTempleWidth:p[152].y-p[10].y;
+  const yaw=(p[1].x-(p[33].x+p[263].x)/2)/Math.max(.01,Math.abs(p[33].x-p[263].x)),pitch=(p[1].y-p[10].y)/Math.max(.01,poseHeight),roll=Math.atan2((p[454].y-p[234].y)*h,(p[454].x-p[234].x)*w);
   const alignment:FaceAlignment={faceDetected:true,isMediaPipeActive:true,faceCount:1,box:{x:minX*w,y:minY*h,width:(maxX-minX)*w,height:(maxY-minY)*h},yaw,pitch,roll,scaleRatio:maxX-minX,isAligned:true,guidanceTextTr:'Yüz izleniyor',landmarks:p};
   const quality=visionFrameQuality(ctx,w,h,alignment,eye);
   const measurements=(['RIGHT','LEFT'] as Eye[]).map(side=>{const ids=eyeIds[side],q=ids.map(i=>p![i]),dist=(i:number,j:number)=>Math.hypot((q[i].x-q[j].x)*w,(q[i].y-q[j].y)*h);return {anatomicalSideValid:eyeOnAnatomicalSide(side,(q[0].x+q[3].x)/2,(q[0].y+q[3].y)/2,p![168],p![2]),ear:(dist(1,5)+dist(2,4))/(2*Math.max(1,dist(0,3))),narrow:patch(ctx,bounds(p!,ids,w,h,.08)),wide:patch(ctx,bounds(p!,ids,w,h,.40)),box:bounds(p!,ids,w,h,.12),blink:side==='RIGHT'?model.blinkRight:model.blinkLeft};});
@@ -128,7 +132,7 @@ export class VisionTracker {
   // even when the face model predicts plausible eyelid landmarks behind it.
   if(!this.baseline&&native&&poseValid&&framed&&quality.isValid&&measurements.every(v=>v.anatomicalSideValid&&v.narrow&&v.wide&&baselineEyeVisible(v.ear,v.blink,handCoverage(model.hands,v.box,w,h)))){
    if(!this.baselineSince)this.baselineSince=now;this.samples.push({ears:measurements.map(v=>v.ear),blinks:measurements.map(v=>v.blink!),narrow:measurements.map(v=>v.narrow!),wide:measurements.map(v=>v.wide!),lengths});
-   if(now-this.baselineSince>=VISION_TRACKING_RULES.baselineMs&&this.samples.length>=6){this.baselinePairs=lengths.map((_,i)=>median(this.samples.map(s=>s.lengths[i])));const sample=this.samples[Math.floor(this.samples.length/2)];this.baseline={RIGHT:{ear:median(this.samples.map(s=>s.ears[0])),blink:median(this.samples.map(s=>s.blinks[0])),patch:sample.narrow[0],wide:sample.wide[0]},LEFT:{ear:median(this.samples.map(s=>s.ears[1])),blink:median(this.samples.map(s=>s.blinks[1])),patch:sample.narrow[1],wide:sample.wide[1]}};this.distance='stable';}
+   if(now-this.baselineSince>=VISION_TRACKING_RULES.baselineMs&&this.samples.length>=6){this.baselinePoseHeight=p![152].y-p![10].y;this.baselineTempleWidth=templeWidth;this.baselinePairs=lengths.map((_,i)=>median(this.samples.map(s=>s.lengths[i])));const sample=this.samples[Math.floor(this.samples.length/2)];this.baseline={RIGHT:{ear:median(this.samples.map(s=>s.ears[0])),blink:median(this.samples.map(s=>s.blinks[0])),patch:sample.narrow[0],wide:sample.wide[0]},LEFT:{ear:median(this.samples.map(s=>s.ears[1])),blink:median(this.samples.map(s=>s.blinks[1])),patch:sample.narrow[1],wide:sample.wide[1]}};this.distance='stable';}
   }else if(!this.baseline){this.baselineSince=0;this.samples=[];}
   const ratios=this.baselinePairs?lengths.map((v,i)=>v/this.baselinePairs![i]-1):[];
   const reliableRatios=ratios.filter((_,i)=>!model.hands.some(hand=>pairs[i].some(id=>{const b={x:p![id].x*w-10,y:p![id].y*h-10,width:20,height:20};return hand.some(v=>inside(v,b,w,h));})));

@@ -25,20 +25,20 @@ const c={observedAt:1000,cameraLive:true,modelActive:true,faceCount:1,qualityVal
  assert result.returncode==0,result.stdout+result.stderr
 
 @pytest.mark.parametrize('text,expected',[
- ('ters E',{'letter':'E','clarify':'reverse'}),('düz P',{'letter':'P','orientation':'upright'}),
- ('sağa yatmış A',{'letter':'A','orientation':'right'}),('sola yatmış B',{'letter':'B','orientation':'left'}),
- ('Rize baş aşağı',{'letter':'R','orientation':'down'}),('Edirne aynalı',{'letter':'E','orientation':'mirror'}),
+ ('ters E',{'letter':'E','clarify':'reverse'}),('düz P',{'letter':'P','rotation':0}),
+ ('sağa yatmış A',{'letter':'A','rotation':90}),('sola yatmış B',{'letter':'B','rotation':270}),
+ ('Rize baş aşağı',{'letter':'R','rotation':180}),('Edirne aynalı',{'letter':'E','mirrored':True}),
  ('göremiyorum',{'command':'not-visible'}),('tekrar',{'command':'repeat'}),('duraklat',{'command':'pause'}),('devam et',{'command':'resume'}),('bitir',{'command':'finish'}),
- ('düz E veya F',{'orientation':'upright','clarify':'letter'}),('E',{'letter':'E','clarify':'orientation'})])
+ ('düz E veya F',{'rotation':0,'ambiguous':'letter','clarify':'letter'}),('E',{'letter':'E','clarify':'orientation'})])
 def test_target_independent_turkish_parser(tmp_path,text,expected):
  run(tmp_path,'assert.deepEqual(JSON.parse(JSON.stringify(V.parseLetterAnswer('+json.dumps(text)+'))),'+json.dumps(expected)+');')
 
 def test_symmetry_real_errors_and_not_visible_adaptation(tmp_path):
  run(tmp_path,"""
 assert(V.equivalentOrientation('A','upright','mirror'));assert(!V.equivalentOrientation('A','left','right'));assert(!V.equivalentOrientation('E','upright','mirror'));
-const s=new V.SpokenLetterSession();s.present();let size=s.sizePx;const answer=()=>({letter:s.letter,orientation:s.orientation});
+const s=new V.SpokenLetterSession();s.present();let size=s.sizePx;const answer=()=>({letter:s.letter,rotation:s.transform.rotation,mirrored:s.transform.mirrored});
 assert(s.respond(answer(),c,1100,s.presentationId));assert.equal(s.sizePx,size);s.present();assert(s.respond(answer(),c,1100,s.presentationId));assert(s.sizePx<size);
-size=s.sizePx;s.present();assert(s.respond({letter:s.letter==='E'?'P':'E',orientation:s.orientation},c,1100,s.presentationId));assert(s.sizePx>size);
+size=s.sizePx;s.present();assert(s.respond({letter:s.letter==='E'?'P':'E',orientation:s.orientation},c,1100,s.presentationId));assert.equal(s.sizePx,size);
 size=s.sizePx;s.present();assert(s.respond({command:'not-visible'},c,1100,s.presentationId));assert(s.sizePx>size);assert(!s.trials.at(-1).correct&&s.trials.at(-1).notVisible);
 for(let i=s.trials.length;i<24;i++){s.present();const cc={...c,...(s.eye==='LEFT'?{right:closed,left:open}:{})};assert(s.respond(answer(),cc,1100,s.presentationId));assert(!s.respond(answer(),cc,1100,s.presentationId));}
 assert(s.completed);assert.equal(s.trials.filter(t=>t.eye==='RIGHT').length,12);assert.equal(s.trials.filter(t=>t.eye==='LEFT').length,12);assert(!('logMAR' in s));
@@ -81,13 +81,13 @@ assert.equal(captures,0);assert(snapshot.visualError);assert.equal(snapshot.data
 
 def test_component_metrics_log_steps_and_recomputation(tmp_path):
  run(tmp_path,"""
-const s=new V.SpokenLetterSession();s.present(1000);s.beginResponse(1000);s.letter='P';s.orientation='right';const size=s.sizePx;
+const s=new V.SpokenLetterSession();s.present(1000);s.beginResponse(1000);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');const size=s.sizePx;
 assert(s.respond({letter:'P',orientation:'left'},c,1100,s.presentationId));assert.equal(s.sizePx,size);assert.deepEqual(V.scoreLetterTrial(s.trials[0]),{letterCorrect:true,orientationCorrect:false,combinedCorrect:false});
-s.present(1100);s.letter='P';s.orientation='right';assert(s.respond({letter:'P',orientation:'down'},c,1150,s.presentationId));assert(Math.abs(s.sizePx-size/10**.1)<1e-10);
-s.present(1200);s.letter='P';s.orientation='right';assert(s.respond({letter:'F',orientation:'right'},c,1300,s.presentationId));assert.deepEqual(V.scoreLetterTrial(s.trials[2]),{letterCorrect:false,orientationCorrect:true,combinedCorrect:false});
+s.present(1100);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');assert(s.respond({letter:'P',orientation:'down'},c,1150,s.presentationId));assert(Math.abs(s.sizePx-size*10**.1)<1e-10);
+s.present(1200);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');assert(s.respond({letter:'F',orientation:'right'},c,1300,s.presentationId));assert.deepEqual(V.scoreLetterTrial(s.trials[2]),{letterCorrect:false,orientationCorrect:true,combinedCorrect:false});
 s.present(1300);assert(s.respond({command:'not-visible'},c,1400,s.presentationId));
 const rows=V.performanceBySize(s.ledger,'RIGHT');assert.equal(rows.reduce((n,r)=>n+r.letter.total,0),4);assert.equal(rows.reduce((n,r)=>n+r.orientation.correct,0),1);assert.equal(rows.reduce((n,r)=>n+r.combined.correct,0),0);
-s.trials[0].letterCorrect=false;s.trials[0].correct=true;assert.equal(V.performanceBySize(s.ledger,'RIGHT').find(r=>r.widthCssPx===120).letter.correct,2);
+s.trials[0].letterCorrect=false;s.trials[0].correct=true;assert.equal(V.performanceForEye(s.ledger,'RIGHT').letter.correct,2);
 assert.equal(V.performanceBySize([], 'LEFT').length,0);assert(!('threshold' in s));assert(!('acuity' in s));assert.equal(s.trials[0].responseTimeMs,100);
 assert(s.trials.every(t=>t.protocolVersion===V.LETTER_PROTOCOL&&t.id&&t.presentationId&&t.distanceEvidence.absoluteDistanceCm===null));
 """)

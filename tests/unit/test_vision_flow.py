@@ -37,7 +37,7 @@ def test_eye_instruction_cannot_request_missing_stimulus():
  for eye in ['right','left']:
   assert 'Harfi' not in vision_speech.PROMPTS[eye]
   assert 'veya örtün' in vision_speech.PROMPTS[eye]
- assert 'Harfi ve yönünü söyleyin' in vision_speech.PROMPTS['repeat']
+ assert 'harfi ve yönünü söyleyin' in vision_speech.PROMPTS['repeat']
 
 def test_blink_hold_and_distance_hysteresis_contract(tmp_path):
  run(tmp_path,"""
@@ -114,15 +114,15 @@ assert(!T.sourceFaceFramed(.4,.6,.4,1.01,true));
 
 def test_user_reported_phrase_is_valid_without_target_fallback(tmp_path):
  run(tmp_path,"""
-assert.deepEqual(V.parseLetterAnswer('sola yatmış P'),{letter:'P',orientation:'left'});
-assert.deepEqual(V.parseLetterAnswer('P sola yatmış'),{letter:'P',orientation:'left'});
-assert.deepEqual(V.parseLetterAnswer('baş aşağı R'),{letter:'R',orientation:'down'});
-assert.deepEqual(V.parseLetterAnswer('baş aşağı Rize'),{letter:'R',orientation:'down'});
+assert.deepEqual(V.parseLetterAnswer('sola yatmış P'),{letter:'P',rotation:270});
+assert.deepEqual(V.parseLetterAnswer('P sola yatmış'),{letter:'P',rotation:270});
+assert.deepEqual(V.parseLetterAnswer('baş aşağı R'),{letter:'R',rotation:180});
+assert.deepEqual(V.parseLetterAnswer('baş aşağı Rize'),{letter:'R',rotation:180});
 """)
 
 def test_instruction_echo_does_not_become_an_answer_or_repeat(tmp_path):
  run(tmp_path,"""
-for(const text of ['Harf alanına bakın. Harfi ve yönünü söyleyin; sırası önemli değil.','Harfi şehir adıyla kodlayarak söyleyin; yönünü ekleyebilirsiniz.','Hangi yöne dönük olduğunu da söyler misiniz?','Ters derken baş aşağı mı, aynalı mı demek istediniz?','düz baş aşağı sağa veya sola yatmış'])assert(V.isLetterInstructionEcho(text));
+for(const text of Object.values(V.LETTER_INSTRUCTIONS))assert(V.isLetterInstructionEcho(text));
 for(const text of ['P sola yatmış','sola yatmış P','sola yatmış','tekrar','duraklat','göremiyorum','bitir','F baş aşağı','baş aşağı R','baş aşağı Rize'])assert(!V.isLetterInstructionEcho(text));
 """)
 
@@ -141,7 +141,7 @@ def test_native_letter_direction_fragments_join_without_target_or_tts_time(tmp_p
  run(tmp_path,"""
 for(const fragments of [['R','baş aşağı'],['baş aşağı','R'],['sola yatmış','P'],['P','sola yatmış']]){
 const s=new V.SpokenLetterSession();s.present(1000);let partial={};for(const text of fragments)partial=V.mergeLetterAnswer(partial,V.parseLetterAnswer(text));
-assert(partial.letter&&partial.orientation&&!partial.clarify);
+assert(partial.letter&&V.answerTransform(partial)&&!partial.clarify);
 // No response timer has started: an answer during TTS remains admissible,
 // with the speaking duration excluded, and only one trial advances.
 assert(V.respondToVisibleLetter(s,partial,c,s.presentationId,()=>({viewportWidthCssPx:120,viewportHeightCssPx:120,pathWidthCssPx:100,pathHeightCssPx:100,strokeWidthCssPx:10,measuredAt:1099,method:'dom-svg-css-pixels'}),()=>1100));

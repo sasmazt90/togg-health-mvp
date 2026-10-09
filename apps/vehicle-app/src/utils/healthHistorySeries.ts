@@ -1,7 +1,7 @@
 /** Read-only presentation adapters. They never persist or change measurement precision. */
 import type { HealthRecord } from './healthRecords';
 import { HEALTH_MODULE_IDS, type HealthModule } from './healthModules';
-import { performanceBySize, type LetterTrial } from './spokenVision';
+import { performanceBySize, isLetterProtocol, type LetterTrial } from './spokenVision';
 import { SIGN_LABELS } from './skinIndicators';
 import { skinDisplayKind } from './skinPresentation';
 
@@ -29,7 +29,7 @@ export function moduleOverview(module: HealthModule, records: HealthRecord[]): {
   const last = rows[0];
   if (!last) return { date: null, text: 'Kayıt yok', count: 0 };
   let text: string;
-  if (module === 'vision') text = last.protocolVersion === 'spoken-letter-v1' ? `${Array.isArray(last.trials) ? last.trials.filter((t: LetterTrial) => t.valid).length + ' geçerli harf/yön yanıtı' : 'Harf/yön oturumu'}` : 'Önceki görme protokolü';
+  if (module === 'vision') text = isLetterProtocol(last.protocolVersion) ? `${Array.isArray(last.trials) ? last.trials.filter((t: LetterTrial) => t.valid).length + ' geçerli harf/yön yanıtı' : 'Harf/yön oturumu'}` : 'Önceki görme protokolü';
   else if (module === 'skin') text = last.analysisMode === 'instant-appearance-v2' ? 'Anlık bölgesel görünüm' : 'Önceki cilt yöntemi';
   else if (module === 'dental') text = `${last.sourceType === 'upload' ? 'Yüklenen fotoğraf' : last.sourceType === 'camera' ? 'Kamera' : 'Kaynak kaydedilmemiş'} · ${Array.isArray(last.measurements) ? last.measurements.length + ' görünüm' : 'ölçüm ayrıntıları'}`;
   else if (module === 'hearing') text = Array.isArray(last.thresholds) ? 'Saf ses · dijital eşikler' : number(last.value) !== null ? `Sayı/gürültü · ${formatHistoryValue(last.value, 'dB SNR')}` : 'Sayı/gürültü · eşik ölçülemedi';
@@ -46,7 +46,7 @@ export function buildHistorySeries(module: HealthModule, records: HealthRecord[]
   };
   for (const r of rows) {
     if (module === 'vision') {
-      if (r.protocolVersion === 'spoken-letter-v1' && Array.isArray(r.trials)) {
+      if (isLetterProtocol(r.protocolVersion) && Array.isArray(r.trials)) {
         for (const eye of ['RIGHT', 'LEFT'] as const) for (const group of performanceBySize(r.trials, eye)) {
           const trials = r.trials.filter((t: LetterTrial) => t.valid && t.eye === eye && t.renderedGeometry?.viewportWidthCssPx === group.widthCssPx && t.renderedGeometry?.viewportHeightCssPx === group.heightCssPx);
           // Split sessions further if source symbol stroke/path or screen conditions differ.
@@ -54,9 +54,9 @@ export function buildHistorySeries(module: HealthModule, records: HealthRecord[]
           for (const shape of geometries) {
             const subset = trials.filter((t: LetterTrial) => JSON.stringify([t.renderedGeometry?.pathWidthCssPx, t.renderedGeometry?.pathHeightCssPx, t.renderedGeometry?.strokeWidthCssPx]) === shape);
             const scoped = performanceBySize(subset, eye)[0];
-            for (const [criterion, label] of [['letter', 'Harf doğruluğu'], ['orientation', 'Yön doğruluğu'], ['combined', 'Birleşik doğruluk']] as const) {
-              const a = scoped[criterion];
-              add(r, { criterion, label, region: eye, regionLabel: REGION_LABELS[eye], unit: '%', method: `Sesli harf · ${group.widthCssPx.toFixed(1)} × ${group.heightCssPx.toFixed(1)} CSS px`, source: '' }, [r.protocolVersion, group.size, shape, r.deviceContext || { unknown: r.id }, r.distanceMethod || 'unknown'], a.percentage, eye + group.size + shape + criterion, `${a.correct}/${a.total} doğru/geçerli yanıt`, a);
+            for (const [criterion, label] of [['letter', 'Harf tanımlama skoru'], ['orientation', 'Harf yönü skoru'], ['average', 'Toplam ortalama skor']] as const) {
+              const a = criterion === 'average' ? {correct: 0, total: scoped.letter.total, percentage: scoped.average} : scoped[criterion];
+              add(r, { criterion, label, region: eye, regionLabel: REGION_LABELS[eye], unit: '%', method: `Sesli harf · ${group.widthCssPx.toFixed(1)} × ${group.heightCssPx.toFixed(1)} CSS px`, source: '' }, [r.protocolVersion, r.methodVersion || r.protocolVersion, group.size, shape, r.deviceContext || { unknown: r.id }, r.distanceMethod || 'unknown'], a.percentage, eye + group.size + shape + criterion, criterion === 'average' ? '' : `${a.correct}/${a.total} doğru/geçerli yanıt`, criterion === 'average' ? undefined : a);
             }
           }
         }

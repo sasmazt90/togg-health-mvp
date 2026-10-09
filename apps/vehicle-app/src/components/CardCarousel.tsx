@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /** One row at every width; navigation moves the actual scroll container. */
-export function CardCarousel({ label, items }: { label: string; items: { id: string; content: ReactNode }[] }) {
+export function CardCarousel({ label, items, itemWidthClassName = 'basis-[90%] sm:basis-72' }: { label: string; items: { id: string; content: ReactNode }[]; itemWidthClassName?: string }) {
   const id = useId(), track = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ previous: false, next: false, first: 1 });
   const update = useCallback(() => {
@@ -27,7 +27,7 @@ export function CardCarousel({ label, items }: { label: string; items: { id: str
   return <section aria-label={label} aria-roledescription="karusel" className="min-w-0 space-y-3" data-card-carousel>
     <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-slate-300">{label}</h2><div className="flex gap-2"><button type="button" className={arrow} aria-label="Önceki kartlar" aria-controls={id} disabled={!position.previous} onClick={() => move(-1)}><ChevronLeft aria-hidden="true" className="h-5 w-5"/></button><button type="button" className={arrow} aria-label="Sonraki kartlar" aria-controls={id} disabled={!position.next} onClick={() => move(1)}><ChevronRight aria-hidden="true" className="h-5 w-5"/></button></div></div>
     <div ref={track} id={id} role="list" onScroll={update} className="flex items-stretch gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory scroll-p-1 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {items.map((item, index) => <div key={item.id} role="listitem" aria-label={`${index + 1} / ${items.length}`} className="flex min-w-0 shrink-0 basis-[90%] snap-start sm:basis-72">{item.content}</div>)}
+      {items.map((item, index) => <div key={item.id} role="listitem" aria-label={`${index + 1} / ${items.length}`} className={`flex min-w-0 shrink-0 snap-start ${itemWidthClassName}`}>{item.content}</div>)}
     </div>
     <span className="sr-only" role="status" aria-live="polite">İlk görünür kart: {position.first} / {items.length}</span>
   </section>;

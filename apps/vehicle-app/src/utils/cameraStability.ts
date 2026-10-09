@@ -32,3 +32,22 @@ export class SourceMotion {
   return dt>=.3 && scale>0 && Math.hypot(x-first.x,y-first.y)/(scale*dt)>CAMERA_STABILITY.motionFaceWidthsPerSecond;
  }
 }
+
+/** Mouth-independent, fixed-aspect vision crop. Only raw upper-head anchors
+ * affect the display. The legacy skin crop and its stability stay unchanged. */
+export function visionCameraCrop(points:{x:number;y:number}[]|undefined,sourceRatio:number):Crop {
+ if(!points||points.length<468)return {x:0,y:0,width:1,height:1};
+ const width=Math.min(1,Math.max(.18,Math.abs(points[454].x-points[234].x)*1.7));
+ const height=Math.min(1,width*sourceRatio/(4/3)),fittedWidth=Math.min(1,height*(4/3)/sourceRatio);
+ const cx=(points[234].x+points[454].x)/2,cy=(points[10].y+points[1].y)/2+width*sourceRatio*.12;
+ return {x:Math.max(0,Math.min(1-fittedWidth,cx-fittedWidth/2)),y:Math.max(0,Math.min(1-height,cy-height/2)),width:fittedWidth,height};
+}
+export class VisionPreviewCrop {
+ private value:Crop|null=null;private at=0;
+ update(target:Crop,at:number):Crop {
+  if(!this.value){this.value={...target};this.at=at;return this.value;}
+  const dt=Math.min(250,Math.max(1,at-this.at)),alpha=1-Math.exp(-dt/300);this.at=at;
+  const value={...this.value};for(const key of ['x','y','width','height'] as const)if(Math.abs(target[key]-value[key])>(key==='x'||key==='y'?.01:value[key]*.03))value[key]+=alpha*(target[key]-value[key]);
+  this.value=value;return value;
+ }
+}

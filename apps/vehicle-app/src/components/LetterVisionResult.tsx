@@ -1,15 +1,21 @@
- 'use client';
+'use client';
 import Link from 'next/link';
 import {careHref} from '../utils/healthModules';
-import { LetterResult, LETTER_RULES, performanceBySize, Accuracy } from '../utils/spokenVision';
-import { InformationButton } from './InformationButton';
-function value(a:Accuracy){return a.percentage===null?'Yeterli yanıt yok':`${a.correct}/${a.total} · %${Math.round(a.percentage)}`;}
-export function LetterVisionResult({result}:{result:LetterResult}){
- return <section data-letter-result className="space-y-4"><h2 className="font-bold text-xl">Harf tanıma sonucu</h2><p>Her göz ve gerçekten gösterilen boyut için harf, yön ve birleşik doğruluk ayrı hesaplanır. Bu sonuç klinik eşik veya göz sağlığı yüzdesi değildir.</p>
-  {(['RIGHT','LEFT'] as const).map(eye=>{const rows=performanceBySize(result.trials,eye);const invalid=result.trials.filter(t=>t.eye===eye&&!t.valid);const reasons=[...new Set(invalid.map(t=>t.invalidReason))];return <div key={eye} className="rounded-xl bg-slate-950 p-4 space-y-3"><h3 className="font-bold">{eye==='RIGHT'?'Sağ göz':'Sol göz'}</h3>
-   {rows.length?<div className="overflow-x-auto"><table className="w-full text-sm text-left"><caption className="text-left pb-2">Ölçülen SVG boyutu: CSS pikseli; fiziksel boyut değildir.</caption><thead><tr><th className="pr-3">Boyut</th><th className="pr-3">Harf</th><th className="pr-3">Yön</th><th>Birleşik</th></tr></thead><tbody>{rows.map(row=><tr key={row.size}><td className="py-3 pr-3">{row.widthCssPx.toFixed(1)} × {row.heightCssPx.toFixed(1)}</td><td className="pr-3">{value(row.letter)}</td><td className="pr-3">{value(row.orientation)}</td><td>{value(row.combined)}</td></tr>)}</tbody></table></div>:<p>Yeterli yanıt yok</p>}
-   <p>“Göremiyorum”: {result.trials.filter(t=>t.eye===eye&&t.valid&&t.notVisible).length} geçerli tanıma başarısızlığı. Teknik veya çözümlenemeyen yanıt: {invalid.length} değerlendirme dışı.</p>{reasons.map(reason=><p key={reason}>{({camera:'Kamera / güncel görüntü',position:'Konum değişimi',eye:'Göz koşulu',uncertain:'Belirsiz göz kanıtı',ASR_UNCLEAR:'Konuşma çözümlenemedi',ASR_LOW_CONFIDENCE:'Konuşma güveni düşük'} as Record<string,string>)[reason||'']||reason}: {invalid.filter(t=>t.invalidReason===reason).length}</p>)}
-  </div>;})}
-  <InformationButton title="Harf görevinin anlamı"><p>Harf doğruluğu doğru harf/geçerli yanıt; yön doğruluğu ayırt edilebilir hedef yönüne uygun yanıt/geçerli yön denemesi; birleşik doğruluk ikisi doğru/geçerli iki bileşenli denemedir. Simetrik yönler eşdeğer kabul edilir. Göremiyorum bu paydalara yanlış olarak katılır; teknik hatalar ve çözümlenemeyen konuşma katılmaz.</p><p>İki ardışık doğru harf boyutu 10^0,1 (yaklaşık 1,259) çarpanıyla küçültür; bir yanlış harf veya göremiyorum büyütür. Yalnız yön hatası boyutu artırmaz. Başlangıç {LETTER_RULES.startPx}, alt {LETTER_RULES.minPx}, üst {LETTER_RULES.maxPx} CSS pikselidir. Göz başına {LETTER_RULES.perEye}, toplam {LETTER_RULES.maxValid} geçerli deneme bir UX sınırıdır. Levitt’in transformed up-down yaklaşımı ve 0,1 log boyut adımı bu tasarımı açıklar; döndürülmüş harf görevi klinik ETDRS testi değildir. Tek doğru yanıttan eşik üretilmez.</p><p>Fiziksel ekran ölçeği ve göz-ekran mesafesi doğrulanmadı. Kesin santimetre, görme açısı, logMAR, Snellen veya göz numarası üretilmez. Yalnız başlangıca göre yüz ölçeği değişimi izlenir.</p></InformationButton>
- <Link className="inline-flex min-h-11 items-center rounded-xl border border-white/20 px-4" href={careHref('vision')}>Uzman seçenekleri</Link></section>;
+import {type LetterResult, performanceBySize, performanceForEye} from '../utils/spokenVision';
+import {CardCarousel} from './CardCarousel';
+const percent=(value:number|null)=>value===null?'Yeterli yanıt yok':`%${Math.round(value)}`;
+export function LetterVisionResult({result,showReferral=true}:{result:LetterResult;showReferral?:boolean}){
+ const items=(['RIGHT','LEFT'] as const).map(eye=>{
+  const summary=performanceForEye(result.trials,eye),rows=performanceBySize(result.trials,eye);
+  return {id:eye,content:<article data-eye-result={eye} className="w-full min-w-0 rounded-2xl border border-white/10 bg-slate-950/60 p-4 space-y-4">
+   <h3 className="text-lg font-bold">{eye==='RIGHT'?'Sağ göz':'Sol göz'}</h3>
+   <dl data-eye-summary className="grid grid-cols-2 gap-3">{[
+    ['Harf tanımlama skoru',percent(summary.letter.percentage)],['Harf yönü skoru',percent(summary.orientation.percentage)],
+    ['Toplam ortalama skor',percent(summary.average)],['Geçerli yanıt sayısı',String(summary.valid)]
+   ].map(([label,value])=><div key={label} className="rounded-xl border border-white/10 p-3"><dt className="text-sm font-semibold text-slate-300">{label}</dt><dd className="mt-2 text-lg font-bold text-togg-turquoise">{value}</dd></div>)}</dl>
+   {summary.notVisible>0&&<p className="text-sm text-slate-400">Göremiyorum yanıtı: {summary.notVisible}</p>}
+   {rows.length>0&&<details><summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-slate-300">Boyut bazlı sonuçlar</summary><div className="max-h-48 overflow-auto rounded-xl border border-white/10"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-950"><tr>{['Harf boyutu','Harf yönü skoru','Harf tanımlama skoru','Toplam ortalama skor'].map(label=><th key={label} className="p-2 font-semibold">{label}</th>)}</tr></thead><tbody>{rows.map(row=><tr key={row.size} className="border-t border-white/10"><td className="p-2">{row.widthCssPx.toFixed(1)} × {row.heightCssPx.toFixed(1)}</td><td className="p-2">{percent(row.orientation.percentage)}</td><td className="p-2">{percent(row.letter.percentage)}</td><td className="p-2">{percent(row.average)}</td></tr>)}</tbody></table></div></details>}
+  </article>};
+ });
+ return <section data-letter-result className="min-w-0 space-y-4"><CardCarousel label="Harf tanıma sonucu" items={items} itemWidthClassName="basis-[92%] md:basis-[calc(50%-6px)]"/>{showReferral&&<Link className="inline-flex min-h-11 items-center rounded-xl border border-white/20 px-4" href={careHref('vision')}>Uzman seçenekleri</Link>}</section>;
 }
