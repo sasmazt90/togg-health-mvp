@@ -1,6 +1,5 @@
 'use client';
 import { HEALTH_MODULES,HEALTH_MODULE_IDS,HealthModule } from '../../utils/healthModules';
-import { useGuidance } from '../../utils/audioGuidance';
 
 import { InformationButton } from '../../components/InformationButton';
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
@@ -46,8 +45,6 @@ interface CareSlot {
 }
 
 function CareContent() {
-  const voice=useGuidance('care');
-  useEffect(()=>voice.phase('entry','care-entry'),[voice]);
 
   const { state, isParked } = useVehicle();
   const searchParams = useSearchParams();
@@ -147,7 +144,6 @@ function CareContent() {
 
   const handleSelectSlot = (slot: CareSlot) => {
     if (!isParked) return;
-    void voice.say('care-select');
     setSelectedSlot(slot);
     setConsentApproved(false);
     setConfirmationStep('CONFIRM_MODAL');

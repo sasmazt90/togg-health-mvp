@@ -1,54 +1,26 @@
 'use client';
 import { HEALTH_MODULES } from '../utils/healthModules';
-import { useGuidance } from '../utils/audioGuidance';
 
+import { HealthHistoryOverview } from '../components/HealthHistoryOverview';
 import { InformationButton } from '../components/InformationButton';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useVehicle } from '../context/VehicleContext';
 import {
-  Eye,
-  Sparkles,
-  HeartPulse,
   CalendarCheck,
   ArrowRight,
   AlertCircle,
-  Lock,
-  Activity,
-  ChevronRight,
-  Clock,
-  ShieldCheck,
-  Info
 } from 'lucide-react';
 import { isDemoMode } from '../utils/attuneMode';
-import {
-  getVisionSummary,
-  EMPTY_VISION_SUMMARY,
-  EMPTY_SKIN_SUMMARY,
-  EMPTY_MENTAL_SUMMARY,
-  getSkinSummary,
-  getMentalSummary,
-  getHealthTimeline,
-  VisionSummaryData,
-  SkinSummaryData,
-  MentalSummaryData,
-  HealthTimelineItem
-} from '../utils/healthSelectors';
 
 export default function CockpitDashboard() {
-  const voice=useGuidance('cockpit');
-  useEffect(()=>voice.phase('entry','cockpit-entry'),[voice]);
 
   const { isParked } = useVehicle();
   const [isDemo, setIsDemo] = useState<boolean>(false);
-  const [vision, setVision] = useState<VisionSummaryData>(EMPTY_VISION_SUMMARY);
-  const [skin, setSkin] = useState<SkinSummaryData>(EMPTY_SKIN_SUMMARY);
-  const [mental, setMental] = useState<MentalSummaryData>(EMPTY_MENTAL_SUMMARY);
-  const [timeline, setTimeline] = useState<HealthTimelineItem[]>([]);
 
   useEffect(() => {
     const refresh = () => {
-      const demo = isDemoMode(); setIsDemo(demo); setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo)); setTimeline(getHealthTimeline(demo));
+      const demo = isDemoMode(); setIsDemo(demo);
     };
     refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
     return () => { window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
@@ -117,161 +89,8 @@ export default function CockpitDashboard() {
         )}
       </section>
 
-      {/* 2. Dört Eşit Modül Kartı Grid (1600x900 ilk ekranda görünür) */}
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-        {/* Modül 1: Göz Sağlığı */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
-                <Eye className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
-                01 • GÖRME
-              </span>
-            </div>
-
-            <div>
-              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
-                {HEALTH_MODULES.vision.name}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Yönergeli yön hizalama ön değerlendirmesi.
-              </p>
-            </div>
-
-            {/* Sade Tek Katman İçgörü */}
-            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-[11px]">{vision.hasData ? 'Son Sonuç' : 'Son Değerlendirme'}</span>
-                <span className="font-mono text-white text-xs font-semibold">{vision.acuitySummary}</span>
-              </div>
-              <div className="text-[11px] text-amber-400 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
-                <span>Kontrast</span>
-                <span className="text-slate-400 font-normal">{vision.contrastSummary}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-white/5">
-            {isParked ? (
-              <Link
-                href="/vision"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
-              >
-                <span>Kontrolü Başlat</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            ) : (
-              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-900 text-slate-500 font-medium text-xs border border-slate-800 cursor-not-allowed">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Park Halinde Açılır</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Modül 2: Cilt Sağlığı */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
-                02 • CİLT
-              </span>
-            </div>
-
-            <div>
-              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
-                {HEALTH_MODULES.skin.name}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Ön ve yan pozlarda cilt değişimlerini izleyin.
-              </p>
-            </div>
-
-            {/* Sade Tek Katman İçgörü */}
-            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-[11px]">{skin.hasData ? skin.regionNameTr : 'Son Tarama'}</span>
-                <span className={`font-mono text-xs font-bold ${skin.hasData ? 'text-amber-400' : 'text-slate-400 font-normal'}`}>
-                  {skin.changeLabel}
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-300 font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
-                <span>Durum</span>
-                <span className="text-amber-400 font-normal">{skin.recommendation}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-white/5">
-            {isParked ? (
-              <Link
-                href="/skin"
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
-              >
-                <span>Cilt Taramasını Aç</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            ) : (
-              <div className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-slate-900 text-slate-500 font-medium text-xs border border-slate-800 cursor-not-allowed">
-                <Lock className="w-3.5 h-3.5" />
-                <span>Park Halinde Açılır</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Modül 3: Ruh Sağlığı */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
-                <HeartPulse className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
-                03 • RUHSAL
-              </span>
-            </div>
-
-            <div>
-              <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
-                {HEALTH_MODULES.mental.name}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Konuşun veya yazın; görüşme özetinizi izleyin.
-              </p>
-            </div>
-
-            {/* Sade Tek Katman İçgörü */}
-            <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 text-xs space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-400 text-[11px]">Tekrar Eden Tema</span>
-                <span className="text-white text-xs font-semibold">{mental.primaryTheme}</span>
-              </div>
-              <div className="text-[11px] text-togg-turquoise font-medium pt-1 border-t border-slate-900 flex items-center justify-between">
-                <span>Seans Hafızası</span>
-                <span className="text-slate-400 font-normal">{mental.sessionCountLabel}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-white/5">
-            <Link
-              href="/mental"
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-togg-turquoise text-togg-darkBlue font-semibold text-xs hover:bg-[#33D0EE] transition-all min-h-touch shadow-md"
-            >
-              <span>{isParked ? 'Görüşmeyi Başlat' : 'Görüşmeyi Görüntüle'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Modül 4: Uzman & Randevu */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
+      <HealthHistoryOverview showStartActions parked={isParked} extraCard={
+        <div className="w-full bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="p-2.5 bg-togg-darkBlue/80 border border-togg-darkTurquoise/50 text-togg-turquoise rounded-xl group-hover:border-togg-turquoise/60 transition-colors">
@@ -315,48 +134,8 @@ export default function CockpitDashboard() {
             </Link>
           </div>
         </div>
-      </section>
+      } />
 
-      {/* 3. Below Fold: Son Değişimler Zaman Çizelgesi */}
-      <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <div className="flex items-center gap-2.5 text-sm font-bold text-white">
-            <Activity className="w-4 h-4 text-togg-turquoise" />
-            <span>Son Değişimler & Eğilim Akışı</span>
-          </div>
-          <Link
-            href="/profile"
-            className="flex items-center gap-1 text-xs text-togg-turquoise hover:text-[#33D0EE] transition-colors font-semibold"
-          >
-            <span>Tüm Sağlık Geçmişi</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        {timeline.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {timeline.map((item) => (
-              <div key={item.id} className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/70 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">{item.dateTr}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded border font-medium ${item.badgeClass}`}>
-                    {item.moduleName}
-                  </span>
-                </div>
-                <p className="text-slate-300 text-[11px] leading-relaxed">
-                  {item.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-6 text-center text-xs text-slate-400 bg-slate-950/40 rounded-xl border border-slate-800/50 space-y-1">
-            <Info className="w-5 h-5 text-slate-500 mx-auto" />
-            <p>Henüz kayıtlı ölçüm geçmişi bulunmuyor.</p>
-            <p className="text-[11px] text-slate-500">Görme veya cilt kontrolünü tamamladığınızda eğilim akışınız burada listelenecektir.</p>
-          </div>
-        )}
-      </section>
     </div>
   );
 }

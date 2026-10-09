@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ResultValue } from '../ResultValue';
+import { SkinIndicatorValue } from './SkinIndicatorValue';
 import { InformationButton } from '../InformationButton';
 import { TrendingUp, FileText, Lightbulb, ArrowRight } from 'lucide-react';
 import { SkinRegionData } from '../../data/skinDemoFixture';
@@ -36,14 +36,11 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         {currentRegion.indicators ? <div className="space-y-4" data-skin-indicators>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {currentRegion.indicators.filter(indicator=>indicator.score!==null).map(indicator=>{
-              const score=Math.round(indicator.score!);
               const geometry=indicator.appearance?.type==='longitudinal_measurement';
-              const baseline=geometry&&indicator.appearance?.limitationCode==='REFERENCE_CREATED';
               const delta=indicator.referenceDelta===undefined?undefined:Math.round(indicator.referenceDelta*(geometry?1000:1));
               return <div key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-2xl border border-sky-400/15 bg-slate-900/60 p-4 space-y-3">
                 <div className="text-sm text-slate-300">{indicator.label}</div>
-                <ResultValue value={geometry?indicator.score!*1000:indicator.score} status={baseline?'Referans oluşturuldu':undefined} unit={geometry?'× 10⁻³ kontur oranı':indicator.unit||'/ 100 · renk indeksi'}/>
-                {!geometry&&indicator.appearance?.unit!=='candidate-count'&&<div className="h-2 rounded-full bg-slate-800 overflow-hidden" role="meter" aria-label={indicator.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={score}><div className="h-full rounded-full bg-togg-turquoise" style={{width:`${Math.min(100,Math.max(0,score))}%`}}/></div>}
+                <SkinIndicatorValue indicator={indicator}/>
                 {delta!==undefined&&<p className="text-xs text-sky-300">Referansa göre {delta>0?'+':''}{delta} {geometry?'× 10⁻³ kontur farkı':indicator.unit}</p>}
               </div>;
             })}
@@ -141,7 +138,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         </div>}
       </div>
 
-      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Renk ve çizgi indeksleri mühendislik ölçekleridir. Alan oranları yalnız görünür, geçerli cilt alanındaki gerçek adayları gösterir. Parlama sebum, pullanma nem, sivilce adayı tanı değildir. Yeni kontur ve katlanma indeksleri yalnız mevcut çekimin birlikte desteklediği görünüm sinyalidir; kişisel geçmiş gerekmez. Eski kontur oranları yalnız eski kayıt yönteminde korunur. Işık, sakal, gölge ve düşük detay sonucu sınırlayabilir. T-bölgesi hesabı alın ve burunu kapsar; çene eklenmez. Dolgu, korunan seçili bölge ağıyla sınırlıdır. Seçilen kartın lokal sinyali varsa ağ içinde dolgu görünür; geometrik ölçümde yalnız gerçek kontur çizilir. Yöntemler uzman şiddet ölçeğine kalibre edilmemiştir.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
+      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Yüzde biçimindeki 0–100 değerler görünüm indeksidir; hastalık olasılığı veya klinik şiddet yüzdesi değildir. Renk geçişi yalnız görsel bir ölçektir. Alan oranları yalnız görünür, geçerli cilt alanındaki gerçek adayları gösterir. Parlama sebum, pullanma nem, sivilce adayı tanı değildir. Yeni kontur ve katlanma indeksleri yalnız mevcut çekimin birlikte desteklediği görünüm sinyalidir; kişisel geçmiş gerekmez. Eski kontur oranları yalnız eski kayıt yönteminde korunur. Işık, sakal, gölge ve düşük detay sonucu sınırlayabilir. T-bölgesi hesabı alın ve burunu kapsar; çene eklenmez. Dolgu, korunan seçili bölge ağıyla sınırlıdır. Seçilen kartın lokal sinyali varsa ağ içinde dolgu görünür; geometrik ölçümde yalnız gerçek kontur çizilir. Yöntemler uzman şiddet ölçeğine kalibre edilmemiştir.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button

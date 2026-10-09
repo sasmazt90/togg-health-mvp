@@ -1,8 +1,8 @@
 'use client';
 import { HEALTH_MODULES,HEALTH_MODULE_IDS } from '../../utils/healthModules';
-import { useGuidance } from '../../utils/audioGuidance';
 
 import React, { useState, useEffect } from 'react';
+import { HealthHistoryOverview } from '../../components/HealthHistoryOverview';
 import { RecordHistory } from '../../components/RecordHistory';
 import { InformationButton } from '../../components/InformationButton';
 import { readHealthRecords } from '../../utils/healthRecords';
@@ -10,20 +10,8 @@ import { AccessibleDialog } from '../../components/AccessibleDialog';
 import { useVehicle } from '../../context/VehicleContext';
 import { mockInitialHealthProfile } from '@packages/health-profile/mockData';
 import {
-  User,
-  ShieldCheck,
-  Eye,
-  Sparkles,
-  HeartPulse,
-  CalendarCheck,
   Download,
-  CheckCircle2,
   FileText,
-  Clock,
-  ChevronRight,
-  TrendingUp,
-  AlertCircle,
-  Info
 } from 'lucide-react';
 import { buildShareSections, printHealthSummary, ShareSelection,ShareSection,measuredShareSection } from '../../utils/healthShare';
 import { isDemoMode } from '../../utils/attuneMode';
@@ -34,16 +22,12 @@ import {
   EMPTY_MENTAL_SUMMARY,
   getSkinSummary,
   getMentalSummary,
-  getHealthTimeline,
   VisionSummaryData,
   SkinSummaryData,
-  MentalSummaryData,
-  HealthTimelineItem
+  MentalSummaryData
 } from '../../utils/healthSelectors';
 
 export default function ProfilePage() {
-  const voice=useGuidance('profile');
-  useEffect(()=>voice.phase('entry','profile-entry'),[voice]);
 
   const { isParked } = useVehicle();
   const profile = mockInitialHealthProfile;
@@ -57,7 +41,6 @@ export default function ProfilePage() {
   const [skin, setSkin] = useState<SkinSummaryData>(EMPTY_SKIN_SUMMARY);
   const [mental, setMental] = useState<MentalSummaryData>(EMPTY_MENTAL_SUMMARY);
   const [dental,setDental]=useState<ShareSection|null>(null),[hearing,setHearing]=useState<ShareSection|null>(null);
-  const [timeline, setTimeline] = useState<HealthTimelineItem[]>([]);
 
   useEffect(() => {
     const refresh = () => {
@@ -65,7 +48,7 @@ export default function ProfilePage() {
       try { if (!demo) for (const category of ['vision', 'skin', 'mental', 'dental', 'hearing'] as const) readHealthRecords(category); }
       catch { setShareError('Kayıtlar doğrulanamadı; veri değiştirilmedi.'); }
       try{setDental(measuredShareSection('dental'));setHearing(measuredShareSection('hearing'));}catch{setDental(null);setHearing(null);}
-      setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo)); setTimeline(getHealthTimeline(demo));
+      setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo));
     };
     refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
     return () => { window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
@@ -109,100 +92,7 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      {/* 2. ÜÇ MODÜL ÖZET SATIRI (FIRST VIEWPORT 3 OVERVIEW CARDS) */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* Görme Özeti */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 space-y-3 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-togg-turquoise font-bold text-sm">
-              <Eye className="w-4 h-4 text-togg-turquoise" />
-              <span>{HEALTH_MODULES.vision.name}</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {vision.hasData ? vision.dateTr : 'Kayıt Yok'}
-            </span>
-          </div>
-
-          <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex justify-between items-start gap-3 text-xs">
-              <span className="text-slate-400">{['landolt-orientation-guided-v2','spoken-letter-v1'].includes(vision.rawRecord?.protocolVersion)?'Ölçüm kapsamı':'Son Keskinlik'}</span>
-              <span className="font-mono text-white font-bold text-right min-w-0">{vision.acuitySummary}</span>
-            </div>
-            <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
-              <span className="text-amber-400">{['landolt-orientation-guided-v2','spoken-letter-v1'].includes(vision.rawRecord?.protocolVersion)?'Denemeler':'Kontrast'}</span>
-              <span className="font-mono text-slate-300 text-right min-w-0">{vision.contrastSummary}</span>
-            </div>
-          </div>
-
-          <p className="text-[11px] text-slate-400">
-            {vision.hasData
-              ? 'Tamamlanan son görme testi gösteriliyor.'
-              : 'Henüz tamamlanmış görme değerlendirmesi bulunmuyor.'}
-          </p>
-        </div>
-
-        {/* Cilt Özeti */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 space-y-3 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-togg-turquoise font-bold text-sm">
-              <Sparkles className="w-4 h-4 text-togg-turquoise" />
-              <span>Cilt Analizi</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {skin.hasData ? skin.dateTr : 'Kayıt Yok'}
-            </span>
-          </div>
-
-          <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex justify-between items-start gap-3 text-xs">
-              <span className="text-slate-400">{skin.hasData ? skin.regionNameTr : 'Son Değişim'}</span>
-              <span className={`font-mono text-xs font-bold ${skin.hasData ? 'text-amber-400' : 'text-slate-400 font-normal'}`}>
-                {skin.changeLabel}
-              </span>
-            </div>
-            <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
-              <span className="text-slate-400">Öneri</span>
-              <span className="text-slate-300">{skin.recommendation}</span>
-            </div>
-          </div>
-
-          <p className="text-[11px] text-slate-400">
-            {skin.hasData
-              ? (skin.rawRecord?.clinicalNoteTr || 'Cilt analizi kaydedildi.')
-              : 'Henüz tamamlanmış cilt analizi taraması bulunmuyor.'}
-          </p>
-        </div>
-
-        {/* Ruhsal Özet */}
-        <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 space-y-3 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-togg-turquoise font-bold text-sm">
-              <HeartPulse className="w-4 h-4 text-togg-turquoise" />
-              <span>{HEALTH_MODULES.mental.name}</span>
-            </div>
-            <span className="text-[10px] text-slate-400 font-mono">
-              {mental.hasData ? mental.dateTr : 'Kayıt Yok'}
-            </span>
-          </div>
-
-          <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div className="flex justify-between items-start gap-3 text-xs">
-              <span className="text-slate-400">Kayıtlı Tema</span>
-              <span className="font-mono text-white font-bold text-right min-w-0">{mental.primaryTheme}</span>
-            </div>
-            <div className="flex justify-between items-start gap-3 text-[11px] pt-1 border-t border-slate-900">
-              <span className="text-slate-400">Seans Geçmişi</span>
-              <span className="font-mono text-togg-turquoise">{mental.sessionCountLabel}</span>
-            </div>
-          </div>
-
-          <p className="text-[11px] text-slate-400">
-            {mental.hasData
-              ? 'Yalnızca tamamlanan ve kaydetmeye izin verdiğiniz görüşmelerin özetleri gösterilir.'
-              : 'Henüz kaydedilmiş ruhsal iyi oluş görüşmesi bulunmuyor.'}
-          </p>
-        </div>
-      </section>
+      <HealthHistoryOverview />
 
       {!isDemo && <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 space-y-7">
         <RecordHistory parked={isParked} />

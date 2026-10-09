@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { muteGuidance } from '../utils/audioGuidance';
 import { HEALTH_MODULES, HEALTH_MODULE_IDS } from '../utils/healthModules';
 import { InformationButton } from './InformationButton';
+import { HealthModuleIcon } from './HealthModuleIcon';
 import { usePathname } from 'next/navigation';
 import { useVehicle } from '../context/VehicleContext';
 import {
@@ -29,6 +30,7 @@ export const CockpitHeader: React.FC = () => {
   const healthActive=HEALTH_MODULE_IDS.some(id=>pathname===HEALTH_MODULES[id].route);
   const navItems=[{href:'/',label:'Kokpit',icon:Activity},{href:'/care',label:'Uzman & Randevu',icon:CalendarCheck},{href:'/profile',label:'Sağlık Geçmişim',icon:User}];
   const itemClass=(active:boolean)=>`flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all min-h-touch ${active?'bg-togg-turquoise/15 text-togg-turquoise border border-togg-turquoise/30 font-bold':'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'}`;
+  const dropdownClass=(active:boolean)=>`flex items-center justify-start text-left gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all min-h-touch w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-togg-turquoise ${active?'bg-togg-turquoise/15 text-togg-turquoise border border-togg-turquoise/30 font-bold':'text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent'}`;
   return (
     <header data-cockpit-header className="border-b border-white/10 bg-[#050b14]/95 backdrop-blur-md md:sticky top-0 z-50">
       {/* Üst Telemetri ve Güvenlik Durum Çubuğu */}
@@ -90,7 +92,7 @@ export const CockpitHeader: React.FC = () => {
           <div className="relative min-w-0">
             <button ref={trigger} type="button" aria-expanded={open} aria-controls="health-centre-links" className={itemClass(healthActive)+' w-full'} onClick={()=>setOpen(v=>!v)} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();setOpen(true);requestAnimationFrame(()=>{const links=panel.current?.querySelectorAll<HTMLAnchorElement>('a');links?.[e.key==='ArrowDown'?0:links.length-1]?.focus();});}}}><HeartPulse className="w-3.5 h-3.5 shrink-0"/>Sağlık Merkezi</button>
             {open&&<div ref={panel} id="health-centre-links" onKeyDown={move} className="absolute top-full right-0 sm:left-0 sm:right-auto mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-white/20 bg-[#0b1424] shadow-2xl p-2 z-[60]" aria-label="Sağlık modülleri">
-              {HEALTH_MODULE_IDS.map(id=><Link key={id} href={HEALTH_MODULES[id].route} aria-current={pathname===HEALTH_MODULES[id].route?'page':undefined} onClick={()=>close()} className={itemClass(pathname===HEALTH_MODULES[id].route)+' justify-start w-full'}>{HEALTH_MODULES[id].name}</Link>)}
+              {HEALTH_MODULE_IDS.map(id=><Link key={id} href={HEALTH_MODULES[id].route} aria-current={pathname===HEALTH_MODULES[id].route?'page':undefined} onClick={()=>close()} className={dropdownClass(pathname===HEALTH_MODULES[id].route)}><span className="w-[18px] shrink-0 inline-flex"><HealthModuleIcon module={id}/></span><span className="min-w-0 break-words">{HEALTH_MODULES[id].name}</span></Link>)}
             </div>}
           </div>
           {navItems.slice(1).map(item=>{const Icon=item.icon;return <Link key={item.href} href={item.href} aria-current={pathname===item.href?'page':undefined} className={itemClass(pathname===item.href)}><Icon className="w-3.5 h-3.5 shrink-0"/>{item.label}</Link>;})}
