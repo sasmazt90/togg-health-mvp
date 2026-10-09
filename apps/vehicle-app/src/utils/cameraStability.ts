@@ -35,12 +35,14 @@ export class SourceMotion {
 
 /** Mouth-independent, fixed-aspect vision crop. Only raw upper-head anchors
  * affect the display. The legacy skin crop and its stability stay unchanged. */
-export function visionCameraCrop(points:{x:number;y:number}[]|undefined,sourceRatio:number):Crop {
- if(!points||points.length<468)return {x:0,y:0,width:1,height:1};
+export function visionCameraCrop(points:{x:number;y:number}[]|undefined,sourceRatio:number,frameRatio=4/3):Crop {
+ if(!points||points.length<468){const width=Math.max(1,frameRatio/sourceRatio),height=width*sourceRatio/frameRatio;return {x:(1-width)/2,y:(1-height)/2,width,height};}
  const width=Math.min(1,Math.max(.18,Math.abs(points[454].x-points[234].x)*1.7));
- const height=Math.min(1,width*sourceRatio/(4/3)),fittedWidth=Math.min(1,height*(4/3)/sourceRatio);
+ // Keep the previous upper-head/neck vertical coverage when the frame widens.
+ // Virtual margins letterbox the source if it cannot fill that aspect safely.
+ const height=Math.min(1,Math.max(width*sourceRatio/(4/3),width*sourceRatio/frameRatio)),fittedWidth=height*frameRatio/sourceRatio;
  const cx=(points[234].x+points[454].x)/2,cy=(points[10].y+points[1].y)/2+width*sourceRatio*.12;
- return {x:Math.max(0,Math.min(1-fittedWidth,cx-fittedWidth/2)),y:Math.max(0,Math.min(1-height,cy-height/2)),width:fittedWidth,height};
+ return {x:fittedWidth>1?(1-fittedWidth)/2:Math.max(0,Math.min(1-fittedWidth,cx-fittedWidth/2)),y:Math.max(0,Math.min(1-height,cy-height/2)),width:fittedWidth,height};
 }
 export class VisionPreviewCrop {
  private value:Crop|null=null;private at=0;

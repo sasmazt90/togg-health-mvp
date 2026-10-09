@@ -72,7 +72,10 @@ with sync_playwright() as pw:
   if name=='desktop':p.locator('[data-vision-stage]').evaluate("e=>e.scrollIntoView({block:'start'})");p.wait_for_timeout(150)
   capture(p,name+'-active.png');layout=dims(p)
   if name=='desktop':
-   bounds=p.locator('[data-camera-preparation]').bounding_box();controls=p.get_by_role('button',name='Bitir',exact=True).bounding_box();camera=p.locator('[data-camera-preview]').bounding_box();head=p.locator('[data-cockpit-header]').bounding_box();assert camera['y']>=head['y']+head['height'] and bounds['y']+bounds['height']<=layout['height'] and controls['y']+controls['height']<=layout['height'],(bounds,controls,layout)
+   camera=p.locator('[data-camera-preview]').bounding_box();area=p.locator('[data-letter-area]').bounding_box();assert all(abs(camera[k]-area[k])<.1 for k in ['y','width','height']),(camera,area)
+   # Enlarged matching frames use normal page scroll for the readable controls.
+   for control in [p.locator('[data-camera-preparation]'),p.get_by_role('button',name='Bitir',exact=True)]:control.scroll_into_view_if_needed();expect(control).to_be_visible()
+   p.locator('[data-letter-optotype]').scroll_into_view_if_needed()
   assert layout['doc']<=layout['width']+1,layout
   # Complete exactly 12 per eye on the actual page, free ordering and early finals.
   while p.locator('[data-vision-stage]').get_attribute('data-vision-stage')!='result':

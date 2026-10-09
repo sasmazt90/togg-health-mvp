@@ -1,15 +1,17 @@
 'use client';
-import { useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { cameraCrop, StablePreviewCrop, visionCameraCrop, VisionPreviewCrop } from '../utils/cameraStability';
+import { VISION_FRAME_CLASS, VISION_FRAME_RATIO } from './VisionFrame';
 import { InformationButton } from './InformationButton';
 import type { FaceAlignment, ImageQuality } from '../utils/skinAnalyzer';
 
 export { cameraCrop } from '../utils/cameraStability';
 /** Display crop only. Analysis always reads the native uncropped camera. */
 export function CameraPreview({videoRef,landmarks,vision=false}:{videoRef:RefObject<HTMLVideoElement|null>;landmarks?:{x:number;y:number}[];vision?:boolean}) {
- const [ratio,setRatio]=useState(4/3),stable=useRef(new StablePreviewCrop()),visionStable=useRef(new VisionPreviewCrop());
- const desired=vision?visionCameraCrop(landmarks,ratio):cameraCrop(landmarks),crop=(vision?visionStable.current:stable.current).update(desired,performance.now());
- return <div data-camera-preview data-preview-crop={JSON.stringify(crop)} data-target-crop={JSON.stringify(desired)} className="relative w-full max-w-[480px] mx-auto overflow-hidden rounded-2xl bg-black" style={vision?{aspectRatio:4/3,maxWidth:'min(100%, 320px, calc(16vh * 4 / 3))'}:{aspectRatio:ratio*crop.width/crop.height}}>
+ const [ratio,setRatio]=useState(4/3),[frameRatio,setFrameRatio]=useState(VISION_FRAME_RATIO),frame=useRef<HTMLDivElement>(null),stable=useRef(new StablePreviewCrop()),visionStable=useRef(new VisionPreviewCrop());
+ useEffect(()=>{if(!vision||!frame.current)return;const observer=new ResizeObserver(([entry])=>{const {width,height}=entry.contentRect;if(width>0&&height>0)setFrameRatio(width/height);});observer.observe(frame.current);return()=>observer.disconnect();},[vision]);
+ const desired=vision?visionCameraCrop(landmarks,ratio,frameRatio):cameraCrop(landmarks),crop=(vision?visionStable.current:stable.current).update(desired,performance.now());
+ return <div ref={frame} data-camera-preview data-preview-crop={JSON.stringify(crop)} data-target-crop={JSON.stringify(desired)} className={vision?VISION_FRAME_CLASS:"relative w-full max-w-[480px] mx-auto overflow-hidden rounded-2xl bg-black"} style={vision?undefined:{aspectRatio:ratio*crop.width/crop.height}}>
   <video ref={videoRef} autoPlay playsInline muted data-vision-camera={vision?true:undefined} onLoadedMetadata={e=>{if(e.currentTarget.videoHeight)setRatio(e.currentTarget.videoWidth/e.currentTarget.videoHeight);}} className="absolute max-w-none" style={{width:`${100/crop.width}%`,height:'auto',left:`${-100*crop.x/crop.width}%`,top:`${-100*crop.y/crop.height}%`}}/>
  </div>;
 }
