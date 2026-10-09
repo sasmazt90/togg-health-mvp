@@ -17,10 +17,10 @@ export function assessDentalCapture(ctx:CanvasRenderingContext2D,a:FaceAlignment
  const w=x1-x0;for(let i=w+1;i<gray.length-w-1;i++)if(valid[i]&&valid[i-1]&&valid[i+1]&&valid[i-w]&&valid[i+w]){const lap=gray[i-1]+gray[i+1]+gray[i-w]+gray[i+w]-4*gray[i];gradient+=lap*lap;comparisons++;}
  let tongue=0;for(let y=3;y<y1-y0-3;y++)for(let x=3;x<w-3;x++){let interior=true;for(let dy=-3;dy<=3&&interior;dy++)for(let dx=-3;dx<=3;dx++)if(!redInterior[(y+dy)*w+x+dx]){interior=false;break;}if(interior)tongue++;}
  const visibleFraction=tooth/Math.max(total,1),sharp=gradient/Math.max(comparisons,1);
- if(mouthWidth<65)reasons.push('Kaynak görüntüde diş ayrıntısı yetersiz; dijital zoom yeni detay üretmez.');
+ if(mouthWidth<65)reasons.push('Ön dişleriniz daha belirgin görünmeli.');
  if(pose!=='BITE'&&opening<.12)reasons.push('Ağzınızı rahatça açın.');
  if(pose==='BITE'&&opening>.32)reasons.push('Doğal kapanışta ön dişlerinizi gösterin.');
- if(tooth<150||visibleFraction<.15)reasons.push('Dişler yeterince görünmüyor; dudak veya dil örtüyor olabilir.');
+ if(tooth<150||visibleFraction<.15)reasons.push(light/Math.max(total,1)<90?'Ön dişlerinize ışık gelsin; ağzınızı rahatça açık tutun.':'Ön dişleriniz dudak ve dil tarafından örtülmeden görünsün.');
  if(light/Math.max(total,1)<45||light/Math.max(total,1)>230)reasons.push('Dişlerin ışığını düzenleyin.');
  if(sharp<12)reasons.push('Kamera netliğini kontrol edin.');
  if(glare/Math.max(tooth+glare,1)>.12)reasons.push('Tükürük yansıması veya fazla parlama var.');

@@ -22,6 +22,7 @@ import {
 } from '../../data/skinDemoFixture';
 import { isDemoMode, STORAGE_KEYS, isCameraAllowed } from '../../utils/attuneMode';
 import { appendHealthRecord } from '../../utils/healthRecords';
+import { rememberSkinSnapshots } from '../../utils/skinVolatileHistory';
 import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
@@ -50,7 +51,7 @@ export default function SkinPage() {
     if(indicators&&conditions&&snapshot.landmarks){
       if(!snapshot.photoId){const digest=await crypto.subtle.digest('SHA-256',ctx.getImageData(0,0,snapshot.width,snapshot.height).data);snapshot.photoId=Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,'0')).join('');}
       const result=await analyzeAppearance(snapshot,valid,conditions,temporalSupport.current,current);
-      if(current()){attachAppearance(indicators,result);snapshot.localMaps={...snapshot.localMaps,...result.maps};snapshot.contoursMeasured=result.contours;}
+      if(current()){attachAppearance(indicators,result);snapshot.localMaps={...snapshot.localMaps,...result.maps};snapshot.contoursMeasured=result.contours;snapshot.acneCandidates=Object.fromEntries(Object.entries(result.measurements).map(([region,rows])=>[region,rows.find(v=>v.id==='acne'&&v.value!==null)?.components.bounds||[]]));}
     }
   };
   useEffect(()=>()=>{localAnalysis.current?.cancel();},[]);
@@ -68,7 +69,7 @@ export default function SkinPage() {
   const [angleIndex, setAngleIndex] = useState(0);
   const [completedAngles, setCompletedAngles] = useState<SkinAngle[]>([]);
   const angleRuntime = useRef({ enabled: true, index: 0, captures: {} as Partial<Record<SkinAngle, AngleCapture>> });
-  const [selectedRegionId, setSelectedRegionId] = useState<SkinRegionId>('rightCheek');
+  const [selectedRegionId, setSelectedRegionId] = useState<SkinRegionId>('forehead');
   const [activeModal, setActiveModal] = useState<'trend' | 'observation' | 'actions' | null>(null);
 
   // Video & Canvas referansları (MediaPipe kamera ve analiz motoru)
@@ -110,7 +111,7 @@ export default function SkinPage() {
   });
   const [guidanceText, setGuidanceText] = useState<string>('Lütfen başınızı sabit tutun.');
   const voice=useGuidance('skin',isParked);
-  useEffect(()=>{if(isParked)voice.phase(scanState+':'+angleIndex,scanState==='READY'?'skin-entry':scanState==='COMPLETED'?'skin-complete':scanState==='CAMERA_ACTIVE'?(['skin-front','skin-right','skin-left'] as const)[angleIndex]:undefined);},[voice,isParked,scanState,angleIndex]);
+  useEffect(()=>{if(isParked)voice.phase(scanState+':'+angleIndex,scanState==='CAMERA_ACTIVE'?(['skin-front','skin-right','skin-left'] as const)[angleIndex]:undefined);},[voice,isParked,scanState,angleIndex]);
   useEffect(()=>{const id=scanState==='CAMERA_ACTIVE'&&!preparationPhase&&!guidanceText.startsWith('Hizalama uygun')?qualityGuidance(guidanceText):undefined;voice.issue(id||'',id);},[voice,guidanceText,scanState,preparationPhase]);
 
   const snapshotFrames = useRef<Partial<Record<SkinAngle, SkinSnapshot>>>({});
@@ -352,7 +353,7 @@ export default function SkinPage() {
       } catch {}
 
       setAnalysisResult(demoResult);
-      setSelectedRegionId('rightCheek');
+      setSelectedRegionId('forehead');
       setScanState('COMPLETED');
       return;
     }
@@ -444,7 +445,7 @@ export default function SkinPage() {
     }
 
     const snapshot = acceptedSnapshot;
-    snapshotFrames.current = { FRONT: snapshot }; snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
+    snapshotFrames.current = { FRONT: snapshot }; rememberSkinSnapshots(finalResult.id,{FRONT:snapshot}); setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
     setMediaStream(null); setIsLiveVideo(false);
     setAnalysisResult(finalResult);
     // En yüksek değişimin olduğu bölgeye odaklan veya varsayılan sağ yanak
@@ -476,7 +477,7 @@ export default function SkinPage() {
       resultPersisted.current=storageAllowed();
       if(resultPersisted.current)await appendHealthRecord('skin', finalResult, {}, () => validCapture() && storageAllowed());
       if (!validCapture()) return;
-      snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
+      rememberSkinSnapshots(finalResult.id,snapshotFrames.current); setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
       setMediaStream(null); setIsLiveVideo(false);
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {

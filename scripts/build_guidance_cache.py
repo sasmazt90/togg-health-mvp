@@ -32,9 +32,9 @@ TEXTS={
  'dental-file':'JPEG, PNG veya WebP biçiminde, sınırlar içinde açılabilen bir fotoğraf seçin.',
  'dental-complete':'Analiz tamamlandı. Adaylar yalnız görünür yüzeyler içindir; sonuç kartlarını inceleyin.',
  'hearing-entry':N['hearing']['name']+'. Sessiz ortamda stereo kulaklık kullanın. Önce sağ ve sol kanalı doğrulayacağız.',
- 'hearing-prepare':'Stereo kulaklığı takın. Rahat, düşük cihaz sesini seçin ve test boyunca değiştirmeyin. Kanalları dinleyip yalnız doğru kulağınızda duyduğunuzu doğrulayın.',
- 'hearing-tone':'Yönerge bittikten sonra test başlayacak. Bir ses duyarsanız Duydum düğmesine veya boşluk tuşuna basın. Duymadığınızda bekleyin.',
- 'hearing-digits':'Yönerge bittikten sonra gürültü içinde üç sayı duyacaksınız. Sayıları sırayla girip yanıtı gönderin. Tekrar edilen deneme puanlanmaz.',
+ 'hearing-prepare':'Lütfen önce kulaklığınızı takın ve aşağıda ilgili butonlara basarak sadece belirtilen kulaklıktan ses duyduğunuzu onaylayın.',
+ 'hearing-tone':'Sesi duyana kadar bekleyin ve duyduğunuz an butona basın.',
+ 'hearing-digits':'Geri sayım bittikten sonra gürültü içinde üç sayı duyacaksınız. Sayıları sırayla girip yanıtı gönderin.',
  'hearing-complete':'Test tamamlandı. Sonuç bu cihazın dijital ses birimindedir. İsterseniz sayısal sonucu kaydedin.',
  'mental-entry':N['mental']['name']+'. Görüşmeyi başlatınca konuşabilir veya yazabilirsiniz. Bitir düğmesi görüşmeyi tamamlar.',
  'mental-complete':'Görüşme tamamlandı. Özeti inceleyebilir ve uzman seçeneklerine geçebilirsiniz.'

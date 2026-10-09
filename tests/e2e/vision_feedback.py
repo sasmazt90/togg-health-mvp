@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd()/'tests/e2e'))
 """Focused production-page controller checks. Controlled camera/ASR/audio only.
 Isolated profiles; never writes the normal user's history or sends provider calls.
 """
@@ -5,7 +8,7 @@ from pathlib import Path
 import base64, json, math, subprocess
 from playwright.sync_api import sync_playwright, expect
 
-ROOT=Path.cwd(); OUT=ROOT/'audit-results/vision-feedback-20261009'; OUT.mkdir(parents=True,exist_ok=True)
+ROOT=Path.cwd(); OUT=ROOT/'audit-results/feedback-four-modules-20261009/vision-full'; OUT.mkdir(parents=True,exist_ok=True)
 BOOT=r"""
 localStorage.removeItem('togg_health_vision_history');localStorage.removeItem('togg_health_latest_vision');
 window.probe={calls:[],recognitions:[],audios:[],fault:null,mouth:false};
@@ -67,7 +70,15 @@ with sync_playwright() as pw:
    p.evaluate("probe.fault='near'");p.wait_for_timeout(180);emit(p,'düz P');assert target(p)['id']==fifth['id'];p.evaluate('probe.fault=null');p.wait_for_timeout(180);assert target(p)['id']==fifth['id']
    # Popup once, dismissing does not make the wrong-eye state scoreable.
    p.evaluate("probe.fault='both-open'");p.wait_for_timeout(1050);expect(p.get_by_role('dialog',name='Görme bildirimi')).to_be_visible();p.get_by_role('button',name='Tamam',exact=True).click();p.wait_for_timeout(1000);assert not p.get_by_role('dialog').count();assert not p.locator('[data-letter-optotype]').count();p.evaluate('probe.fault=null');active(p)
-   resumed=target(p);emit(p,'P');p.get_by_role('button',name='Duraklat',exact=True).click();assert not p.get_by_text('Duyulan:',exact=False).count();p.get_by_role('button',name='Devam et',exact=True).click();active(p);assert target(p)['id']!=resumed['id'];assert target(p)['path']==resumed['path'];assert target(p)['transform']==resumed['transform'];assert not p.get_by_text('Duyulan:',exact=False).count()
+   # Complete the recovered target explicitly; its retained invalid-condition
+   # fragments must not make this pause test a complete answer by accident.
+   recovered=target(p);letter,direction=words(recovered);emit(p,letter+' '+direction);next_target(p,recovered['id'])
+   resumed=target(p);letter,direction=words(resumed);emit(p,direction);p.wait_for_timeout(100)
+   assert target(p)['id']==resumed['id']
+   p.get_by_role('button',name='Duraklat',exact=True).click();assert p.get_by_text('Duyulan:',exact=False).count()
+   p.get_by_role('button',name='Devam et',exact=True).click();active(p);now=target(p)
+   assert now['path']==resumed['path'] and now['transform']==resumed['transform']
+   assert p.get_by_text('Duyulan:',exact=False).count()
    observations=[first,second,third,fourth,fifth]
   if name=='desktop':p.locator('[data-vision-stage]').evaluate("e=>e.scrollIntoView({block:'start'})");p.wait_for_timeout(150)
   capture(p,name+'-active.png');layout=dims(p)

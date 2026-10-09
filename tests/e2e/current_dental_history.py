@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image,ImageFilter
 from playwright.async_api import async_playwright,expect
 ROOT=Path(__file__).resolve().parents[2]
-OUT=ROOT/'audit-results/current-health-20261009/dental-history';OUT.mkdir(parents=True,exist_ok=True)
+OUT=ROOT/'audit-results/feedback-four-modules-20261009/dental-history';OUT.mkdir(parents=True,exist_ok=True)
 INFO=json.loads((ROOT/'audit-results/current-health-20261009/public-positive.json').read_text('utf8'))
 PHOTO=Path(INFO['path']);assert hashlib.sha256(PHOTO.read_bytes()).hexdigest()==INFO['sourceSHA256']
 KEYS={'vision':'togg_health_vision_history','skin':'togg_health_skin_history','mental':'togg_health_mental_history','dental':'attune_dental_history_v1','hearing':'attune_hearing_history_v1'}
@@ -17,7 +17,7 @@ async def main():
   c=await browser.new_context(viewport={'width':1600,'height':1000});await c.add_init_script(INIT);p=await c.new_page();errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
   await c.request.post('http://127.0.0.1:8000/api/vehicle/speed',data={'speedKmH':0})
   await p.goto('http://127.0.0.1:3000/dental');await p.get_by_label('Fotoğraflarımı yalnız bu cihazda geçici işlemeyi kabul ediyorum.').check()
-  inp=p.get_by_label('Diş fotoğrafı seç');await expect(p.get_by_role('button',name='Fotoğraf yükle',exact=True)).to_be_enabled();await inp.set_input_files(str(PHOTO))
+  inp=p.get_by_label('Diş fotoğrafı seç');await expect(p.get_by_role('button',name='Fotoğraf Yükle',exact=True)).to_be_enabled();await inp.set_input_files(str(PHOTO))
   await expect(p.locator('[data-dental-result]')).to_be_visible(timeout=30000)
   assert await p.evaluate('window.cameraCalls===0&&window.workerCalls===0')
   assert await p.locator('[data-dental-result] rect').count()>0
@@ -43,7 +43,7 @@ async def main():
   await inp.set_input_files(str(PHOTO));await asyncio.wait_for(received.wait(),30)
   await p.get_by_role('button',name='İptal et',exact=True).click();release.set();await asyncio.sleep(.5)
   await expect(p.locator('[data-dental-result]')).to_have_count(0)
-  await expect(p.get_by_role('button',name='Kamerayı aç ve taramayı başlat')).to_be_visible()
+  await expect(p.get_by_role('button',name='Diş Taramasını Başlat')).to_be_visible()
   await p.unroute('**/api/local-health/dental-upload',delay)
   # File replacement: hold a real poor-quality response; the next positive source wins.
   blurred=io.BytesIO();Image.open(PHOTO).filter(ImageFilter.GaussianBlur(25)).save(blurred,format='PNG')
@@ -62,8 +62,8 @@ async def main():
   await inp.set_input_files({'name':'not-photo.png','mimeType':'image/png','buffer':b'<svg>not an image</svg>'})
   await expect(p.locator('[data-dental-page]').get_by_role('alert')).to_be_visible();await p.get_by_role('button',name='İptal et',exact=True).click()
   # Existing legacy records are declared history fixtures, not completed physical sessions.
-  hearing=json.loads((ROOT/'audit-results/current-health-20261009/hearing-positive/proof.json').read_text('utf8'))['result']
-  skin=json.loads((ROOT/'audit-results/current-health-20261009/skin/completed-0.json').read_text('utf8'))['result']
+  hearing=json.loads((ROOT/'audit-results/feedback-four-modules-20261009/hearing-positive/proof.json').read_text('utf8'))['result']
+  skin=json.loads((ROOT/'audit-results/feedback-four-modules-20261009/skin/completed-0.json').read_text('utf8'))['result']
   fixtures={'vision':{'id':'legacy-vision-fixture','date':'2026-10-01T09:00:00Z','acuityRightSnellen':'20/30','acuityLeftSnellen':'20/40','controlledHistoryFixture':True},'mental':{'id':'legacy-mental-fixture','date':'2026-10-02T09:00:00Z','methodVersion':'legacy-summary','summaryText':'Sabit kişisel olmayan kayıt testi.','transcriptConsented':False},'skin':skin,'hearing':hearing}
   await p.evaluate('({fixtures,keys})=>{for(const [k,v] of Object.entries(fixtures)){localStorage.setItem(keys[k],JSON.stringify([v]));const latest={vision:"togg_health_latest_vision",skin:"togg_health_latest_skin",mental:"togg_health_latest_mental",hearing:"attune_hearing_latest_v1"}[k];if(latest)localStorage.setItem(latest,JSON.stringify(v));}localStorage.setItem("foreign_sentinel","keep");}',{'fixtures':fixtures,'keys':KEYS})
   legacy={'id':'legacy-contour-fixture','timestamp':'2026-09-01T09:00:00Z','methodVersion':'appearance-cv-1','isBaseline':False,'controlledHistoryFixture':True,'indicators':{'forehead':[{'id':'sag','label':'Sarkma','score':.02,'appearance':{'type':'longitudinal_measurement','unit':'normalized-contour-ratio','methodVersion':'appearance-cv-1','limitationCode':None}}]}}
@@ -77,6 +77,8 @@ async def main():
    row=history.locator('[data-record-category='+category+']').first;await row.get_by_role('button',name='Sonucu Aç',exact=True).click();dialog=p.get_by_role('dialog',name=names[category]['name']+' sonucu',exact=True);await expect(dialog).to_be_visible()
    href=await dialog.get_by_role('link',name='Uzman seçenekleri',exact=True).get_attribute('href');assert 'from='+category in href and 'recordId=' in href;links.append(href)
    if category=='hearing':await expect(dialog).to_contain_text('dB SNR')
+   if category=='skin':
+    await expect(dialog.get_by_role('heading',name='Alın',exact=True)).to_be_visible();await dialog.get_by_role('button',name='Sonraki Bölge').click();await expect(dialog.get_by_role('heading',name='Sağ Yanak',exact=True)).to_be_visible();await p.screenshot(path=str(OUT/'skin-history-carousel.png'),full_page=True)
    await p.keyboard.press('Escape')
   await history.locator('[data-record-id=legacy-contour-fixture]').get_by_role('button',name='Sonucu Aç',exact=True).click()
   await expect(p.get_by_role('dialog').locator('[data-skin-score]')).to_have_text('20');await expect(p.get_by_role('dialog')).to_contain_text('× 10⁻³ kontur oranı');await p.keyboard.press('Escape')

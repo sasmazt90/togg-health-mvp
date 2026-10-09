@@ -46,6 +46,7 @@ export default function PrivacyPage() {
   const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [saveTranscript, setSaveTranscript] = useState(false);
   const [saveSkin,setSaveSkin]=useState(false);
+  const [saveHearing,setSaveHearing]=useState(true);
   const [saveVision, setSaveVision] = useState(false);
   const [saveMentalSummaries, setSaveMentalSummaries] = useState<boolean>(true);
   const [dataStats, setDataStats] = useState<{
@@ -102,6 +103,7 @@ export default function PrivacyPage() {
 
       setSaveTranscript(localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true');
       setSaveSkin(localStorage.getItem('attune_privacy_skin_save_allowed')==='true');
+      setSaveHearing(localStorage.getItem('attune_privacy_hearing_save_allowed')!=='false');
       setSaveVision(localStorage.getItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED) === 'true');
       const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
       if (mentalPref !== null) {
@@ -354,8 +356,10 @@ export default function PrivacyPage() {
       <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3">
         <h2 className="font-bold">Cilt görünümü ve kişisel referans</h2>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveSkin} onChange={e=>{try{localStorage.setItem('attune_privacy_skin_save_allowed',String(e.target.checked));setSaveSkin(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Cilt ölçümlerini ve kişisel sayısal referansı bu tarayıcıda sakla</label>
-        <p className="text-xs text-slate-400">Varsayılan kapalıdır; çekim izninden ayrıdır. Fotoğraf ve dolgu yalnız açık sonuç oturumunun belleğindedir. Diş ve işitme sonuçlarında ayrıca Kaydet onayı verilir. Kapatmak eski kayıtları silmez; kayıt Sil veya Tüm Yerel Verileri Sil ile kaldırılır.</p>
+        <p className="text-xs text-slate-400">Varsayılan kapalıdır; çekim izninden ayrıdır. Fotoğraf ve dolgu yalnız açık sonuç oturumunun belleğindedir. Diş sonuçlarında ayrıca Kaydet onayı verilir. Kapatmak eski kayıtları silmez; kayıt Sil veya Tüm Yerel Verileri Sil ile kaldırılır.</p>
       </section>
+
+      <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3"><h2 className="font-bold">İşitme Sağlığı sonuçları</h2><label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveHearing} onChange={e=>{try{localStorage.setItem('attune_privacy_hearing_save_allowed',String(e.target.checked));setSaveHearing(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Tamamlanan sayısal işitme sonuçlarını bu cihazda sakla</label></section>
 
       {/* 3. BELOW FOLD: YEREL VERİ YÖNETİMİ VE SİLME */}
       <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-7 shadow-xl space-y-5">

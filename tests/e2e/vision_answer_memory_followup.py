@@ -3,7 +3,7 @@ import ast, base64, json, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-ROOT=Path.cwd();OUT=ROOT/'audit-results/vision-answer-memory-20261009';OUT.mkdir(parents=True,exist_ok=True)
+ROOT=Path.cwd();OUT=ROOT/'audit-results/feedback-four-modules-20261009/vision-memory';OUT.mkdir(parents=True,exist_ok=True)
 PHASE=sys.argv[1] if len(sys.argv)>1 else 'after'
 tree=ast.parse((ROOT/'tests/e2e/vision_feedback.py').read_text('utf8'))
 BOOT=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='BOOT' for t in n.targets))
@@ -79,9 +79,13 @@ with sync_playwright() as pw:
         p.evaluate('()=>{probe.previous=probe.current;probe.previousCallback=probe.current.onresult}')
         emit(p,second_text);p.wait_for_timeout(200);second=state(p);capture(p,PHASE+'-'+mode+'-second.png')
         if PHASE=='after':
+            if mode=='low-confidence':
+                assert target(p)==old and len(second['diagnostics'])==0
+                followup(p,'orientation');assert 'Yalnız yön' in state(p)['notice']
+                emit(p,'sağa yatmış ve aynalı');p.wait_for_timeout(200);second=state(p)
             changed(p,old);assert len(second['diagnostics'])==1 and second['diagnostics'][0]['combinedCorrect'] is (mode!='correction'),second
             d=second['diagnostics'][0];assert d['parsed']['transform']['rotation']==(180 if mode in ['e-down','mirror-parts'] else 90) and d['parsed']['transform']['mirrored'] is (mode!='e-down')
-            assert d['fragmentCount']==(3 if mode=='mirror-parts' else 2)
+            assert d['fragmentCount']==(3 if mode in ['mirror-parts','low-confidence'] else 2)
             assert second['heard']=='' and not second['notice']
             new_id=target(p)
             p.evaluate("probe.previousCallback({resultIndex:99,results:Object.assign(Array(99).fill(null).concat([Object.assign([{transcript:'düz E',confidence:1}],{isFinal:true})]),{})})")

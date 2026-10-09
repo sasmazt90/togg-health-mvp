@@ -47,11 +47,18 @@ export const SkinResultView: React.FC<SkinResultViewProps> = ({
             Cilt Analizi Tamamlandı
           </h1>
           <p className="text-xs sm:text-sm text-slate-300">
-            {currentRegion.indicators ? (isBaseline?'Yeni bölgesel ölçüm referansı oluşturuldu. Eski kayıt ve referanslar korundu.':'Bölgesel fotoğraf göstergeleri. Ölçülemeyen kriterler ayrı belirtilir.') : isBaseline ? 'Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.' :
+            {currentRegion.indicators ? 'Bölge ve kriter seçerek fotoğrafınızdaki görünümü inceleyin.' : isBaseline ? 'Referans oluşturuldu; sonraki uygun taramalar bununla karşılaştırılacak.' :
               comparisonUnavailable ? 'Karşılaştırılamadı. Referansınız korundu.' :
               `${currentRegion.nameTr}: kızarıklık piksel göstergesinde referansa göre ${currentRegion.changePct > 0 ? '+' : ''}${currentRegion.changePct}% değişim.`}
           </p>
-          <InformationButton title="Referans ve görüntü">{comparisonUnavailable && <p data-comparison-reason>{comparisonReasons?.includes('legacy-quality-missing') ? 'Eski referansın kalite veya poz bilgisi eksik; güvenilir karşılaştırma yapılamadı. Mevcut referans korundu.' : comparisonReasons?.includes('capture-conditions-incompatible') ? 'Yeni çekimin ışık, netlik veya poz koşulları referansla uyumsuz. Benzer koşullarda yeni tarama yapabilirsiniz; referans korundu.' : 'Bu eski kayıtta karşılaştırılamama nedeni ayrıntılı saklanmamış. Referans korundu; neden doğrulanmadan değişim gösterilmez.'}</p>}<p className="text-xs text-slate-400" data-skin-comparison-scope={comparisonScope}>Yeni görünüm analizleri mevcut oturumdan hesaplanır; önceki referans gerekmez. Eski karşılaştırmalı kayıtlarda referans, ilk geçerli taramanın sayısal bölge metrikleridir. {baselineTimestamp && `Referans tarihi: ${new Date(baselineTimestamp).toLocaleString('tr-TR')}.`} {baselineId && `Referans kimliği: ${baselineId}.`} Kapsam: {comparisonScope === 'three-angle-v2' ? 'ön, anatomik sağ ve anatomik sol açı' : 'tek karşı açı'}, uyumlu ışık/netlik/poz. Bu yüzde klinik cilt değişimi değildir.</p><p>Fotoğraf arka planıyla birlikte kaynak çözünürlüğünde ve yalnız bellekte kalır; baş/saç kesimi, alpha dekupe veya güzelleştirme uygulanmaz. Gösterim, taramadaki gibi kabul edilen yüzün çevresine yakınlaştırılır; kaynak fotoğraf değişmez. Fotoğraf aynalanmaz. Yeni renk ölçümleri aynı ağın görünür üçgenlerinden gelir. Eski kayıtların sayısal örnekleme kutuları yeni cilt kriterlerine dönüştürülmez. Yanaklar ilgili kabul edilmiş yan pozdan, diğer bölgeler ön pozdan gelir.</p></InformationButton>
+          <InformationButton title="Referans ve görüntü"><ul className="list-disc pl-5 space-y-3 text-base leading-relaxed">
+            <li>Skorlar fotoğraftaki görünümün 0–100 ölçeğindeki göstergeleridir; hastalık olasılığı veya klinik şiddet yüzdesi değildir.</li>
+            <li>Işık, gölge, sakal ve görüntü netliği değerlendirmeyi etkileyebilir. Yeterli görüntü alınamayan değerler — ile gösterilir.</li>
+            <li>Parlama, pullanma ve sivilce adayları fotoğraftaki görünüm üzerinden değerlendirilir.</li>
+            <li>Renkli alanlar seçtiğiniz bölge ve kriterin görüntüdeki dağılımını gösterir.</li>
+            <li>T-bölgesi alın ve burunu kapsar.</li>
+            <li>Kontur göstergelerinde görüntüde izlenen katlanma ve sınır çizgileri gösterilir.</li>
+          </ul></InformationButton>
         </div>
 
         <div>

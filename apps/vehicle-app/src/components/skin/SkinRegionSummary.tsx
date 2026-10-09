@@ -35,22 +35,16 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         {/* 4 Gerçek Engine Metriği Göstergeleri */}
         {currentRegion.indicators ? <div className="space-y-4" data-skin-indicators>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {currentRegion.indicators.filter(indicator=>indicator.score!==null).map(indicator=>{
+            {currentRegion.indicators.map(indicator=>{
               const geometry=indicator.appearance?.type==='longitudinal_measurement';
               const delta=indicator.referenceDelta===undefined?undefined:Math.round(indicator.referenceDelta*(geometry?1000:1));
-              return <div key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-2xl border border-sky-400/15 bg-slate-900/60 p-4 space-y-3">
+              return <div key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className={`rounded-2xl border bg-slate-900/60 p-4 space-y-3 ${selectedCriterion===indicator.id?'border-togg-turquoise ring-1 ring-togg-turquoise/40':'border-sky-400/15'}`}>
                 <div className="text-sm text-slate-300">{indicator.label}</div>
                 <SkinIndicatorValue indicator={indicator}/>
                 {delta!==undefined&&<p className="text-xs text-sky-300">Referansa göre {delta>0?'+':''}{delta} {geometry?'× 10⁻³ kontur farkı':indicator.unit}</p>}
               </div>;
             })}
           </div>
-          {currentRegion.indicators.every(indicator=>indicator.score===null)&&<p className="rounded-2xl border border-slate-700/60 p-4 text-sm text-slate-300">Bu karede yeterli güvenilir cilt ölçümü bulunmuyor.</p>}
-          {currentRegion.indicators.some(indicator=>indicator.score===null)&&<div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4 space-y-3">
-            <p className="text-xs text-slate-400">Bu taramada ölçülemeyenler</p>
-            <div className="flex flex-wrap gap-2">{currentRegion.indicators.filter(indicator=>indicator.score===null).map(indicator=><span key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-lg bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{indicator.label}<span className="sr-only">: Değerlendirilemiyor</span></span>)}</div>
-            <details className="text-xs text-slate-400"><summary className="cursor-pointer text-slate-300">Neden ölçülemiyor?</summary><dl className="mt-3 space-y-3">{currentRegion.indicators.filter(indicator=>indicator.score===null).map(indicator=><div key={indicator.id}><dt className="font-medium text-slate-300">{indicator.label}</dt><dd className="mt-1 leading-relaxed">{indicator.reason}</dd></div>)}</dl></details>
-          </div>}
         </div> : <div className="space-y-2.5">
           {/* 1. Kızarıklık Eğilimi */}
           <div className="space-y-1">
@@ -138,7 +132,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         </div>}
       </div>
 
-      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Yüzde biçimindeki 0–100 değerler görünüm indeksidir; hastalık olasılığı veya klinik şiddet yüzdesi değildir. Renk geçişi yalnız görsel bir ölçektir. Alan oranları yalnız görünür, geçerli cilt alanındaki gerçek adayları gösterir. Parlama sebum, pullanma nem, sivilce adayı tanı değildir. Yeni kontur ve katlanma indeksleri yalnız mevcut çekimin birlikte desteklediği görünüm sinyalidir; kişisel geçmiş gerekmez. Eski kontur oranları yalnız eski kayıt yönteminde korunur. Işık, sakal, gölge ve düşük detay sonucu sınırlayabilir. T-bölgesi hesabı alın ve burunu kapsar; çene eklenmez. Dolgu, korunan seçili bölge ağıyla sınırlıdır. Seçilen kartın lokal sinyali varsa ağ içinde dolgu görünür; geometrik ölçümde yalnız gerçek kontur çizilir. Yöntemler uzman şiddet ölçeğine kalibre edilmemiştir.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
+
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button

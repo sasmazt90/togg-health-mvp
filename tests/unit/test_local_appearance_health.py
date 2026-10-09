@@ -249,9 +249,15 @@ def test_controlled_positive_local_signals_execute_without_painting_source(crite
  measurement=next(r for r in result['measurements']['forehead'] if r['id']==criterion)
  assert measurement['quality']=='valid' and measurement['value']>0
  assert measurement['type']=='appearance_proxy' and result['photoId']==payload['photoId']
- layer=result['maps']['forehead:'+criterion];overlay,_=decode_photo(layer['dataUrl'])
- assert layer['photoId']==payload['photoId'] and layer['colorMapping']=='cyan-fixed-100-v1'
- assert layer['sampleCount']>0 and np.array_equal(before,image)
  if criterion=='acne':
+  assert 'forehead:acne' not in result['maps'] and measurement['localMap'] is None
   assert measurement['value']==1 and len(measurement['components']['bounds'])==1
   box=measurement['components']['bounds'][0];assert 240<box['x']<260 and 85<box['y']<105
+  # Overlapping region supports cannot report the same candidate twice.
+  assert sum(r['value'] or 0 for rows in result['measurements'].values() for r in rows if r['id']=='acne')==1
+  assert measurement['components']['candidateAreaPercent']>0
+ else:
+  layer=result['maps']['forehead:'+criterion];overlay,_=decode_photo(layer['dataUrl'])
+  assert layer['photoId']==payload['photoId'] and layer['colorMapping']=='cyan-fixed-100-v1'
+  assert layer['sampleCount']>0
+ assert np.array_equal(before,image)

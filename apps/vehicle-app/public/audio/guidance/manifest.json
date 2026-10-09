@@ -262,34 +262,34 @@
       "url": "/audio/guidance/438f535e696375cf3e64ad131cb2d9e5a962f46b3b325197d0c502be03dab239.mp3"
     },
     "hearing-prepare": {
-      "text": "Stereo kulaklığı takın. Rahat, düşük cihaz sesini seçin ve test boyunca değiştirmeyin. Kanalları dinleyip yalnız doğru kulağınızda duyduğunuzu doğrulayın.",
+      "text": "Lütfen önce kulaklığınızı takın ve aşağıda ilgili butonlara basarak sadece belirtilen kulaklıktan ses duyduğunuzu onaylayın.",
       "voice": "tr-TR-AhmetNeural",
       "rate": "-10%",
       "pitch": "-10Hz",
       "textVersion": "guidance-20261009-v1",
-      "contractHash": "cd9dd9b07875a9ee06b87a689303232d90c52e35f5616e74287729d5e8ec4a98",
-      "sha256": "8e921f40684819572c4a7b429d10411b3603cc95d3392758fd44d017b8f37e61",
-      "url": "/audio/guidance/cd9dd9b07875a9ee06b87a689303232d90c52e35f5616e74287729d5e8ec4a98.mp3"
+      "contractHash": "17e2e6e3043b8af03da0ec6da40d0c4642049b90796292bf685b5ae6a2eda3ab",
+      "sha256": "14ed34ac2d1d3df9eb4d39ed7583a7895bae66c102370b96dad946ac0d4ca835",
+      "url": "/audio/guidance/17e2e6e3043b8af03da0ec6da40d0c4642049b90796292bf685b5ae6a2eda3ab.mp3"
     },
     "hearing-tone": {
-      "text": "Yönerge bittikten sonra test başlayacak. Bir ses duyarsanız Duydum düğmesine veya boşluk tuşuna basın. Duymadığınızda bekleyin.",
+      "text": "Sesi duyana kadar bekleyin ve duyduğunuz an butona basın.",
       "voice": "tr-TR-AhmetNeural",
       "rate": "-10%",
       "pitch": "-10Hz",
       "textVersion": "guidance-20261009-v1",
-      "contractHash": "7560db7a17afb6fa6463b45cc95146d15434cd314c0087793e3772d8263ed552",
-      "sha256": "89f50cd37d1132afbe10f8156c115cff7a94a9d04352215a681bdb59f67b6915",
-      "url": "/audio/guidance/7560db7a17afb6fa6463b45cc95146d15434cd314c0087793e3772d8263ed552.mp3"
+      "contractHash": "6e6201841b280306b8b3f1b01002e232a148c0d0f61eb3278fa176e94edb5011",
+      "sha256": "147205af68d79fc12e787baa8c27597bdcbdebd128c207287186a680396d8886",
+      "url": "/audio/guidance/6e6201841b280306b8b3f1b01002e232a148c0d0f61eb3278fa176e94edb5011.mp3"
     },
     "hearing-digits": {
-      "text": "Yönerge bittikten sonra gürültü içinde üç sayı duyacaksınız. Sayıları sırayla girip yanıtı gönderin. Tekrar edilen deneme puanlanmaz.",
+      "text": "Geri sayım bittikten sonra gürültü içinde üç sayı duyacaksınız. Sayıları sırayla girip yanıtı gönderin.",
       "voice": "tr-TR-AhmetNeural",
       "rate": "-10%",
       "pitch": "-10Hz",
       "textVersion": "guidance-20261009-v1",
-      "contractHash": "89c90f5ef388677dbddcbf6caeb167af3f6f046523f42364e49ae4e0c98fd733",
-      "sha256": "08db4d743d62b84a197767d4ab8f6482c502b38154c2bf06cc3917e02aec2a99",
-      "url": "/audio/guidance/89c90f5ef388677dbddcbf6caeb167af3f6f046523f42364e49ae4e0c98fd733.mp3"
+      "contractHash": "1aa5eae5001f9a5efafaffbf89b89c3e4b74501c8935ff0f9d1373793220697e",
+      "sha256": "0931e7a59108d6f0409b23d86219e5ec0be00e2d16f8ac4e8e70d39865948a85",
+      "url": "/audio/guidance/1aa5eae5001f9a5efafaffbf89b89c3e4b74501c8935ff0f9d1373793220697e.mp3"
     },
     "hearing-complete": {
       "text": "Test tamamlandı. Sonuç bu cihazın dijital ses birimindedir. İsterseniz sayısal sonucu kaydedin.",

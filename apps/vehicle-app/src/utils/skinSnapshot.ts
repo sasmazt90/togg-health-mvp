@@ -17,6 +17,7 @@ export interface SkinSnapshot {
   landmarks?:{x:number;y:number;z?:number}[];
   contoursMeasured?:Record<string,{points:{x:number;y:number}[];lines?:{x:number;y:number}[][];features:number[]}>;
   localMaps?:Record<string,import('./skinLocalMaps').SkinLocalMap>;
+  acneCandidates?:Record<string,{x:number;y:number;width:number;height:number;areaPixels?:number}[]>;
   localAnalysis?:{loadMs:number;analysisMs:number;allocatedBytes:number};
 }
 // Anatomical indices in the unmirrored accepted MediaPipe frame. Sampling ROIs

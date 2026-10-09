@@ -5,7 +5,7 @@ import { ResultValue } from '../ResultValue';
 export function SkinIndicatorValue({ indicator, bar = true }: { indicator: SkinIndicator; bar?: boolean }) {
   const kind = skinDisplayKind(indicator), baseline = indicator.appearance?.limitationCode === 'REFERENCE_CREATED';
   const value = indicator.score;
-  if (value === null || !Number.isFinite(value) || baseline) return <ResultValue value={null} status={baseline ? 'Referans oluşturuldu' : 'Değerlendirilemiyor'} />;
+  if (value === null || !Number.isFinite(value) || baseline) return <span className="text-xl font-bold text-slate-300">—</span>;
   if (kind !== 'percent') return <ResultValue value={kind === 'contour' ? value * 1000 : value} unit={kind === 'contour' ? '× 10⁻³ kontur oranı' : kind === 'count' ? 'aday' : indicator.unit} />;
   const percent = Math.max(0, Math.min(100, value)), direction = SKIN_DISPLAY_DIRECTION[indicator.id] || 'neutral';
   const gradient = direction === 'positive' ? 'linear-gradient(to right,#f84b55 0%,#fb923c 50%,#34d399 100%)' : 'linear-gradient(to right,#34d399 0%,#fb923c 50%,#f84b55 100%)';

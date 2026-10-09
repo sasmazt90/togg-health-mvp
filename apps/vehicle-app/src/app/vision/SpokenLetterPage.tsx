@@ -121,11 +121,11 @@ export default function SpokenLetterPage(){
   if(!a.answerMemory.matches(target)||a.answerMemory.processed)return;
   // Store decoded fields before the admission/confidence gate. Showing an
   // understood fragment must not claim information that memory then discards.
-  if(!parsed.command){if(!a.answerMemory.append(target,key,text,parsed))return;refresh();}
+  if(!parsed.command){if(!a.answerMemory.append(target,key,text,parsed,confidence))return;refresh();}
   const merged=parsed.command?parsed:a.answerMemory.answer,geometry=measureSymbol(),now=performance.now();
   if(failure()||!geometry||!flow.current.canAnswer){setAnswerNotice(`Algılanan: ${answerDescription(merged)}. Koşullar düzelince bu harf için yeniden yanıt verin.`);s.unscored('CONDITIONS_INVALID_AT_RESPONSE',a.evidence?.conditions||null,now,geometry,parsed);inspect();return;}
   if(parsed.command==='repeat'){prompt(a.lastPrompt||'repeat');return;}
-  const low=confidence>0&&confidence<.5,unclear=!parsed.command&&(low||!!merged.clarify||!merged.letter||!answerTransform(merged));
+  const unclear=!parsed.command&&(!!a.answerMemory.missing||!!merged.clarify||!merged.letter||!answerTransform(merged));
   // A genuine user fragment cuts the remaining prompt without closing this mic.
   stopSpeech();setVoice(a.listeningStarted?'listening':'quiet');
   if(unclear){

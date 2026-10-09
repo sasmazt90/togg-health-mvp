@@ -15,7 +15,7 @@ from skimage.filters import gabor
 from skin_scan_baseline.oiliness import oiliness_map
 from skin_scan_baseline.blemishes import blemish_map
 
-VERSION = 'appearance-cv-2'
+VERSION = 'appearance-cv-3'
 LIMITS = {'minFacePixels': 180, 'analysisFacePixels': 320, 'maxClippedFraction': .03}
 
 
@@ -92,6 +92,45 @@ def eligible_flake_components(signal,eligible):
         if 3<=pixels<=80 and .3<=w/max(h,1)<=3.3 and pixels/max(w*h,1)>.25:
             islands|=labels==label
     return signal*eligible*islands
+
+
+def eye_skin_bands(points, shape, scale, origin, source_shape):
+    """Distinct lower-lid skin and outer-canthus supports in source coordinates.
+    These masks restrict measurement; the approved presentation mesh is unchanged.
+    """
+    p=np.asarray([[(v['x']*source_shape[1]-origin[0])*scale,
+                   (v['y']*source_shape[0]-origin[1])*scale] for v in points],np.float32)
+    axis=p[263]-p[33];axis/=max(float(np.linalg.norm(axis)),.001)
+    down=np.array([-axis[1],axis[0]],np.float32)
+    if down[1]<0:down=-down
+    face_width=max(float(abs((p[454]-p[234])@axis)),1.)
+    result={k:np.zeros(shape,np.uint8) for k in ('dark','bags','lines')}
+    for lower,corner,sign in [([33,163,144,145,153,154,155,133],33,-1),([263,390,373,374,380,381,382,362],263,1)]:
+        line=p[lower]
+        for criterion,top,bottom in [('dark',.012,.065),('bags',.022,.095)]:
+            polygon=np.concatenate([line+down*face_width*top,(line+down*face_width*bottom)[::-1]])
+            cv2.fillPoly(result[criterion],[np.rint(polygon).astype(np.int32)],255)
+        c=p[corner];out=axis*sign*face_width
+        polygon=np.asarray([c+out*.012-down*face_width*.012,c+out*.085-down*face_width*.025,
+                            c+out*.09+down*face_width*.05,c+out*.012+down*face_width*.06])
+        cv2.fillPoly(result['lines'],[np.rint(polygon).astype(np.int32)],255)
+    return {k:v>0 for k,v in result.items()}
+
+
+def acne_candidates(red, gray, saturation, high, local_contrast, baseline, eligible):
+    """One connected component list per source; no regional duplicate detections."""
+    red_center=red-cv2.GaussianBlur(red,(0,0),4)
+    scale2=red-cv2.GaussianBlur(red,(0,0),2)
+    detected=((red_center>.055)&(scale2>.028)&(local_contrast>.008)&(baseline>.02)&eligible).astype(np.uint8)
+    n,labels,stats,_=cv2.connectedComponentsWithStats(detected)
+    support=cv2.erode(eligible.astype(np.uint8),np.ones((5,5),np.uint8))>0
+    objects=[]
+    for label in range(1,n):
+        x,y,w,h,count=stats[label];blob=labels==label
+        if not 5<=count<=180 or not .45<=w/max(h,1)<=2.2 or count/max(w*h,1)<.38:continue
+        if not support[blob].all() or np.mean(gray[blob])<.20 or np.mean(saturation[blob])<.12 or np.mean(high[blob]>0)<.08:continue
+        objects.append((int(x),int(y),int(w),int(h),int(count),blob))
+    return objects,red_center
 
 
 def contour_geometry(points, region, conditions, temporal):
@@ -192,6 +231,9 @@ def analyze_skin(payload):
     for indices in holes:
         poly = np.asarray([[(points[i]['x']*width-x0)*scale, (points[i]['y']*bgr.shape[0]-y0)*scale] for i in indices], np.int32)
         cv2.fillPoly(exclusion, [poly], 255)
+    # Filter support at a cropped source edge is invalid, rather than a dark border signal.
+    edge=max(2,int(round(4*scale)))
+    exclusion[:edge,:]=255;exclusion[-edge:,:]=255;exclusion[:,:edge]=255;exclusion[:,-edge:]=255
     face_support=np.zeros(gray.shape,np.uint8)
     oval=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109]
     face_polygon=np.array([[(points[i]['x']*width-x0)*scale,(points[i]['y']*bgr.shape[0]-y0)*scale] for i in oval],np.int32)
@@ -200,6 +242,16 @@ def analyze_skin(payload):
     baseline_oil=oiliness_map(image,baseline_masks)
     baseline_blemish=blemish_map(image,baseline_masks)
     shine*=baseline_oil>0
+    bands=eye_skin_bands(points,gray.shape,scale,origin,bgr.shape)
+    overall=np.logical_or.reduce(list(masks.values()))&(exclusion==0)&~hair&~clipping&(gray>.12)
+    detections,red_center=acne_candidates(red,gray,saturation,high,local_contrast,baseline_blemish,overall)
+    # A component has one owning anatomical region in this source. T-zone overlap
+    # must not turn a forehead component into an additional nose detection.
+    assigned={k:[] for k in masks}
+    for detection in detections:
+        x,y,w,h,count,blob=detection
+        eligible_owners=[k for k in ('forehead','rightCheek','leftCheek','nose','chin') if k in masks and masks[k][blob].mean()>=.65]
+        if eligible_owners:assigned[eligible_owners[0]].append(detection)
     response, maps, contours = {}, {}, {}
     conditions = {**payload['conditions'],'sourceWidth':bgr.shape[1],'sourceHeight':bgr.shape[0]}
     for region, anatomical in masks.items():
@@ -217,12 +269,12 @@ def analyze_skin(payload):
                         noseSourcePixels=float((valid&display_anatomical).sum()/scale**2),
                         chinSourcePixels=0.)
         items = []
-        def add(criterion, value, unit, signal=None, ceiling=1., limitation=reason, components=None):
+        def add(criterion, value, unit, signal=None, ceiling=1., limitation=reason, components=None, signal_mask=None):
             usable = limitation is None
             item = row(region, criterion, float(value) if usable else None, unit, area, conditions, limitation, components)
             items.append(item)
             if usable and signal is not None:
-                layer = map_result(signal, valid & display_anatomical, region, criterion, source_hash, payload['pose'], bgr.shape, scale, unit, ceiling, origin)
+                layer = map_result(signal, valid & display_anatomical & (signal_mask if signal_mask is not None else True), region, criterion, source_hash, payload['pose'], bgr.shape, scale, unit, ceiling, origin)
                 if layer:
                     key=f'{region}:{criterion}';maps[key]=layer
                     # Descriptor only: the pixel/mask payload remains ephemeral
@@ -231,28 +283,20 @@ def analyze_skin(payload):
                         criterion=criterion,coordinateSpace='source-pixels')
         if region != 'periorbital':
             total=np.maximum(rgb.sum(axis=2),.001);chroma=(rgb[:,:,0]-rgb[:,:,1])/total
-            add('tone',np.std(chroma[valid])*100 if valid.any() else 0,'relative-color-index-0-100')
+            # Actual per-pixel contribution to the existing regional dispersion.
+            tone=np.abs(chroma-(np.mean(chroma[valid]) if valid.any() else 0))*100
+            add('tone',np.std(chroma[valid])*100 if valid.any() else 0,'relative-color-index-0-100',tone,100)
             redness=np.clip(red*100,0,100)
             add('redness',np.mean(redness[valid]) if valid.any() else 0,'relative-color-index-0-100',redness,100)
             add('oil', np.mean(shine[valid] > .12)*100 if valid.any() else 0, 'percent-visible-area', shine,
                 components={'localIntensity': float(np.mean(shine[valid])) if valid.any() else None, 'clippedFraction': clipped})
             # Small red center-surround candidates need circularity, texture and
             # multi-scale agreement. Dark moles/freckles and hair aren't acne evidence.
-            red_center = red-cv2.GaussianBlur(red, (0, 0), 4)
-            scale2 = red-cv2.GaussianBlur(red, (0, 0), 2)
-            candidates = ((red_center > .055) & (scale2 > .028) & (local_contrast > .008) & (baseline_blemish > .02) & valid).astype(np.uint8)
-            n, labels, stats, _ = cv2.connectedComponentsWithStats(candidates)
             signal = np.zeros(gray.shape, np.float32); boxes = []
-            for label in range(1, n):
-                x, y, w, h, count = stats[label]
-                if not 5 <= count <= 180 or not .45 <= w/max(h, 1) <= 2.2 or count/max(w*h, 1) < .38:
-                    continue
-                blob = labels == label
-                if np.mean(gray[blob]) < .20 or np.mean(saturation[blob]) < .12 or np.mean(high[blob] > 0) < .08:
-                    continue
+            for x,y,w,h,count,blob in assigned[region]:
                 signal[blob] = np.clip(red_center[blob]/.15, 0, 1)
-                boxes.append(dict(x=float(x/scale+x0), y=float(y/scale+y0), width=float(w/scale), height=float(h/scale)))
-            add('acne', len(boxes), 'candidate-count', signal, components={'bounds': boxes, 'evaluatedArea': area})
+                boxes.append(dict(x=float(x/scale+x0), y=float(y/scale+y0), width=float(w/scale), height=float(h/scale),areaPixels=float(count/scale**2)))
+            add('acne', len(boxes), 'candidate-count', components={'bounds': boxes, 'evaluatedArea': area,'candidateAreaPercent':100*sum(b['areaPixels'] for b in boxes)/max(area['sourcePixels'],1)})
         detail_reason = reason or ('INSUFFICIENT_SOURCE_DETAIL' if face_pixels < LIMITS['minFacePixels'] else None)
         regional_flakes=eligible_flake_components(flakes,valid)
         add('dry', np.mean(regional_flakes[valid] > .04)*100 if valid.any() else 0, 'percent-visible-area', regional_flakes,
@@ -260,11 +304,12 @@ def analyze_skin(payload):
             'lbpNonUniformFraction':float(np.mean(lbp[valid] == 9)) if valid.any() else None,
             'meaning':'fine-bright-flaking-candidates; roughness alone is not dryness'})
         if region == 'periorbital':
-            adjacent = cv2.dilate(base.astype(np.uint8), np.ones((25,25),np.uint8)).astype(bool) & ~base & (exclusion == 0) & ~clipping & ~hair & (face_support>0) & (gray>.12)
-            if adjacent.sum() >= 100 and valid.any():
+            under=valid&bands['dark']
+            adjacent = cv2.dilate(under.astype(np.uint8), np.ones((25,25),np.uint8)).astype(bool) & ~under & (exclusion == 0) & ~clipping & ~hair & (face_support>0) & (gray>.12)
+            if adjacent.sum() >= 100 and under.sum()>=100:
                 # Local relative contrast; global exposure cancels approximately.
                 dark = np.maximum(0,(np.median(gray[adjacent])-gray)/max(float(np.median(gray[adjacent])), .1))*100
-                add('dark', np.mean(dark[valid]), 'relative-color-index-0-100', dark, 100)
+                add('dark', np.mean(dark[under]), 'relative-color-index-0-100', dark, 100,signal_mask=bands['dark'],components={'band':'lower-lid-skin','analysisPixels':int(under.sum())})
             else: add('dark', 0, 'relative-color-index-0-100', limitation='ADJACENT_SKIN_MISSING')
             lines = np.zeros(gray.shape, np.float32)
             for frequency in (.18,.28):
@@ -272,16 +317,15 @@ def analyze_skin(payload):
                     real, imaginary = gabor(gray, frequency=frequency, theta=theta)
                     lines = np.maximum(lines, np.clip((np.hypot(real,imaginary)-.015)/.06,0,1))
             # Outer canthi only; don't report lower-eye texture as crow's feet.
-            outer = np.zeros(gray.shape,np.uint8)
-            for index in (33,263):
-                point = points[index]
-                cv2.circle(outer,(int((point['x']*width-x0)*scale),int((point['y']*bgr.shape[0]-y0)*scale)),int(28*scale/max(scale,.001)),255,-1)
-            lines *= outer > 0
-            add('lines', np.mean(lines[valid])*100 if valid.any() else 0, 'directional-line-index-0-100', lines, limitation=detail_reason)
+            outer=valid&bands['lines'];lines*=outer
+            add('lines', np.mean(lines[outer])*100 if outer.any() else 0, 'directional-line-index-0-100', lines, limitation=detail_reason or (None if outer.sum()>=30 else 'OUTER_CORNER_NOT_VISIBLE'),signal_mask=bands['lines'])
         if region != 'nose':
-            value,components,signal,lines,limitation=instant_proxy(gray,base&~clipping&(gray>.12),points,region,conditions,scale,origin,bgr.shape,hair,(face_support>0)&(exclusion==0)&~clipping&(gray>.12))
+            contour_support=base&~clipping&(gray>.12)
+            if region=='periorbital':contour_support&=bands['bags']
+            value,components,signal,lines,limitation=instant_proxy(gray,contour_support,points,region,conditions,scale,origin,bgr.shape,hair,(face_support>0)&(exclusion==0)&~clipping&(gray>.12))
             criterion = 'bags' if region == 'periorbital' else 'sag'
-            add(criterion,value or 0,INSTANT_UNIT,signal,limitation=reason or limitation,components=components)
+            # Contours already carry measured coordinates; no region-wide sag fill.
+            add(criterion,value or 0,INSTANT_UNIT,limitation=reason or limitation,components=components)
             if value is not None and reason is None and lines:
                 contours[region]=dict(points=lines[0],lines=lines,features=[])
         response[region]=items

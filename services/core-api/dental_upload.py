@@ -78,8 +78,9 @@ def analyze_upload(payload):
     # Single-view appearance is explicitly not a multiview-confirmed candidate.
     accumulation=dict(type='appearance_proxy',value=sum(c['areaPixels'] for c in deposits)/border*100 if border>100 else None,unit='percent-visible-border-area',methodVersion='dental-border-single-photo-v1',quality='valid' if border>100 else 'insufficient',limitationCode=None if border>100 else 'GINGIVAL_BORDER_NOT_VISIBLE',candidates=deposits,evaluatedArea=border,viewSupport=1,evidenceScope='single-photo-appearance-unconfirmed',uncertainty=['stain-food-filling-confounders','not-multiview-confirmed'],**meta)
     contours=[];rows=None;reason='NATURAL_BITE_NOT_CONFIRMED'
-    if payload.get('biteConfirmed') is True:
-        # User-reported relaxed bite plus a narrow separation of two actual enamel rows.
+    if tooth.any():
+        # Infer only visible two-row support from the actual pixels. A checkbox
+        # cannot establish a bite or supply a missing lower row.
         profile=tooth.sum(axis=1)/max(quality['roi']['width'],1)
         active=profile>.12;segments=[];start=None
         for i,v in enumerate(active):
@@ -90,6 +91,6 @@ def analyze_upload(payload):
         if len(segments)==2 and 0<segments[1][0]-segments[0][1]<quality['roi']['width']*.08:
             split=(segments[1][0]+segments[0][1])/2
             contours,rows,reason=contours_and_alignment(image,tooth,mouth,None,split,quality['roi']['width'])
-    alignment=dict(type='appearance_proxy',value={k:v['value'] for k,v in rows.items()} if reason is None else None,unit='degrees-of-visible-axis-dispersion',methodVersion='marker-watershed-upload-v1',quality='valid' if reason is None else 'insufficient',limitationCode=reason,rows=rows,contours=contours,evaluatedArea=int(tooth.sum()),biteConfirmation='user-reported-with-visible-two-row-support' if reason is None else None,uncertainty=['view-perspective','visible-contour-separation','not-malocclusion'],**meta)
-    view=dict(photoId=digest,pose='BITE' if payload.get('biteConfirmed') is True else 'FRONT',sourceWidth=image.shape[1],sourceHeight=image.shape[0],sourceType='upload',quality=quality,caries=dict(type='trained_prediction',value=len(candidates) if model['quality']=='valid' else None,unit='candidate-count',candidates=candidates,evaluatedArea=int(mouth.sum()),uncertainty=['dataset-domain-shift','visible-surface-only','confidence-is-not-severity'],**{**meta,**model}),accumulation=accumulation,alignment=alignment)
-    return dict(methodVersion='dental-visible-upload-v1',sourceType='upload',views=[view],storage='volatile-memory-only',clinicalValidation=False,source=source,normalizedPhoto=normalized)
+    alignment=dict(type='appearance_proxy',value={k:v['value'] for k,v in rows.items()} if reason is None else None,unit='degrees-of-visible-axis-dispersion',methodVersion='marker-watershed-upload-v2',quality='valid' if reason is None else 'insufficient',limitationCode=reason,rows=rows,contours=contours,evaluatedArea=int(tooth.sum()),biteConfirmation='visible-two-row-support' if reason is None else None,uncertainty=['view-perspective','visible-contour-separation','not-malocclusion'],**meta)
+    view=dict(photoId=digest,pose='FRONT',sourceWidth=image.shape[1],sourceHeight=image.shape[0],sourceType='upload',quality=quality,caries=dict(type='trained_prediction',value=len(candidates) if model['quality']=='valid' else None,unit='candidate-count',candidates=candidates,evaluatedArea=int(mouth.sum()),uncertainty=['dataset-domain-shift','visible-surface-only','confidence-is-not-severity'],**{**meta,**model}),accumulation=accumulation,alignment=alignment)
+    return dict(methodVersion='dental-visible-upload-v2',sourceType='upload',views=[view],storage='volatile-memory-only',clinicalValidation=False,source=source,normalizedPhoto=normalized)

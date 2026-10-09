@@ -43,9 +43,9 @@ export function mergeLetterAnswer(partial:ParsedAnswer,answer:ParsedAnswer):Pars
 }
 export const LETTER_INSTRUCTIONS={
  first:'Harf alanına bakın. Harfi ve yönünü istediğiniz sırada söyleyin. Yön ile birlikte, gördüğünüz harfle başlayan bir kelime söyleyebilirsiniz. Harf görünüyorsa yönergenin bitmesini beklemeniz gerekmez.',
- next1:'Şimdi bu harfi ve yönünü söyleyin.',
- next2:'Lütfen sıradaki harfi aynı şekilde okuyun.',
- next3:'Sıradaki harfi ve yönünü okuyun.',
+ next1:'Şimdi sıradaki harfi söyleyin.',
+ next2:'Lütfen bu harfi aynı şekilde okuyun.',
+ next3:'Yanıtınız kaydedildi. Sıradaki harfe geçiyoruz.',
  letter:'Harfi söyler misiniz? O harfle başlayan bir kelime de kullanabilirsiniz.',
  orientation:'Harfin hangi yöne dönük olduğunu söyler misiniz?',
  reverse:'Baş aşağı mı, aynalı mı?',
