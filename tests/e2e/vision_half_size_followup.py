@@ -7,7 +7,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path.cwd()
-OUT = ROOT / 'audit-results/vision-half-size-20261009'
+OUT = ROOT / (sys.argv[2] if len(sys.argv) > 2 else 'audit-results/vision-half-size-20261009')
 OUT.mkdir(parents=True, exist_ok=True)
 PHASE = sys.argv[1] if len(sys.argv) > 1 else 'after'
 tree = ast.parse((ROOT / 'tests/e2e/vision_feedback.py').read_text('utf8'))
