@@ -5,6 +5,25 @@ import argparse,hashlib,json,re
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 
+def duplicate_components(rows,root=ROOT):
+ import cv2,numpy as np
+ parent=list(range(len(rows)));hashes=[]
+ def find(i):
+  while parent[i]!=i:parent[i]=parent[parent[i]];i=parent[i]
+  return i
+ for row in rows:
+  gray=cv2.imread(str(root/row['imagePath']),cv2.IMREAD_GRAYSCALE)
+  coeff=cv2.dct(cv2.resize(gray,(32,32)).astype(np.float32))[:8,:8].ravel()[1:]
+  hashes.append(sum(int(v>np.median(coeff))<<j for j,v in enumerate(coeff)))
+ for i,a in enumerate(rows):
+  for j,b in enumerate(rows[:i]):
+   if a['caseId']==b['caseId'] or a['photoSHA256']==b['photoSHA256'] or (hashes[i]^hashes[j]).bit_count()<=4:parent[find(i)]=find(j)
+ return [find(i) for i in range(len(rows))]
+
+def partitions_are_disjoint(rows,root=ROOT):
+ groups=duplicate_components(rows,root)
+ return all(len({r.get('split') for i,r in enumerate(rows) if groups[i]==group})==1 for group in set(groups))
+
 def validate(rows,target,protocol,root=ROOT):
  spec=protocol['targets'][target];result=[];reasons=[]
  for i,row in enumerate(rows):
@@ -45,16 +64,11 @@ def main():
  accepted,rejected=validate(rows,args.target,protocol);report={'target':args.target,'realAcceptedAnnotations':len(accepted),'rejected':rejected,'readyForTraining':False,'productAccepted':False,'unit':protocol['targets'][args.target]['unit'],'nextStep':'Acquire rights-cleared standardized captures, two independent expert grades and agreed local annotations; run prepare_annotations then train_ordinal then evaluate held-out camera-domain cases'}
  if accepted:
   import random
-  cases=sorted({r['caseId'] for r in accepted});random.Random(protocol['seed']).shuffle(cases);splits={k:'train' if i<int(.6*len(cases)) else 'validation' if i<int(.8*len(cases)) else 'test' for i,k in enumerate(cases)}
-  # Reject any cross-partition exact/near duplicate; never silently retrain on it.
-  import cv2,numpy as np
-  hashes=[]
-  for r in accepted:
-   gray=cv2.imread(str(ROOT/r['imagePath']),cv2.IMREAD_GRAYSCALE);coeff=cv2.dct(cv2.resize(gray,(32,32)).astype(np.float32))[:8,:8].ravel()[1:];hashes.append(sum(int(v>np.median(coeff))<<j for j,v in enumerate(coeff)))
-  leaked=any(splits[a['caseId']]!=splits[b['caseId']] and (a['photoSHA256']==b['photoSHA256'] or (hashes[i]^hashes[j]).bit_count()<=4) for i,a in enumerate(accepted) for j,b in enumerate(accepted[:i]))
-  if leaked:report['duplicateLeakage']=True;accepted=[]
-  else:
-   for r in accepted:r['split']=splits[r['caseId']]
-   report['readyForTraining']=all(len({r['caseId'] for r in accepted if r['split']==s and r['consensusGrade']==g})>=3 for s in ['train','validation','test'] for g in range(4))
+  components=duplicate_components(accepted);groups=sorted(set(components));random.Random(protocol['seed']).shuffle(groups)
+  splits={group:'train' if i<int(.6*len(groups)) else 'validation' if i<int(.8*len(groups)) else 'test' for i,group in enumerate(groups)}
+  for r,group in zip(accepted,components):r['split']=splits[group]
+  assert partitions_are_disjoint(accepted)
+  report['duplicateComponents']=len(groups)
+  report['readyForTraining']=all(len({r['caseId'] for r in accepted if r['split']==s and r['consensusGrade']==g})>=3 for s in ['train','validation','test'] for g in range(4))
  (out/(args.target+'-manifest.json')).write_text(json.dumps(accepted,indent=2),'utf8');(out/(args.target+'-report.json')).write_text(json.dumps(report,indent=2),'utf8');print(json.dumps(report))
 if __name__=='__main__':main()

@@ -13,7 +13,7 @@ const fs=require('fs'),ts=require('typescript'),assert=require('assert/strict');
 const dir=JSON.parse(fs.readFileSync(0,'utf8')).dir;
 const Module=require('module'),original=Module._resolveFilename;
 Module._resolveFilename=function(request,parent,...rest){if(request==='@mediapipe/tasks-vision')return original.call(this,request,{paths:module.paths},...rest);return original.call(this,request,parent,...rest)};
-function load(name){const target=dir+'/'+name+'.js';fs.writeFileSync(target,ts.transpileModule(fs.readFileSync('apps/vehicle-app/src/utils/'+name+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);return require(target)}
+const load=require('./tests/unit/ts_source_loader.cjs')(dir);
 const V=load('spokenVision');
 // Explicit unit geometry input, not a claim of browser measurement.
 const originalRespond=V.SpokenLetterSession.prototype.respond;

@@ -1,12 +1,14 @@
 import { STORAGE_KEYS } from './attuneMode';
 
-export type HealthCategory = 'vision' | 'skin' | 'mental';
+export type HealthCategory = 'vision' | 'skin' | 'mental' | 'dental' | 'hearing';
 export type HealthRecord = { id: string; date?: string; timestamp?: string; dateTr?: string; [key: string]: any };
-export const RECORD_LABELS = { vision: 'Görme testi', skin: 'Cilt analizi', mental: 'Ruhsal iyi oluş özeti' };
+export const RECORD_LABELS = { vision: 'Görme testi', skin: 'Cilt analizi', mental: 'Ruhsal iyi oluş özeti', dental: 'Diş görünümü', hearing: 'Cihazda duyulabilirlik' };
 export const RECORD_JOURNAL = 'attune_health_transaction_v1';
 const KEYS = {
   vision: { history: 'togg_health_vision_history', latest: STORAGE_KEYS.LATEST_VISION },
   skin: { history: STORAGE_KEYS.SKIN_HISTORY, latest: STORAGE_KEYS.LATEST_SKIN },
+  dental: { history: 'attune_dental_history_v1', latest: 'attune_dental_latest_v1' },
+  hearing: { history: 'attune_hearing_history_v1', latest: 'attune_hearing_latest_v1' },
   mental: { history: STORAGE_KEYS.MENTAL_HISTORY, latest: STORAGE_KEYS.LATEST_MENTAL }
 };
 
@@ -20,7 +22,7 @@ function recover() {
   if (!raw) return;
   const backup = JSON.parse(raw);
   if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('Kayıt işlemi doğrulanamadı.');
-  const allowed = new Set<string>([...Object.values(KEYS).flatMap(k => [k.history, k.latest]), STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.REFERRAL_CONTEXT]);
+  const allowed = new Set<string>(['attune_skin_appearance_reference_v1','attune_skin_appearance_single_reference_v1',...Object.values(KEYS).flatMap(k => [k.history, k.latest]), STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.REFERRAL_CONTEXT]);
   for (const [key, value] of Object.entries(backup)) {
     if (!allowed.has(key) || (value !== null && typeof value !== 'string')) throw new Error('Kayıt işlemi doğrulanamadı.');
     if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value as string);
@@ -155,6 +157,19 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
     const changes: Record<string, string | null> = { [keys.history]: JSON.stringify(remaining), [keys.latest]: latest };
     let referenceRemoved = false;
     if (category === 'skin') {
+      for(const key of ['attune_skin_appearance_reference_v1','attune_skin_appearance_single_reference_v1']){
+        const ref=JSON.parse(localStorage.getItem(key)||'null');
+        if(ref?.id===id){changes[key]=null;referenceRemoved=true;}
+        else if(ref){let changed=false;
+          for(const rows of Object.values(ref.indicators||{}) as any[][])for(const row of rows)if(row.appearance?.referenceId===id){
+            row.score=null;row.appearance.value=null;row.appearance.quality='insufficient';row.appearance.referenceId=null;
+            row.appearance.components={};row.appearance.limitationCode='REFERENCE_DELETED';
+            if(row.measurement){row.measurement.rawValue=null;row.measurement.quality='insufficient';row.measurement.unavailableReason='REFERENCE_DELETED';}
+            delete row.referenceDelta;changed=true;
+          }
+          if(changed){changes[key]=JSON.stringify(ref);referenceRemoved=true;}
+        }
+      }
       const single = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE_META) || 'null');
       const multi = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE) || 'null');
       const signs = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKIN_SIGNS_BASELINE) || 'null');
@@ -165,11 +180,14 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
         changes[STORAGE_KEYS.SKIN_BASELINE] = null; changes[STORAGE_KEYS.SKIN_BASELINE_META] = null; referenceRemoved = true;
       }
       if (multi?.id === id) { changes[STORAGE_KEYS.SKIN_MULTI_BASELINE] = null; referenceRemoved = true; }
+      for(const item of remaining)for(const rows of Object.values(item.indicators||{}) as any[][])for(const row of rows)if(row.appearance?.referenceId===id){
+        delete row.referenceDelta;row.appearance.referenceId=null;delete row.appearance.components.normalizedContourDelta;row.appearance.limitationCode='REFERENCE_DELETED';
+      }
       for (const item of remaining) if (item.baselineId === id) {
         item.comparisonUnavailable = true; item.referenceDeleted = true;
         delete item.highestChangePct; item.referralSuggested = false;
         for (const region of Object.values(item.regions || {}) as any[]) { delete region.changeFromBaselinePct; region.comparisonUnavailable = true; }
-        for (const rows of Object.values(item.indicators || {}) as any[][]) for(const row of rows) delete row.referenceDelta;
+        for (const rows of Object.values(item.indicators || {}) as any[][]) for(const row of rows){delete row.referenceDelta;if(row.appearance){row.appearance.referenceId=null;delete row.appearance.components.normalizedContourDelta;row.appearance.limitationCode='REFERENCE_DELETED';}}
         item.clinicalNoteTr = 'Bu karşılaştırmanın referansı silindi. Yeni bir referans taraması gerekiyor.';
       }
       changes[keys.history] = JSON.stringify(remaining);

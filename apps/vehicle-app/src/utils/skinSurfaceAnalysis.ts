@@ -54,3 +54,31 @@ export function surfaceColor(value:number,valid:boolean,maximum=100):[number,num
  if(!valid||!Number.isFinite(value)||value<=0)return [0,0,0,0];const t=clamp(value/maximum);
  return [Math.round(54-40*t),Math.round(228-100*t),Math.round(241-95*t),Math.round(255*.32*t)];
 }
+
+export const RELATIVE_SHINE_METHOD='relative-chromatic-reflection-candidate-v2';
+/** Research-only local brightening + desaturation. No absolute V threshold,
+ * photo min/max, generated skin details, sebum claim or product admission.
+ * Shares the exact source-coordinate mask/denominator with the V1 control.
+ */
+export function analyzeRelativeShine(input:SurfaceInput):SurfaceGrid {
+ const grid=analyzeSurface(input,false),values=new Float64Array(grid.valid.length),saturation=new Float64Array(grid.valid.length);
+ for(let gy=0;gy<grid.height;gy++)for(let gx=0;gx<grid.width;gx++){
+  const k=gy*grid.width+gx;if(!grid.valid[k])continue;
+  const sx=Math.min(input.width-1,grid.x+gx*grid.step+Math.floor(grid.step/2)),sy=Math.min(input.height-1,grid.y+gy*grid.step+Math.floor(grid.step/2)),i=(sy*input.width+sx)*4;
+  const r=input.pixels[i],g=input.pixels[i+1],b=input.pixels[i+2],v=Math.max(r,g,b);values[k]=v/255;saturation[k]=v?(v-Math.min(r,g,b))/v:0;
+ }
+ const unavailable=input.region==='periorbital'?'region-out-of-scope':!input.qualityValid?'invalid-source-quality':grid.validSamples<100?'insufficient-visible-skin':grid.clippedFraction>SHINE_PARAMETERS.maxClippedFraction?'overexposed-region':null;
+ let numerator=0;
+ if(!unavailable)for(let gy=0;gy<grid.height;gy++)for(let gx=0;gx<grid.width;gx++){
+  const k=gy*grid.width+gx;if(!grid.valid[k])continue;const v:number[]=[],s:number[]=[];
+  for(let yy=Math.max(0,gy-5);yy<=Math.min(grid.height-1,gy+5);yy++)for(let xx=Math.max(0,gx-5);xx<=Math.min(grid.width-1,gx+5);xx++){
+   const j=yy*grid.width+xx;if(grid.valid[j]){v.push(values[j]);s.push(saturation[j]);}
+  }
+  if(v.length<16)continue;v.sort((a,b)=>a-b);s.sort((a,b)=>a-b);
+  const background=v[Math.floor(v.length/2)],backgroundS=s[Math.floor(s.length/2)];
+  const brightening=values[k]/Math.max(background,1e-6)-1,desaturation=backgroundS-saturation[k];
+  const response=clamp((brightening-.08)/.24)*clamp(desaturation/.25);
+  grid.shine[k]=response;if(response>=SHINE_PARAMETERS.candidateThreshold)numerator++;
+ }
+ return {...grid,shineSamples:numerator,shineUnavailable:unavailable,shineAreaPercent:unavailable?null:100*numerator/Math.max(1,grid.validSamples),allocatedBytes:grid.allocatedBytes+values.byteLength+saturation.byteLength};
+}

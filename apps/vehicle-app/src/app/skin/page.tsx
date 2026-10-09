@@ -25,6 +25,8 @@ import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
 import { SkinSnapshot, snapshotRawSkinFrame as snapshotSkinFrame, snapshotAngleForRegion, assertCompleteFace } from '../../utils/skinSnapshot';
 import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators, canCompareIndicator } from '../../utils/skinIndicators';
+import {skinTemporalSupport} from '../../utils/skinTemporalSupport';
+import { analyzeAppearance,attachAppearance,compareAppearance,initializeMissingContourReferences } from '../../utils/appearanceMeasurements';
 import { SkinLocalAnalysis } from '../../utils/skinLocalMaps';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
@@ -36,10 +38,19 @@ import { SkinActionsModal } from '../../components/skin/SkinActionsModal';
 import { AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
 
 export default function SkinPage() {
+  const volatileReference=useRef<any>(null);
+  const resultPersisted=useRef(false);
+  const storageAllowed=()=>localStorage.getItem('attune_privacy_skin_save_allowed')==='true';
+  const temporalSupport=useRef<ReturnType<typeof skinTemporalSupport>[]>([]);
   const localAnalysis=useRef<SkinLocalAnalysis|null>(null);
-  const addLocalMaps=async(snapshot:SkinSnapshot,ctx:CanvasRenderingContext2D,valid:boolean,current:()=>boolean,expected?:string)=>{
+  const addLocalMaps=async(snapshot:SkinSnapshot,ctx:CanvasRenderingContext2D,valid:boolean,current:()=>boolean,expected?:string,indicators?:import('../../utils/skinIndicators').SkinIndicators,conditions?:Record<string,number>)=>{
     localAnalysis.current??=new SkinLocalAnalysis();
     try {const result=await localAnalysis.current.analyze(snapshot,ctx.getImageData(0,0,snapshot.width,snapshot.height).data,valid,current,expected);if(current()){snapshot.photoId=result.photoId;snapshot.localMaps=result.maps;snapshot.localAnalysis={loadMs:result.loadMs,analysisMs:result.analysisMs,allocatedBytes:result.allocatedBytes};}} catch {/* Optional local layer failure never fabricates a map or discards numerical capture. */}
+    if(indicators&&conditions&&snapshot.landmarks){
+      if(!snapshot.photoId){const digest=await crypto.subtle.digest('SHA-256',ctx.getImageData(0,0,snapshot.width,snapshot.height).data);snapshot.photoId=Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,'0')).join('');}
+      const result=await analyzeAppearance(snapshot,valid,conditions,temporalSupport.current,current);
+      if(current()){attachAppearance(indicators,result);snapshot.localMaps={...snapshot.localMaps,...result.maps};snapshot.contoursMeasured=result.contours;}
+    }
   };
   useEffect(()=>()=>{localAnalysis.current?.cancel();},[]);
   const router = useRouter();
@@ -193,6 +204,7 @@ export default function SkinPage() {
   useEffect(() => {
     const revoke = () => {
       if (!parkedRef.current || !isCameraAllowed()) {
+        volatileReference.current=null;
         acquisitionRef.current += 1;
         snapshotFrames.current = {}; snapshotRecord.current = null; setSnapshots({});
         if (demoTimerRef.current) clearInterval(demoTimerRef.current);
@@ -212,7 +224,7 @@ export default function SkinPage() {
 
   useEffect(() => {
     const refresh = () => {
-      if (scanState !== 'COMPLETED' || isDemoMode()) return;
+      if (scanState !== 'COMPLETED' || isDemoMode() || !resultPersisted.current) return;
       try {
         const latest = JSON.parse(localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) || 'null');
         if (latest?.id !== snapshotRecord.current) { snapshotFrames.current = {}; snapshotRecord.current = null; setSnapshots({}); }
@@ -382,12 +394,12 @@ export default function SkinPage() {
     }
 
     try { assertCompleteFace(alignToUse, canvas.width, canvas.height); } catch { setErrorMessage('Alın ve çenenin tamamı kadrajda olmalı. İlgili pozu yeniden alın.'); setScanState('ERROR'); return; }
-    setGuidanceText('Portre görüntüsü hazırlanıyor...');
+    setGuidanceText('Yerel görünüm ölçümleri hazırlanıyor; iptal edebilirsiniz.');
     setPreparationPhase(null);
     if (!validCapture()) return;
     const acceptedSnapshot = snapshotSkinFrame(canvas, alignToUse, 'FRONT');
     const indicators=measureSkinIndicators(ctx,acceptedSnapshot,qualToUse);
-    await addLocalMaps(acceptedSnapshot,ctx,qualToUse.isValid,validCapture);
+    await addLocalMaps(acceptedSnapshot,ctx,qualToUse.isValid,validCapture,undefined,indicators,{yaw:alignToUse.yaw,pitch:alignToUse.pitch,roll:alignToUse.roll,scaleRatio:alignToUse.scaleRatio,avgLuminance:qualToUse.avgLuminance,blurScore:qualToUse.blurScore});
     if(!validCapture())return;
 
     // Baseline kontrolü (İlk tarama mı, sonraki tarama mı?)
@@ -410,17 +422,17 @@ export default function SkinPage() {
     }
 
     const capturePose = { yaw: alignToUse.yaw, pitch: alignToUse.pitch, roll: alignToUse.roll, scaleRatio: alignToUse.scaleRatio };
-    const signsRaw=localStorage.getItem(STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE);
+    const signsRaw=localStorage.getItem('attune_skin_appearance_single_reference_v1');
     let signsPrior:any;
     try {
-      signsPrior=JSON.parse(signsRaw||'null');
+      signsPrior=JSON.parse(signsRaw||'null')||volatileReference.current;
       if(signsPrior && (signsPrior.schemaVersion!==3 || signsPrior.indicatorContract!==SKIN_SIGN_CONTRACT || !validSkinIndicators(signsPrior.indicators)))throw Error('INCOMPATIBLE_SIGN_REFERENCE');
     } catch {setErrorMessage('Yeni renk referansı okunamadı. Mevcut referanslar korunuyor; tarama kaydedilmedi.');setScanState('ERROR');return;}
     const isFirstScan=!signsPrior;
     const comparisonUnavailable=!!signsPrior && !canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:signsPrior.quality,pose:signsPrior.pose},qualToUse,capturePose);
-    if(signsPrior&&!comparisonUnavailable)for(const [region,rows] of Object.entries(indicators))for(const row of rows){
+    if(signsPrior)for(const [region,rows] of Object.entries(indicators))for(const row of rows){
       const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));
-      if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;
+      if(row.appearance)compareAppearance(row,previous,!comparisonUnavailable,signsPrior.id);else if(!comparisonUnavailable&&row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;
     }
     // Legacy metrics remain available to old records; they do not drive V3 claims.
     const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, null, 20.0);
@@ -435,7 +447,7 @@ export default function SkinPage() {
       highestChangePct: 0,
       referralSuggested: false,
       isBaseline: isFirstScan,
-      clinicalNoteTr: 'V3 renk indeksleri klinik belirti şiddeti değildir. Eski doku/parlaklık referansları korunur; yeni başlıklara dönüştürülmez.',
+      clinicalNoteTr: 'Bölgesel görünüm vekilleri ve kişisel kontur takibi; hastalık veya kalibre klinik şiddet değildir.',
       baselineId: signsPrior?.id,
       baselineTimestamp: signsPrior?.timestamp,
       comparisonUnavailable,
@@ -444,12 +456,16 @@ export default function SkinPage() {
       usedMediaPipe: true
     };
 
+    const addedContourReference=initializeMissingContourReferences(signsPrior,indicators,comparisonUnavailable?[]:Object.keys(indicators),finalResult.id);
     // Yalnızca canPersistResult doğrulaması geçerse gerçek sonuç kalıcı olarak saklanır
     if (validSkinIndicators(indicators) && SkinAnalyzer.canPersistResult(finalResult)) {
       try {
-        await appendHealthRecord('skin', finalResult, isFirstScan ? {
-          [STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE]: JSON.stringify({id:finalResult.id,timestamp:finalResult.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,quality:qualToUse,pose:capturePose})
-        } : {}, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE)===signsRaw);
+        resultPersisted.current=storageAllowed();
+        if(resultPersisted.current)await appendHealthRecord('skin', finalResult, isFirstScan ? {
+          ['attune_skin_appearance_single_reference_v1']: JSON.stringify({id:finalResult.id,timestamp:finalResult.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,quality:qualToUse,pose:capturePose})
+        } : addedContourReference?{['attune_skin_appearance_single_reference_v1']:JSON.stringify(addedContourReference)}:{}, () => validCapture() && storageAllowed() && localStorage.getItem('attune_skin_appearance_single_reference_v1')===signsRaw);
+        if(addedContourReference)volatileReference.current=addedContourReference;
+        if(isFirstScan)volatileReference.current={id:finalResult.id,timestamp:finalResult.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,quality:qualToUse,pose:capturePose};
         if (!validCapture()) return;
       } catch (e) {
         setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Referans veya geçmiş kaydı oluşturulduğu doğrulanamadı.');
@@ -482,16 +498,16 @@ export default function SkinPage() {
       const priorRaw = localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE);
       const prior: MultiAngleReference | null = JSON.parse(priorRaw || 'null');
       const comparison = compareMultiAngle(current, prior);
-      const signsRaw=localStorage.getItem(STORAGE_KEYS.SKIN_SIGNS_BASELINE);
-      const signsPrior=JSON.parse(signsRaw||'null');
+      const signsRaw=localStorage.getItem('attune_skin_appearance_reference_v1');
+      const signsPrior=JSON.parse(signsRaw||'null')||volatileReference.current;
       if(signsPrior && (signsPrior.schemaVersion!==3 || signsPrior.indicatorContract!==SKIN_SIGN_CONTRACT || !validSkinIndicators(signsPrior.indicators)))throw Error('INCOMPATIBLE_SIGN_REFERENCE');
       const indicators=Object.assign({},captures.FRONT.indicators,captures.RIGHT.indicators,captures.LEFT.indicators);
       const incompatible:string[]=[];
       if(signsPrior)for(const [region,rows] of Object.entries(indicators)){
         const angle=snapshotAngleForRegion(region,true),base=signsPrior.captures?.[angle],capture=captures[angle];
         const compatible=base&&canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:base.quality,pose:base.pose},capture.quality,capture.pose);
-        if(!compatible){incompatible.push(region);continue;}
-        for(const row of rows){const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));if(row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;}
+        if(!compatible)incompatible.push(region);
+        for(const row of rows){const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));if(row.appearance)compareAppearance(row,previous,compatible,signsPrior.id);else if(compatible&&row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;}
       }
       const finalResult: SkinAnalysisResult = {
         schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,
@@ -500,12 +516,16 @@ export default function SkinPage() {
         highestChangePct: 0, referralSuggested: false,
         comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose, baselineId: signsPrior?.id, baselineTimestamp: signsPrior?.timestamp,
         comparisonUnavailable: incompatible.length > 0, comparisonReasons: incompatible.length?['capture-conditions-incompatible']:[],
-        clinicalNoteTr: 'V3 bölgesel renk indeksleri klinik belirti şiddeti değildir. Eski doku/parlaklık referansları korunur; yeni başlıklara dönüştürülmez. Kuruluk, sarkma, yağlılık, sivilce ve göz çevresi kriterlerinin doğrulanmış ölçümü yoktur.'
+        clinicalNoteTr: 'Bölgesel renk, görünüm vekilleri ve kişisel kontur takibi. Hastalık tanısı veya kalibre edilmiş klinik şiddet değildir; eski ölçümler yeni yönteme dönüştürülmez.'
       };
       if (!validSkinIndicators(indicators) || !SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
       // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
-      const referenceChanges:Record<string,string|null>=!signsPrior?{[STORAGE_KEYS.SKIN_SIGNS_BASELINE]:JSON.stringify({id:current.id,timestamp:current.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,captures})}:{};
-      await appendHealthRecord('skin', finalResult, referenceChanges, () => validCapture() && localStorage.getItem(STORAGE_KEYS.SKIN_SIGNS_BASELINE) === signsRaw);
+      const addedContourReference=initializeMissingContourReferences(signsPrior,indicators,Object.keys(indicators).filter(region=>!incompatible.includes(region)),current.id);
+      const referenceChanges:Record<string,string|null>=!signsPrior?{['attune_skin_appearance_reference_v1']:JSON.stringify({id:current.id,timestamp:current.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,captures})}:addedContourReference?{['attune_skin_appearance_reference_v1']:JSON.stringify(addedContourReference)}:{};
+      resultPersisted.current=storageAllowed();
+      if(resultPersisted.current)await appendHealthRecord('skin', finalResult, referenceChanges, () => validCapture() && storageAllowed() && localStorage.getItem('attune_skin_appearance_reference_v1') === signsRaw);
+      if(addedContourReference)volatileReference.current=addedContourReference;
+      if(!signsPrior)volatileReference.current={id:current.id,timestamp:current.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,captures};
       if (!validCapture()) return;
       snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
       setMediaStream(null); setIsLiveVideo(false);
@@ -635,6 +655,7 @@ export default function SkinPage() {
               curQual.isValid;
 
             if (isValid) {
+              if(curAlign.landmarks){temporalSupport.current.push(skinTemporalSupport(ctx,curAlign.landmarks));temporalSupport.current=temporalSupport.current.slice(-6);}
               consecutiveValidFramesRef.current += 1;
               const progress = Math.min(100, Math.round((consecutiveValidFramesRef.current / 15) * 100));
               setScanProgress(captureState.enabled ? Math.round((captureState.index * 100 + progress) / 3) : progress);
@@ -646,12 +667,12 @@ export default function SkinPage() {
                     assertCompleteFace(curAlign, canvas.width, canvas.height);
                     const capture = await captureSkinAngle(ctx, curAlign, curQual, target, captureState.captures);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
-                    setGuidanceText('Portre görüntüsü hazırlanıyor...');
+                    setGuidanceText('Yerel görünüm ölçümleri hazırlanıyor; iptal edebilirsiniz.');
                     setPreparationPhase(null);
                     if (cancelled || !parkedRef.current || !isCameraAllowed()) return;
                     const snapshot = snapshotSkinFrame(canvas, curAlign, target);
                     capture.indicators=measureSkinIndicators(ctx,snapshot,curQual);
-                    await addLocalMaps(snapshot,ctx,curQual.isValid,()=>!cancelled&&parkedRef.current&&isCameraAllowed(),capture.frameToken);
+                    await addLocalMaps(snapshot,ctx,curQual.isValid,()=>!cancelled&&parkedRef.current&&isCameraAllowed(),capture.frameToken,capture.indicators,{...capture.pose,avgLuminance:curQual.avgLuminance,blurScore:curQual.blurScore});
                     if(cancelled||!parkedRef.current||!isCameraAllowed())return;
                     if(target==='FRONT'){delete capture.indicators.rightCheek;delete capture.indicators.leftCheek;}
                     if (target === 'FRONT') snapshot.rois = snapshot.rois.filter(r => !['rightCheek','leftCheek'].includes(r.id));
@@ -659,8 +680,9 @@ export default function SkinPage() {
                     captureState.captures[target] = capture;
                     setCompletedAngles([...SKIN_ANGLES.slice(0, captureState.index + 1)]);
                     if (captureState.index === 2) { finishMultiRef.current(captureState.captures as Record<SkinAngle, AngleCapture>); return; }
-                    captureState.index++; setAngleIndex(captureState.index); consecutiveValidFramesRef.current = 0;
+                    temporalSupport.current=[];captureState.index++; setAngleIndex(captureState.index); consecutiveValidFramesRef.current = 0;
                   } catch (error) {
+                    if(error instanceof Error&&error.message==='Yerel görünüm analizi tamamlanamadı.'){setErrorMessage(error.message);setScanState('ERROR');return;}
                     consecutiveValidFramesRef.current = 0;
                     setScanProgress(Math.round(captureState.index * 100 / 3));
                     setGuidanceText(error instanceof Error && error.message === 'INCOMPLETE_HEAD_FRAME' ? 'Alın ve çeneniz kadrajda kalacak şekilde biraz geriye gidin; bu poz yeniden alınacak.' : 'Bu poz güvenilir ölçülemedi veya önceki kareyle aynı. İstenen açıyı yeniden deneyin.');

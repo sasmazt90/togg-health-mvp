@@ -139,6 +139,10 @@ def main():
         if occupied(3000) or occupied(8000):
             raise RuntimeError("3000 veya 8000 portunda mevcut bir servis var. Kisa yol bu servisi kapatmaz veya sahiplenmez.")
         env = {key: value for key, value in os.environ.items() if not key.startswith("OPENAI_")}
+        runtime = ROOT / ".runtime/security-20261008"
+        if not (runtime / "fastapi").is_dir():
+            raise RuntimeError("TOGG guvenli Python ortami eksik; install_security_runtime.py calistirilmali.")
+        env["PYTHONPATH"] = str(runtime) + os.pathsep + env.get("PYTHONPATH", "")
         env["OPENAI_API_KEY"] = ""
         env["ATTUNE_LOAD_LOCAL_ENV"] = "0"
         env["ATTUNE_TRUSTED_ORIGINS"] = "http://localhost:3000,http://127.0.0.1:3000"

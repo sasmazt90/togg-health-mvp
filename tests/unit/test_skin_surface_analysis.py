@@ -6,7 +6,7 @@ def test_fixed_scale_mask_units_source_immutability_and_contract(tmp_path):
  script=r'''
 const fs=require('fs'),ts=require('typescript'),assert=require('assert/strict');const {dir}=JSON.parse(fs.readFileSync(0,'utf8'));
 function load(n){const p=dir+'/'+n+'.js';fs.writeFileSync(p,ts.transpileModule(fs.readFileSync('apps/vehicle-app/src/utils/'+n+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText);return require(p)}
-const S=load('skinSurfaceAnalysis'),I=load('skinIndicators');
+load('skinResearchAdapter');const S=load('skinSurfaceAnalysis'),I=load('skinIndicators');
 const width=80,height=80,pixels=new Uint8ClampedArray(width*height*4);
 for(let i=0;i<pixels.length;i+=4)pixels.set([150,120,100,255],i);
 const mesh={points:[{x:0,y:0},{x:79,y:0},{x:79,y:79},{x:0,y:79}],edges:[[0,1],[1,2],[2,3],[3,0],[0,2]],major:[],boundary:[],excluded:[]};

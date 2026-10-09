@@ -66,7 +66,7 @@ const map=new Map();let failKey=null;
 global.localStorage={getItem:k=>map.has(k)?map.get(k):null,setItem:(k,v)=>{if(k===failKey){failKey=null;throw Error('CONTROLLED_QUOTA');}map.set(k,String(v));},removeItem:k=>map.delete(k)};
 global.window={dispatchEvent:()=>{},location:{search:''}};Object.defineProperty(global,'navigator',{value:{locks:{request:async(_name,fn)=>fn()}},configurable:true});global.crypto=require('crypto').webcrypto;
 const H=require(dir+'/healthRecords.js');
-const keys={vision:['togg_health_vision_history','togg_health_latest_vision'],skin:['togg_health_skin_history','togg_health_latest_skin'],mental:['togg_health_mental_history','togg_health_latest_mental']}[category];
+const keys={vision:['togg_health_vision_history','togg_health_latest_vision'],skin:['togg_health_skin_history','togg_health_latest_skin'],mental:['togg_health_mental_history','togg_health_latest_mental'],dental:['attune_dental_history_v1','attune_dental_latest_v1'],hearing:['attune_hearing_history_v1','attune_hearing_latest_v1']}[category];
 const old={date:'2026-10-03T10:00:00Z',summaryText:'Legacy untouched',themes:['kitap'],completed:true,consented:true,schemaVersion:2};
 map.set(keys[0],JSON.stringify([old,{...old,id:'new',summaryText:'Other untouched'}]));map.set(keys[1],JSON.stringify(old));
 (async()=>{
@@ -83,6 +83,6 @@ const before=new Map(map);failKey=keys[0];
 })().catch(e=>{console.error(e);process.exitCode=1;});
 '''
 
-@pytest.mark.parametrize('category', ['vision', 'skin', 'mental'])
+@pytest.mark.parametrize('category', ['vision', 'skin', 'mental', 'dental', 'hearing'])
 def test_client_legacy_ids_delete_rollback_reopen_and_no_raw_media(tmp_path, category):
     subprocess.run(['node', '-e', NODE], input=json.dumps({'dir': str(tmp_path), 'category': category}), text=True, check=True, cwd=Path(__file__).resolve().parents[2])

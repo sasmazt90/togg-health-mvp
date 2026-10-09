@@ -13,7 +13,7 @@ const fs=require('fs'),ts=require('typescript'),Module=require('module');
 const m=new Module('surface',module);m.paths=module.paths;
 m._compile(ts.transpileModule(fs.readFileSync('apps/vehicle-app/src/utils/skinSurfaceAnalysis.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,'surface');
 const input=JSON.parse(fs.readFileSync(process.argv[1],'utf8')),S=m.exports;
-const rows=input.map(v=>{v.pixels=new Uint8ClampedArray(Buffer.from(v.pixels,'base64'));v.mesh=v.meshes[v.region];const before=Buffer.from(v.pixels);const t=performance.now(),g=S.analyzeSurface(v,true);if(!before.equals(Buffer.from(v.pixels)))throw Error('SOURCE_MUTATED');return {...g,valid:Array.from(g.valid),redness:Array.from(g.redness),shine:Array.from(g.shine),ms:performance.now()-t};});
+const rows=input.map(v=>{v.pixels=new Uint8ClampedArray(Buffer.from(v.pixels,'base64'));v.mesh=v.meshes[v.region];const before=Buffer.from(v.pixels);const t=performance.now(),g=S.analyzeSurface(v,true),v1ms=performance.now()-t;const t2=performance.now(),v2=S.analyzeRelativeShine(v);if(!before.equals(Buffer.from(v.pixels)))throw Error('SOURCE_MUTATED');return {...g,valid:Array.from(g.valid),redness:Array.from(g.redness),shine:Array.from(g.shine),ms:v1ms,relative:{...v2,valid:Array.from(v2.valid),redness:undefined,shine:Array.from(v2.shine),ms:performance.now()-t2}};});
 process.stdout.write(JSON.stringify(rows));
 '''
 
@@ -46,9 +46,14 @@ def main():
   bgr=cv2.cvtColor(source,cv2.COLOR_RGBA2BGR);base=mod.oiliness_map(bgr,{'evaluation-domain':np.ones(source.shape[:2],dtype='uint8')});sample=base[np.ix_(ys,xs)]>0
   assert not np.any(value[~valid]) and not np.any(red[~valid]);assert int(valid.sum())==grid['validSamples'];assert int(((value>=.15)&valid).sum())==grid['shineSamples']
   checks+=1
+  relative=grid['relative'];v2=np.array(relative['shine']).reshape(h,w)
+  assert np.array_equal(np.array(relative['valid']).reshape(h,w)>0,valid)
+  assert not np.any(v2[~valid]) and int(((v2>=.15)&valid).sum())==relative['shineSamples']
   reports.append({'capture':name,'region':meta['region'],'pose':meta['pose'],'photoId':meta['photoId'],'challenge':challenge,'validSampleDenominator':grid['validSamples'],'candidateSampleNumerator':grid['shineSamples'],'candidateAreaPercent':grid['shineAreaPercent'],'unavailableReason':grid['shineUnavailable'],'baselineCandidateAreaPercent':100*int((sample&valid).sum())/max(1,int(valid.sum())),'clippedFraction':grid['clippedFraction'],'analysisMs':grid['ms'],'grid':{'width':w,'height':h,'step':grid['step']},'knownTypedArrayBytes':grid['allocatedBytes']})
+  reports[-1]['relativeV2']={'areaPercent':relative['shineAreaPercent'],'numerator':relative['shineSamples'],'denominator':relative['validSamples'],'unavailable':relative['shineUnavailable'],'ms':relative['ms'],'knownArrayBytes':relative['allocatedBytes']}
   if challenge=='original' and meta['region']!='periorbital':
    rgba=color(value);rgba[~valid]=0;Image.fromarray(rgba).save(out/(name+'-shine-map.png'))
+   rgba=color(v2);rgba[~valid]=0;Image.fromarray(rgba).save(out/(name+'-relative-v2-map.png'))
   mapping_file=capture/('map-'+name.removeprefix('source-')+'.json')
   if challenge=='original' and meta['region']!='periorbital' and mapping_file.exists():
    actual=json.loads(mapping_file.read_text());assert actual['width']==w and actual['height']==h and actual['step']==grid['step']

@@ -4,15 +4,17 @@ from pathlib import Path
 import numpy as np,cv2,torch
 from torch import nn
 from train_acne import TinyNet
-from prepare_annotations import validate
+from prepare_annotations import validate,partitions_are_disjoint
+from ordinal_evaluation import evaluate
 ROOT=Path(__file__).resolve().parents[2]
 def main():
- ap=argparse.ArgumentParser();ap.add_argument('--target',choices=['dry','sag'],required=True);ap.add_argument('--manifest',required=True);ap.add_argument('--epochs',type=int,default=16);args=ap.parse_args();assert 1<=args.epochs<=40
+ ap=argparse.ArgumentParser();ap.add_argument('--target',choices=['dry','sag'],required=True);ap.add_argument('--manifest',required=True);ap.add_argument('--epochs',type=int,default=16);ap.add_argument('--out',default='audit-results/skin-capabilities-20261008/annotations');args=ap.parse_args();assert 1<=args.epochs<=40
  rows=json.loads(Path(args.manifest).read_text('utf8'));protocol=json.loads((ROOT/'docs/skin-research/annotation-protocol.json').read_text('utf8'));rows,rejected=validate(rows,args.target,protocol)
- out=ROOT/'audit-results/skin-capabilities-20261008/annotations';out.mkdir(exist_ok=True,parents=True)
+ out=(ROOT/args.out).resolve();assert out.is_relative_to(ROOT/'audit-results');out.mkdir(exist_ok=True,parents=True)
  if rejected or not all(len({r['caseId'] for r in rows if r.get('split')==s and r['consensusGrade']==g})>=3 for s in ['train','validation','test'] for g in range(4)):
   (out/(args.target+'-training.json')).write_text(json.dumps({'trained':False,'realAnnotations':len(rows),'reason':'insufficient independently annotated real cases per grade/partition','productAccepted':False},indent=2),'utf8');print('Training refused: expert data missing/insufficient');return
  assert all(len({r['split'] for r in rows if r['caseId']==c})==1 for c in {r['caseId'] for r in rows})
+ assert partitions_are_disjoint(rows),'Exact/near-duplicate leakage across partitions'
  torch.manual_seed(protocol['seed']);random.seed(protocol['seed']);torch.set_num_threads(2);torch.use_deterministic_algorithms(True)
  images=[]
  for r in rows:
@@ -32,5 +34,12 @@ def main():
  for a,b in zip(truth,pred):matrix[a,b]+=1
  weights=(np.arange(4)[:,None]-np.arange(4)[None,:])**2/9;expected=np.outer(matrix.sum(1),matrix.sum(0))/max(1,matrix.sum());den=(weights*expected).sum();kappa=1-(weights*matrix).sum()/den if den else None
  report={'trained':True,'seed':protocol['seed'],'modelSHA256':hashlib.sha256((out/(args.target+'.pt')).read_bytes()).hexdigest(),'testConfusion':matrix.tolist(),'testMAE':float(np.abs(truth-pred).mean()),'testWeightedKappa':kappa,'unit':'expert-ordinal-grade-0-3','productAccepted':False,'localMap':False,'reason':'requires inter-rater and camera-domain acceptance; regional grade is not a localization map'}
+ report['caseWeightedModel']=evaluate(truth,pred,[rows[i]['caseId'] for i in test])
+ baseline=int(np.median(Y[train].numpy()));report['trainMedianGradeBaseline']=evaluate(truth,np.full(len(test),baseline),[rows[i]['caseId'] for i in test])
+ report['datasetSHA256']=hashlib.sha256(Path(args.manifest).read_bytes()).hexdigest()
+ # Numeric-only portable weights. No pickle/object arrays or executable code.
+ np.savez_compressed(out/(args.target+'-weights.npz'),**{k:v.detach().cpu().numpy() for k,v in model.state_dict().items()})
+ report['portableWeightsSHA256']=hashlib.sha256((out/(args.target+'-weights.npz')).read_bytes()).hexdigest()
+ report['partitionCases']={s:len({r['caseId'] for r in rows if r['split']==s}) for s in ['train','validation','test']}
  (out/(args.target+'-training.json')).write_text(json.dumps(report,indent=2),'utf8');print(json.dumps(report))
 if __name__=='__main__':main()

@@ -43,7 +43,7 @@ export class SkinInference {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('Cilt analiz motoru yanıt vermiyor'));
-      }, (type === 'segment' || type === 'initializeSegmentation') ? 30000 : 15000);
+      }, (type === 'initialize' || type === 'segment' || type === 'initializeSegmentation') ? 30000 : 15000);
       this.pending.set(id, { resolve, reject, timer, isCurrent });
       this.worker.postMessage({ id, type, frame, alignment }, frame ? [frame] : []);
     });

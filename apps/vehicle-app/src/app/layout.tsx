@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import './globals.css';
 import { VehicleContextProvider } from '../context/VehicleContext';
@@ -30,6 +31,7 @@ export default function RootLayout({
               <span className="text-slate-400">Togg Kişiselleştirilmiş Sağlık Deneyimi</span>
               <span>•</span>
               <span className="text-slate-500">Tıbbi teşhis içermez; ön değerlendirme ve değişim takibi amaçlıdır.</span>
+              <Link href="/privacy" className="inline-flex min-h-touch items-center px-3 text-togg-turquoise underline underline-offset-4 focus-visible:outline focus-visible:outline-2">Gizlilik &amp; İzinler</Link>
             </div>
           </footer>
         </VehicleContextProvider>

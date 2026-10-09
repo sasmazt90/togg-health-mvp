@@ -6,7 +6,7 @@ def test_source_motion_preview_jitter_and_regional_color_contracts(tmp_path):
  script=r'''
 const fs=require('fs'),ts=require('typescript'),assert=require('assert');
 const dir=JSON.parse(fs.readFileSync(0,'utf8')).dir;
-function load(name){const file=dir+'/'+name+'.cjs';fs.writeFileSync(file,ts.transpileModule(fs.readFileSync('apps/vehicle-app/src/utils/'+name+'.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText);return require(file)}
+const load=require('./tests/unit/ts_source_loader.cjs')(dir);
 const {StablePreviewCrop,SourceMotion}=load('cameraStability');
 const smooth=new StablePreviewCrop(),start={x:.2,y:.15,width:.5,height:.7};smooth.update(start,0);
 for(let t=16;t<1000;t+=16)assert.deepEqual(smooth.update({...start,x:start.x+.003*Math.sin(t),width:start.width+.004*Math.cos(t)},t),start);

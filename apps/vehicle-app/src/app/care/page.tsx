@@ -332,7 +332,7 @@ function CareContent() {
         <div className="flex flex-wrap items-center justify-between gap-4 pt-1 border-t border-white/10">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-1">Branş:</span>
-            {['Dermatoloji', 'Göz Hastalıkları', 'Klinik Psikoloji'].map((spec) => (
+            {['Dermatoloji', 'Göz Hastalıkları', 'Diş Hekimliği', 'Kulak Burun Boğaz', 'Klinik Psikoloji'].map((spec) => (
               <button
                 key={spec}
                 onClick={() => setSelectedSpecialty(spec)}

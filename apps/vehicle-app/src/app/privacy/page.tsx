@@ -45,13 +45,16 @@ export default function PrivacyPage() {
   const [cameraStatus, setCameraStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [saveTranscript, setSaveTranscript] = useState(false);
+  const [saveSkin,setSaveSkin]=useState(false);
   const [saveVision, setSaveVision] = useState(false);
   const [saveMentalSummaries, setSaveMentalSummaries] = useState<boolean>(true);
   const [dataStats, setDataStats] = useState<{
     visionCount: number;
     skinCount: number;
     mentalCount: number;
-  }>({ visionCount: 0, skinCount: 0, mentalCount: 0 });
+    dentalCount: number;
+    hearingCount: number;
+  }>({ visionCount: 0, skinCount: 0, mentalCount: 0, dentalCount: 0, hearingCount: 0 });
 
   const [wipeStatus, setWipeStatus] = useState<'IDLE' | 'CONFIRM' | 'WIPING' | 'SUCCESS' | 'PARTIAL' | 'FAILED'>('IDLE');
   const [wipeResult, setWipeResult] = useState<{ local: boolean; backend: boolean } | null>(null);
@@ -98,6 +101,7 @@ export default function PrivacyPage() {
       }
 
       setSaveTranscript(localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true');
+      setSaveSkin(localStorage.getItem('attune_privacy_skin_save_allowed')==='true');
       setSaveVision(localStorage.getItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED) === 'true');
       const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
       if (mentalPref !== null) {
@@ -106,7 +110,7 @@ export default function PrivacyPage() {
 
       // 3. Gerçek Veri Sayımları (Demo vs Real)
       if (isDemoMode()) {
-        setDataStats({ visionCount: 1, skinCount: 2, mentalCount: 2 });
+        setDataStats({ visionCount: 1, skinCount: 2, mentalCount: 2, dentalCount: 0, hearingCount: 0 });
       } else {
         const vCount = readHealthRecords('vision').length;
 
@@ -123,7 +127,7 @@ export default function PrivacyPage() {
         const mentalHistory = readMentalHistory();
         const mCount = mentalHistory.length || (localStorage.getItem(STORAGE_KEYS.LATEST_MENTAL) ? 1 : 0);
 
-        setDataStats({ visionCount: vCount, skinCount: sCount, mentalCount: mCount });
+        setDataStats({ visionCount: vCount, skinCount: sCount, mentalCount: mCount, dentalCount: readHealthRecords('dental').length, hearingCount: readHealthRecords('hearing').length });
         setStorageUnavailable(false);
       }
     }
@@ -167,7 +171,7 @@ export default function PrivacyPage() {
   const handleWipeAllData = async () => {
     setWipeStatus('WIPING');
     let local = true;
-    const healthKeys = [RECORD_JOURNAL, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
+    const healthKeys = ['attune_skin_appearance_reference_v1','attune_skin_appearance_single_reference_v1',RECORD_JOURNAL, 'attune_dental_history_v1', 'attune_dental_latest_v1', 'attune_hearing_history_v1', 'attune_hearing_latest_v1', 'attune_skin_geometry_reference_v1', STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
       STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
       STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
     try { await withRecordsLock(() => {
@@ -197,7 +201,7 @@ export default function PrivacyPage() {
     } finally {
       clearTimeout(deadline);
     }
-    if (local) setDataStats({ visionCount: 0, skinCount: 0, mentalCount: 0 });
+    if (local) setDataStats({ visionCount: 0, skinCount: 0, mentalCount: 0, dentalCount: 0, hearingCount: 0 });
     setWipeResult({ local, backend });
     setWipeStatus(local && backend ? 'SUCCESS' : local || backend ? 'PARTIAL' : 'FAILED');
   };
@@ -347,6 +351,12 @@ export default function PrivacyPage() {
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveVision} aria-label="Yön hizalama sonuçlarını bu cihazda sakla" onChange={e=>{try{localStorage.setItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED,String(e.target.checked));setSaveVision(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Yön hizalama sonuçlarını bu cihazda sakla</label>
       </section>
 
+      <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3">
+        <h2 className="font-bold">Cilt görünümü ve kişisel referans</h2>
+        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveSkin} onChange={e=>{try{localStorage.setItem('attune_privacy_skin_save_allowed',String(e.target.checked));setSaveSkin(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Cilt ölçümlerini ve kişisel sayısal referansı bu tarayıcıda sakla</label>
+        <p className="text-xs text-slate-400">Varsayılan kapalıdır; çekim izninden ayrıdır. Fotoğraf ve dolgu yalnız açık sonuç oturumunun belleğindedir. Diş ve işitme sonuçlarında ayrıca Kaydet onayı verilir. Kapatmak eski kayıtları silmez; kayıt Sil veya Tüm Yerel Verileri Sil ile kaldırılır.</p>
+      </section>
+
       {/* 3. BELOW FOLD: YEREL VERİ YÖNETİMİ VE SİLME */}
       <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 md:p-7 shadow-xl space-y-5">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
@@ -361,7 +371,7 @@ export default function PrivacyPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
           <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl">
             <div className="text-xs text-slate-400">Görme Kayıtları</div>
             <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.visionCount}</div>
@@ -374,6 +384,7 @@ export default function PrivacyPage() {
             <div className="text-xs text-slate-400">Görüşme Özetleri</div>
             <div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : dataStats.mentalCount}</div>
           </div>
+            {(['dental','hearing'] as const).map(category => <div key={category} className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl"><div className="text-xs text-slate-400">{category === 'dental' ? 'Diş Kayıtları' : 'İşitme Kayıtları'}</div><div className="text-2xl font-bold text-togg-turquoise mt-1 font-mono">{storageUnavailable ? '—' : category === 'dental' ? dataStats.dentalCount : dataStats.hearingCount}</div></div>)}
         </div>
 
         {/* TÜM YEREL VERİLERİ SİL BUTONU */}

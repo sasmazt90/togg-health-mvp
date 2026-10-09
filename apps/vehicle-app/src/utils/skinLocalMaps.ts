@@ -1,5 +1,5 @@
 import type { SkinSnapshot } from './skinSnapshot';
-export type SkinLocalMap={criterion:'redness';region:string;pose:string;photoId:string;sourceWidth:number;sourceHeight:number;x:number;y:number;step:number;width:number;height:number;unit:'color-index-0-100';method:'rgb-redness-pixel-v1';validation:'analytic-pixel-index';colorMapping:'cyan-fixed-100-v1';dataUrl:string;validMaskUrl:string;sampleCount:number;values:Float32Array;validMask:Uint8Array};
+export type SkinLocalMap={criterion:string;region:string;pose:string;photoId:string;sourceWidth:number;sourceHeight:number;x:number;y:number;step:number;width:number;height:number;unit:string;method:string;validation:'analytic-pixel-index'|'appearance-proxy';colorMapping:'cyan-fixed-100-v1';dataUrl:string;validMaskUrl:string;sampleCount:number;values:Float32Array;validMask:Uint8Array};
 export class SkinLocalAnalysis {
  private worker?:Worker;private sequence=0;private started=0;private loadMs=0;
  private pending=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void;timer:ReturnType<typeof setTimeout>;current:()=>boolean;expected?:string}>();

@@ -56,7 +56,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const refresh = () => {
       const demo = isDemoMode(); setIsDemo(demo);
-      try { if (!demo) for (const category of ['vision', 'skin', 'mental'] as const) readHealthRecords(category); }
+      try { if (!demo) for (const category of ['vision', 'skin', 'mental', 'dental', 'hearing'] as const) readHealthRecords(category); }
       catch { setShareError('Kayıtlar doğrulanamadı; veri değiştirilmedi.'); }
       setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo)); setTimeline(getHealthTimeline(demo));
     };
@@ -270,6 +270,8 @@ export default function ProfilePage() {
             </div>
         </AccessibleDialog>
       )}
+      <RecordHistory category="dental" parked={isParked} />
+      <RecordHistory category="hearing" parked={isParked} />
     </div>
   );
 }

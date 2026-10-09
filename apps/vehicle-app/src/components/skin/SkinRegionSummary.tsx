@@ -36,16 +36,18 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {currentRegion.indicators.filter(indicator=>indicator.score!==null).map(indicator=>{
               const score=Math.round(indicator.score!);
-              const delta=indicator.referenceDelta===undefined?undefined:Math.round(indicator.referenceDelta);
+              const geometry=indicator.appearance?.type==='longitudinal_measurement';
+              const baseline=geometry&&indicator.appearance?.limitationCode==='REFERENCE_CREATED';
+              const delta=indicator.referenceDelta===undefined?undefined:Math.round(indicator.referenceDelta*(geometry?1000:1));
               return <div key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-2xl border border-sky-400/15 bg-slate-900/60 p-4 space-y-3">
                 <div className="text-sm text-slate-300">{indicator.label}</div>
-                <div className="flex items-baseline gap-2"><span className="text-3xl font-semibold text-white tabular-nums" data-skin-score>{score}</span><span className="text-xs text-slate-400">/ 100 · renk indeksi</span></div>
-                <div className="h-2 rounded-full bg-slate-800 overflow-hidden" role="meter" aria-label={indicator.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={score}><div className="h-full rounded-full bg-togg-turquoise" style={{width:`${score}%`}}/></div>
-                {delta!==undefined&&<p className="text-xs text-sky-300">Referansa göre {delta>0?'+':''}{delta} indeks puanı</p>}
+                <div className="flex items-baseline gap-2"><span className="text-3xl font-semibold text-white tabular-nums" data-skin-score>{baseline?'Referans oluşturuldu':geometry?Math.round(indicator.score!*1000):score}</span><span className="text-xs text-slate-400">{baseline?'':geometry?'× 10⁻³ kontur oranı':indicator.unit||'/ 100 · renk indeksi'}</span></div>
+                {!geometry&&indicator.appearance?.unit!=='candidate-count'&&<div className="h-2 rounded-full bg-slate-800 overflow-hidden" role="meter" aria-label={indicator.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={score}><div className="h-full rounded-full bg-togg-turquoise" style={{width:`${Math.min(100,Math.max(0,score))}%`}}/></div>}
+                {delta!==undefined&&<p className="text-xs text-sky-300">Referansa göre {delta>0?'+':''}{delta} {geometry?'× 10⁻³ kontur farkı':indicator.unit}</p>}
               </div>;
             })}
           </div>
-          {currentRegion.indicators.every(indicator=>indicator.score===null)&&<p className="rounded-2xl border border-slate-700/60 p-4 text-sm text-slate-300">Bu bölge için doğrulanmış bir fotoğraf ölçümü bulunmuyor.</p>}
+          {currentRegion.indicators.every(indicator=>indicator.score===null)&&<p className="rounded-2xl border border-slate-700/60 p-4 text-sm text-slate-300">Bu karede yeterli güvenilir cilt ölçümü bulunmuyor.</p>}
           {currentRegion.indicators.some(indicator=>indicator.score===null)&&<div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4 space-y-3">
             <p className="text-xs text-slate-400">Bu taramada ölçülemeyenler</p>
             <div className="flex flex-wrap gap-2">{currentRegion.indicators.filter(indicator=>indicator.score===null).map(indicator=><span key={indicator.id} data-skin-indicator={indicator.id} role={onSelectCriterion?'button':undefined} tabIndex={onSelectCriterion?0:undefined} aria-pressed={onSelectCriterion?selectedCriterion===indicator.id:undefined} onClick={()=>onSelectCriterion?.(indicator.id)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelectCriterion?.(indicator.id);}}} className="rounded-lg bg-slate-800/70 px-3 py-2 text-xs text-slate-300">{indicator.label}<span className="sr-only">: Değerlendirilemiyor</span></span>)}</div>
@@ -138,7 +140,7 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
         </div>}
       </div>
 
-      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Yalnız renk indeksleri ölçülür: yüksek indeks fotoğrafta daha belirgin renk farkıdır. Yüzde, hastalık olasılığı veya kalibre edilmiş belirti şiddeti değildir. Işık, gölge, ten tonu ve sakal renk ölçümünü etkiler. Seçilen kızarıklık kartındaki dolgu yerel piksel renk indeksidir; klinik şiddet değildir. Haritası olmayan kriterde yalnız ağ gösterilir. Yağlı Görünüm hedefi yüzey parlaklığıdır; sebum miktarı değildir, yöntem bağımsız doğrulanmadan sonuca açılmaz. Diğer başlıklar için doğrulanmış ölçüm bulunmadığında puan ve çubuk gösterilmez. Örnekleme, aynı anatomik ağdaki üçgenlerin içindedir; göz, dudak ve burun deliği kesişimleri çıkarılır.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
+      <InformationButton title="Görüntü göstergeleri"><p>{currentRegion.indicators?'Renk ve çizgi indeksleri mühendislik ölçekleridir. Alan oranları yalnız görünür, geçerli cilt alanındaki gerçek adayları gösterir. Parlama sebum, pullanma nem, sivilce adayı tanı değildir. Kontur oranları kişisel takip içindir; ilk geçerli tarama referanstır. Işık, sakal, gölge ve düşük detay sonucu sınırlayabilir. T-bölgesi hesabı alın ve burunu kapsar; çene eklenmez. Dolgu, korunan seçili bölge ağıyla sınırlıdır. Seçilen kartın lokal sinyali varsa ağ içinde dolgu görünür; geometrik ölçümde yalnız gerçek kontur çizilir. Yöntemler uzman şiddet ölçeğine kalibre edilmemiştir.':'Eski değerlendirme: kızarıklık, parlaklık ve piksel farkı yalnız eski fotoğraf göstergeleridir. Yeni cilt kriterlerine dönüştürülmez.'}</p></InformationButton>
       {/* 3 İkincil Eylem Butonu */}
       <div className="grid grid-cols-3 gap-3 pt-1">
         <button

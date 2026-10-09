@@ -11,7 +11,8 @@ import {
   HeartPulse,
   CalendarCheck,
   User,
-  ShieldCheck,
+  Ear,
+  Smile,
   Car,
   Activity,
   AlertTriangle
@@ -25,16 +26,17 @@ export const CockpitHeader: React.FC = () => {
 
   const navItems = [
     { href: '/', label: 'Kokpit', icon: Activity },
-    { href: '/vision', label: 'Görme Kontrolü', icon: Eye },
-    { href: '/skin', label: 'Cilt Kontrolü', icon: Sparkles },
-    { href: '/mental', label: 'Ruhsal İyi Oluş', icon: HeartPulse },
+    { href: '/vision', label: 'Göz Sağlığı', icon: Eye },
+    { href: '/skin', label: 'Cilt Sağlığı', icon: Sparkles },
+    { href: '/dental', label: 'Diş Sağlığı', icon: Smile },
+    { href: '/hearing', label: 'İşitme Sağlığı', icon: Ear },
+    { href: '/mental', label: 'Ruhsal Sağlık', icon: HeartPulse },
     { href: '/care', label: 'Uzman & Randevu', icon: CalendarCheck },
     { href: '/profile', label: 'Sağlık Geçmişim', icon: User },
-    { href: '/privacy', label: 'Gizlilik & İzinler', icon: ShieldCheck },
   ];
 
   return (
-    <header data-cockpit-header className="border-b border-white/10 bg-[#050b14]/95 backdrop-blur-md sticky top-0 z-50">
+    <header data-cockpit-header className="border-b border-white/10 bg-[#050b14]/95 backdrop-blur-md md:sticky top-0 z-50">
       {/* Üst Telemetri ve Güvenlik Durum Çubuğu */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-2 border-b border-white/5 text-xs">
         <div className="flex items-center gap-4">
@@ -98,6 +100,7 @@ export const CockpitHeader: React.FC = () => {
               <Link
                 key={item.href}
                 href={item.href}
+                onFocus={(event:React.FocusEvent<HTMLAnchorElement>)=>event.currentTarget.scrollIntoView({block:'nearest',inline:'nearest'})}
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap min-h-touch ${
                   isActive

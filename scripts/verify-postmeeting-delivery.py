@@ -27,9 +27,13 @@ expected=(ROOT/'scripts/windows-launcher/start_togg.pyw').read_text('utf8').repl
 assert installed==expected
 assert (HOME/'backend_host.py').read_bytes()==(ROOT/'scripts/windows-launcher/backend_host.py').read_bytes()
 source={}
-for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/windows-launcher','package.json','package-lock.json','apps/vehicle-app/package.json').splitlines():
+for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/windows-launcher','apps/vehicle-app/public/audio','third-party/combined-health','package.json','package-lock.json','apps/vehicle-app/package.json').splitlines():
  source[rel]=hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()
-assert (ROOT/'apps/vehicle-app/.next/BUILD_ID').stat().st_mtime>=max((ROOT/p).stat().st_mtime for p in source)
+# The exported weights/diagnostics are loaded by Python, not compiled into Next.
+# Keep source/build freshness strict for program code, banks and notices. The
+# two generated model artifacts are instead checked by SHA and real inference.
+model_artifacts={'services/core-api/models/dental-yolox-s.onnx','services/core-api/models/dental-yolox-s.json'}
+assert (ROOT/'apps/vehicle-app/.next/BUILD_ID').stat().st_mtime>=max((ROOT/p).stat().st_mtime for p in source if p not in model_artifacts)
 manifest=json.loads((ROOT/'apps/vehicle-app/.next/app-build-manifest.json').read_text())['pages']
 chunks=sorted({p for route,paths in manifest.items() for p in paths}|{p.relative_to(ROOT/'apps/vehicle-app/.next').as_posix() for p in (ROOT/'apps/vehicle-app/.next/static/chunks').rglob('*.js')})
 hashes={rel:hashlib.sha256((ROOT/'apps/vehicle-app/.next'/rel).read_bytes()).hexdigest() for rel in chunks}
@@ -66,9 +70,25 @@ assert Path(psutil.Process(running['frontend_pid']).cwd()).resolve()==ROOT/'apps
 assert str(ROOT/'services/core-api').lower() in ' '.join(psutil.Process(running['backend_pid']).cmdline()).lower()
 for rel,digest in hashes.items():
  with urllib.request.urlopen('http://127.0.0.1:3000/_next/'+rel,timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==digest
-for route in ['skin','vision','mental']:
+for route in ['skin','vision','mental','dental','hearing','privacy','profile']:
  with urllib.request.urlopen('http://127.0.0.1:3000/'+route,timeout=5) as response:
   html=response.read().decode();assert all(rel in html for rel in manifest['/'+route+'/page'] if '/app/'+route+'/page-' in rel)
+with urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=5) as response:runtime=json.loads(response.read())
+assert runtime['runtimeIsolated'] and runtime['runtimeVersions']=={'fastapi':'0.135.4','starlette':'1.3.1','aiohttp':'3.14.3','PIL':'12.3.0'}
+bank=json.loads((ROOT/'apps/vehicle-app/public/audio/hearing-bank/manifest.json').read_text('utf8'))
+for entry in [*bank['digits'],bank['noise']]:
+ with urllib.request.urlopen('http://127.0.0.1:3000'+entry['url'],timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==entry['sha256']
+model=json.loads((ROOT/'services/core-api/models/dental-yolox-s.json').read_text('utf8'))
+assert hashlib.sha256((ROOT/'services/core-api/models/dental-yolox-s.onnx').read_bytes()).hexdigest()==model['modelHash']
+# Public source fixture only: prove this installed normal launcher actually loads
+# and runs the checkpoint, rather than merely checking a file on disk.
+fixture=(ROOT/'audit-results/combined-health-20261008/dental-runtime/front-fixture-request.json').read_bytes()
+request=urllib.request.Request('http://127.0.0.1:8000/api/local-health/dental',data=fixture,headers={'Content-Type':'application/json'},method='POST')
+with urllib.request.urlopen(request,timeout=30) as response:dental=json.loads(response.read())
+assert dental['views'][0]['quality']['valid'] and dental['views'][0]['caries']['quality']=='valid'
+assert dental['views'][0]['caries']['modelHash']==model['modelHash']
+assert dental['views'][0]['caries']['type']=='trained_prediction'
+assert dental['views'][0]['caries']['runtimeVersions']==model['additionalDiagnostics']['libraryVersions']
 browser=psutil.Process(running['browser_pid']);assert '--user-data-dir='+str(HOME/'chrome-profile') in browser.cmdline()
 os.startfile(str(LINK));time.sleep(2);assert state()['frontend_pid']==running['frontend_pid'] and state()['backend_pid']==running['backend_pid']
 owned={browser.pid,*[p.pid for p in browser.children(recursive=True)]}
@@ -82,5 +102,5 @@ assert all(row['preserved'] for row in preserved),'Pre-existing Chrome window ch
 os.startfile(str(LINK));reopened=wait(live_state)
 for rel,digest in hashes.items():
  with urllib.request.urlopen('http://127.0.0.1:3000/_next/'+rel,timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==digest
-proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':target,'shortcutArguments':arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
+proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':target,'shortcutArguments':arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'runtimeVersions':runtime['runtimeVersions'],'runtimeIsolated':True,'dentalModelHash':model['modelHash'],'actualNormalDentalModelInference':True,'dentalInferenceFixture':'public-front-only-not-physical-acceptance','digitBankVersion':bank['version'],'digitBankServedHashesMatch':True,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
 OUT.write_text(json.dumps(proof,indent=2),'utf8');print(json.dumps({k:proof[k] for k in ['status','sourceHead','buildId','branch','productRoot','leftRunning']}))

@@ -14,6 +14,8 @@ export interface SkinSnapshot {
   /** Normalized display rectangle only; source pixels and measurement stay full-frame. */
   previewCrop?:Crop;
   photoId?:string;
+  landmarks?:{x:number;y:number;z?:number}[];
+  contoursMeasured?:Record<string,{points:{x:number;y:number}[];features:number[]}>;
   localMaps?:Record<string,import('./skinLocalMaps').SkinLocalMap>;
   localAnalysis?:{loadMs:number;analysisMs:number;allocatedBytes:number};
 }
@@ -71,7 +73,7 @@ export function snapshotSkinFrame(canvas:HTMLCanvasElement, alignment:FaceAlignm
  * segmenter, neck fade, beauty operation or display crop enters this path. */
 export function snapshotRawSkinFrame(canvas:HTMLCanvasElement,alignment:FaceAlignment,angle:SkinAngle):SkinSnapshot {
  const metadata=snapshotSkinFrame(canvas,alignment,angle);
- return {...metadata,visualError:undefined,dataUrl:canvas.toDataURL('image/png'),crop:{x:0,y:0,width:canvas.width,height:canvas.height},previewCrop:cameraCrop(alignment.landmarks)};
+ return {...metadata,landmarks:alignment.landmarks,visualError:undefined,dataUrl:canvas.toDataURL('image/png'),crop:{x:0,y:0,width:canvas.width,height:canvas.height},previewCrop:cameraCrop(alignment.landmarks)};
 }
 export function snapshotAngleForRegion(id:string,threeAngle:boolean):SkinAngle {
   return !threeAngle?'FRONT':id==='rightCheek'?'LEFT':id==='leftCheek'?'RIGHT':'FRONT';

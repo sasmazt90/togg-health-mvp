@@ -118,3 +118,10 @@ scripts/capture_*.py
 audit-results/
 audit-fixtures/
 
+
+# Large, locally trained dental artifact (manifest is tracked).
+services/core-api/models/*.onnx
+!services/core-api/models/dental-yolox-s.onnx
+services/core-api/models/*.npz
+!apps/vehicle-app/public/audio/hearing-bank/*.wav
+.runtime/

@@ -1,2 +1,6 @@
 # Preserve the exact upstream license bytes referenced by SHA256 notices.
-third-party/skin-research/*.txt -text
+third-party/skin-research/*.txt -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+third-party/combined-health/* -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+services/core-api/skin_scan_baseline/* -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+# Preserve the exact training program registered in the model provenance.
+scripts/train_dental_yolox.py -text whitespace=cr-at-eol

@@ -193,7 +193,12 @@ def read_root():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    import fastapi, starlette, aiohttp, PIL
+    modules = (fastapi, starlette, aiohttp, PIL)
+    isolated = Path(__file__).resolve().parents[2] / '.runtime/security-20261008'
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(),
+            "runtimeVersions": {module.__name__: module.__version__ for module in modules},
+            "runtimeIsolated": all(Path(module.__file__).resolve().is_relative_to(isolated) for module in modules)}
 
 # ---------------------------------------------------------------------------
 # Vehicle State
@@ -419,3 +424,8 @@ def wipe_user_health_data():
         "message": "Tüm yerel sağlık verisi, geçmiş seans kayıtları ve önbellekler başarıyla silindi.",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+# New routes share the same authoritative vehicle state and origin middleware.
+import local_health
+local_health.parked = lambda: vehicle_state["vehicleParked"] and not vehicle_state["vehicleMoving"]
+app.include_router(local_health.router)

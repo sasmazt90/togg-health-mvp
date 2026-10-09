@@ -26,6 +26,9 @@ for port in [3000,8000]:
     with socket.socket() as sock:
         assert sock.connect_ex(('127.0.0.1',port))!=0,'Port occupied; refusing to adopt or stop another application'
 env={k:v for k,v in os.environ.items() if not k.startswith('OPENAI_')}
+runtime=root/'.runtime/security-20261008'
+assert (runtime/'fastapi').is_dir(), 'Install the isolated security runtime before verification'
+env['PYTHONPATH']=str(runtime)+os.pathsep+env.get('PYTHONPATH','')
 env.update(OPENAI_API_KEY='',ATTUNE_LOAD_LOCAL_ENV='1' if args.live else '0',PYTHONUTF8='1',PYTHONIOENCODING='utf-8')
 if args.harness_fixture:
     env['OPENAI_API_KEY']='attune-keyless-fixture-not-a-credential'

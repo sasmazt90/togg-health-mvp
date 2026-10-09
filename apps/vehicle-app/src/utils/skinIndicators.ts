@@ -1,8 +1,9 @@
 import type { SkinSnapshot } from './skinSnapshot';
 import type { ImageQuality } from './skinAnalyzer';
-export const SKIN_SIGN_CONTRACT='regional-rgb-v3';
-export type SkinMeasurement={scope:'regional'|'whole-face';region?:string;methodVersion:string;modelHash:string|null;unit:'color-index-0-100'|'visible-highlight-area-percent'|'class-probability'|'ordinal-grade';rawValue:number|null;confidence:number|null;quality:'valid'|'invalid'|'insufficient';validation:'analytic-pixel-index'|'development-only'|'independently-validated'|'unavailable';unavailableReason:string|null};
-export type SkinIndicator={id:string;label:string;score:number|null;referenceDelta?:number;reason:string;method:string;unit:string;sampleCount:number;measurement?:SkinMeasurement};
+import { researchTarget, isAdmittedResearchMeasurement } from './skinResearchAdapter';
+export const SKIN_SIGN_CONTRACT='regional-appearance-v4';
+export type SkinMeasurement={scope:'regional'|'whole-face';region?:string;target?:string;methodVersion:string;modelHash:string|null;datasetHash?:string|null;evidenceHash?:string|null;unit:'color-index-0-100'|'visible-highlight-area-percent'|'class-probability'|'ordinal-grade'|'lesion-count'|'percent-visible-area'|'candidate-count'|'relative-color-index-0-100'|'directional-line-index-0-100'|'normalized-contour-ratio';rawValue:number|null;confidence:number|null;quality:'valid'|'invalid'|'insufficient';validation:'analytic-pixel-index'|'development-only'|'independently-validated'|'unavailable'|'appearance-proxy';unavailableReason:string|null};
+export type SkinIndicator={appearance?:import('./appearanceMeasurements').AppearanceMeasurement;id:string;label:string;score:number|null;referenceDelta?:number;reason:string;method:string;unit:string;sampleCount:number;measurement?:SkinMeasurement};
 export type SkinIndicators=Record<string,SkinIndicator[]>;
 export const SIGN_LABELS:Record<string,string>={tone:'Ton eşitsizliği',oil:'Yağlı görünüm',redness:'Kızarıklık eğilimi',acne:'Sivilce görünümü',sag:'Sarkma',dry:'Cilt kuruluğu',dark:'Göz altı morluğu',bags:'Göz altı torbaları',lines:'Kaz ayakları'};
 export function indicatorIds(region:string){return region==='periorbital'?['dark','bags','lines','dry']:region==='nose'?['tone','oil','redness','acne','dry']:['tone','oil','redness','acne','sag','dry'];}
@@ -13,26 +14,41 @@ export function validSkinIndicators(value:unknown):value is SkinIndicators {
   return Array.isArray(rows)&&rows.length===ids.length&&ids.every(id=>{
    const matching=rows.filter(row=>row?.id===id);if(matching.length!==1)return false;
    const row=matching[0];return typeof row.reason==='string'&&!!row.reason&&typeof row.method==='string'&&!!row.method&&
-    (row.score===null||(typeof row.score==='number'&&Number.isFinite(row.score)&&row.score>=0&&row.score<=100&&['tone','redness'].includes(id)))&&
+    (row.score===null||(typeof row.score==='number'&&Number.isFinite(row.score)&&(['tone','redness'].includes(id)?row.score>=0&&row.score<=100:!!row.appearance)))&&
     (row.referenceDelta===undefined||Number.isFinite(row.referenceDelta))&&validMeasurement(row,region);
   });
  });
 }
 export function validMeasurement(row:SkinIndicator,region:string) {
+ const appearance=row.appearance;
+ if(appearance){
+  const m=row.measurement;
+  return appearance.region===region&&['appearance_proxy','longitudinal_measurement'].includes(appearance.type)&&appearance.methodVersion==='appearance-cv-1'&&
+   !!m&&m.validation==='appearance-proxy'&&m.region===region&&m.rawValue===appearance.value&&row.score===appearance.value&&
+   ['percent-visible-area','candidate-count','relative-color-index-0-100','directional-line-index-0-100','normalized-contour-ratio'].includes(appearance.unit)&&
+   ['valid','invalid','insufficient'].includes(appearance.quality)&&
+   (appearance.value===null?!!appearance.limitationCode:Number.isFinite(appearance.value)&&appearance.quality==='valid')&&
+   !!appearance.captureConditions&&!!appearance.evaluatedArea&&Array.isArray(appearance.uncertainty);
+ }
  const m=row.measurement;if(!m)return true; // Existing V3 records remain readable.
  if(m.scope!=='regional'||m.region!==region||typeof m.methodVersion!=='string'||!m.methodVersion||!(m.modelHash===null||/^[a-f0-9]{64}$/.test(m.modelHash)))return false;
- if(!['color-index-0-100','visible-highlight-area-percent','class-probability','ordinal-grade'].includes(m.unit)||!['valid','invalid','insufficient'].includes(m.quality)||!['analytic-pixel-index','development-only','independently-validated','unavailable'].includes(m.validation))return false;
+ if(!['color-index-0-100','visible-highlight-area-percent','class-probability','ordinal-grade','lesion-count'].includes(m.unit)||!['valid','invalid','insufficient'].includes(m.quality)||!['analytic-pixel-index','development-only','independently-validated','unavailable'].includes(m.validation))return false;
+ if([m.datasetHash,m.evidenceHash].some(v=>v!==undefined&&v!==null&&!/^[a-f0-9]{64}$/.test(v)))return false;
+ if(m.target!==undefined&&m.target!==researchTarget(row.id)&&!(row.id==='acne'&&m.target==='acne-count'))return false;
  if(m.confidence!==null&&(!Number.isFinite(m.confidence)||m.confidence<0||m.confidence>1))return false;
  if(m.rawValue===null)return typeof m.unavailableReason==='string'&&!!m.unavailableReason&&row.score===null;
  if(!Number.isFinite(m.rawValue)||m.rawValue<0||m.quality!=='valid'||m.unavailableReason!==null)return false;
  if(['tone','redness'].includes(row.id))return m.unit==='color-index-0-100'&&m.rawValue<=100&&m.validation==='analytic-pixel-index'&&m.modelHash===null;
  // Experimental values cannot travel into ordinary persisted user results.
- return row.id==='oil'&&row.score===null&&m.unit==='visible-highlight-area-percent'&&m.rawValue<=100&&m.validation==='independently-validated';
+ if(row.score!==null||!isAdmittedResearchMeasurement(m))return false;
+ if(row.id==='oil')return m.unit==='visible-highlight-area-percent'&&m.rawValue<=100;
+ if(row.id==='acne')return m.target==='acne-presence'&&m.unit==='class-probability'&&m.rawValue<=1||m.target==='acne-count'&&m.unit==='lesion-count'&&Number.isInteger(m.rawValue);
+ return ['dry','sag'].includes(row.id)&&m.unit==='ordinal-grade'&&Number.isInteger(m.rawValue)&&m.rawValue<=3;
 }
 export function canCompareIndicator(a:SkinIndicator,b:SkinIndicator) {
  if(a.id!==b.id||a.method!==b.method||a.unit!==b.unit)return false;
  const x=a.measurement,y=b.measurement;
- if(x&&y)return x.scope===y.scope&&x.region===y.region&&x.methodVersion===y.methodVersion&&x.modelHash===y.modelHash&&x.unit===y.unit&&x.validation===y.validation;
+ if(x&&y)return x.scope===y.scope&&x.region===y.region&&x.methodVersion===y.methodVersion&&x.modelHash===y.modelHash&&x.datasetHash===y.datasetHash&&x.evidenceHash===y.evidenceHash&&x.target===y.target&&x.unit===y.unit&&x.validation===y.validation;
  // Only the exact pre-existing color formula is compatible with legacy V3.
  return ['tone','redness'].includes(a.id)&&(!x||x.methodVersion==='regional-rgb-v3')&&(!y||y.methodVersion==='regional-rgb-v3');
 }
@@ -59,7 +75,7 @@ export function measureSkinIndicators(ctx:CanvasRenderingContext2D,snapshot:Skin
    return {id,label:SIGN_LABELS[id],score:measured&&usable?Math.round((id==='redness'?mean:Math.min(100,100*spread))*10)/10:null,
     reason:measured?(usable?'Yalnız fotoğraftaki renk indeksi; ışık, ten tonu, gölge ve sakal etkiler. Kalibre edilmiş belirti şiddeti değildir.':'Geçerli ışık/netlik veya yeterli görünür örnek yok.'):unavailable[id],
     method:measured?(id==='redness'?'mean(clamp(100*(2R-G-B)/255,0,100))':'100*std((R-G)/(R+G+B))'):'unavailable',unit:measured?'Renk indeksi / 100':'',sampleCount:count,
-    measurement:{scope:'regional',region,methodVersion:measured?SKIN_SIGN_CONTRACT:'unavailable-v1',modelHash:null,unit:id==='oil'?'visible-highlight-area-percent':'color-index-0-100',rawValue:measured&&usable?(id==='redness'?mean:Math.min(100,100*spread)):null,confidence:null,quality:usable?'valid':quality.isValid?'insufficient':'invalid',validation:measured&&usable?'analytic-pixel-index':'unavailable',unavailableReason:measured&&usable?null:measured?'insufficient-valid-source-samples':'no-independent-validation'}};});
+    measurement:{scope:'regional',region,...(researchTarget(id)?{target:researchTarget(id)}:{}),methodVersion:measured?'regional-rgb-v3':'unavailable-v1',modelHash:null,unit:id==='oil'?'visible-highlight-area-percent':id==='acne'?'class-probability':['dry','sag'].includes(id)?'ordinal-grade':'color-index-0-100',rawValue:measured&&usable?(id==='redness'?mean:Math.min(100,100*spread)):null,confidence:null,quality:usable?'valid':quality.isValid?'insufficient':'invalid',validation:measured&&usable?'analytic-pixel-index':'unavailable',unavailableReason:measured&&usable?null:measured?'insufficient-valid-source-samples':'no-independent-validation'}};});
  }
  return result;
 }
