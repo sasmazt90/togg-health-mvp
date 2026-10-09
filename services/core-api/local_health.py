@@ -101,3 +101,22 @@ async def dental(request: Request):
         raise HTTPException(503, 'LOCAL_MODEL_FAILURE') from None
     except (KeyError, ValueError, TypeError, IndexError, OverflowError):
         raise HTTPException(422, 'INVALID_LOCAL_GEOMETRY_OR_PHOTO')
+
+
+@router.post('/dental-upload')
+async def dental_upload(request: Request):
+    value = await payload(request)
+    from dental_upload import analyze_upload,UploadError
+    from dental_analysis import DentalModelError
+    try:
+        async with _busy:
+            result = await run_in_threadpool(analyze_upload, value)
+        if not parked() or await request.is_disconnected():
+            raise HTTPException(409, 'CANCELLED')
+        return result
+    except UploadError as error:
+        raise HTTPException(422, str(error)) from None
+    except DentalModelError:
+        raise HTTPException(503, 'LOCAL_MODEL_FAILURE') from None
+    except (KeyError, ValueError, TypeError, IndexError, OverflowError):
+        raise HTTPException(422, 'INVALID_UPLOAD') from None

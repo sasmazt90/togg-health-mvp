@@ -1,4 +1,6 @@
 'use client';
+import { HEALTH_MODULES,HEALTH_MODULE_IDS } from '../../utils/healthModules';
+import { useGuidance } from '../../utils/audioGuidance';
 
 import React, { useState, useEffect } from 'react';
 import { RecordHistory } from '../../components/RecordHistory';
@@ -23,7 +25,7 @@ import {
   AlertCircle,
   Info
 } from 'lucide-react';
-import { buildShareSections, printHealthSummary, ShareSelection } from '../../utils/healthShare';
+import { buildShareSections, printHealthSummary, ShareSelection,ShareSection,measuredShareSection } from '../../utils/healthShare';
 import { isDemoMode } from '../../utils/attuneMode';
 import {
   getVisionSummary,
@@ -40,17 +42,21 @@ import {
 } from '../../utils/healthSelectors';
 
 export default function ProfilePage() {
+  const voice=useGuidance('profile');
+  useEffect(()=>voice.phase('entry','profile-entry'),[voice]);
+
   const { isParked } = useVehicle();
   const profile = mockInitialHealthProfile;
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
 
-  const [selection, setSelection] = useState<ShareSelection>({ vision: false, skin: false, mental: false });
+  const [selection, setSelection] = useState<ShareSelection>({ vision: false, skin: false, mental: false,dental:false,hearing:false });
   const [shareError, setShareError] = useState<string | null>(null);
 
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [vision, setVision] = useState<VisionSummaryData>(EMPTY_VISION_SUMMARY);
   const [skin, setSkin] = useState<SkinSummaryData>(EMPTY_SKIN_SUMMARY);
   const [mental, setMental] = useState<MentalSummaryData>(EMPTY_MENTAL_SUMMARY);
+  const [dental,setDental]=useState<ShareSection|null>(null),[hearing,setHearing]=useState<ShareSection|null>(null);
   const [timeline, setTimeline] = useState<HealthTimelineItem[]>([]);
 
   useEffect(() => {
@@ -58,6 +64,7 @@ export default function ProfilePage() {
       const demo = isDemoMode(); setIsDemo(demo);
       try { if (!demo) for (const category of ['vision', 'skin', 'mental', 'dental', 'hearing'] as const) readHealthRecords(category); }
       catch { setShareError('Kayıtlar doğrulanamadı; veri değiştirilmedi.'); }
+      try{setDental(measuredShareSection('dental'));setHearing(measuredShareSection('hearing'));}catch{setDental(null);setHearing(null);}
       setVision(getVisionSummary(demo)); setSkin(getSkinSummary(demo)); setMental(getMentalSummary(demo)); setTimeline(getHealthTimeline(demo));
     };
     refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
@@ -109,7 +116,7 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-togg-turquoise font-bold text-sm">
               <Eye className="w-4 h-4 text-togg-turquoise" />
-              <span>Görme Kontrolü</span>
+              <span>{HEALTH_MODULES.vision.name}</span>
             </div>
             <span className="text-[10px] text-slate-400 font-mono">
               {vision.hasData ? vision.dateTr : 'Kayıt Yok'}
@@ -171,7 +178,7 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-togg-turquoise font-bold text-sm">
               <HeartPulse className="w-4 h-4 text-togg-turquoise" />
-              <span>Ruhsal İyi Oluş</span>
+              <span>{HEALTH_MODULES.mental.name}</span>
             </div>
             <span className="text-[10px] text-slate-400 font-mono">
               {mental.hasData ? mental.dateTr : 'Kayıt Yok'}
@@ -198,9 +205,7 @@ export default function ProfilePage() {
       </section>
 
       {!isDemo && <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 space-y-7">
-        <RecordHistory category="vision" parked={isParked} />
-        <RecordHistory category="skin" parked={isParked} />
-        <RecordHistory category="mental" parked={isParked} />
+        <RecordHistory parked={isParked} />
       </section>}
 
       {/* PAYLAŞILABİLİR ÖZET MODALI */}
@@ -222,11 +227,11 @@ export default function ProfilePage() {
 
             <fieldset className="space-y-2 text-sm">
               <legend>Rapora dahil edilecek sonuçları seçin</legend>
-              {(['vision', 'skin', 'mental'] as const).map(key => {
-                const available = { vision, skin, mental }[key].hasData;
-                const label = { vision: 'Görme', skin: 'Cilt', mental: 'Ruhsal iyi oluş' }[key];
+              {HEALTH_MODULE_IDS.map(key => {
+                const available = key==='dental'?Boolean(dental):key==='hearing'?Boolean(hearing):{vision,skin,mental}[key].hasData;
+                const label = HEALTH_MODULES[key].name;
                 return <label key={key} className="flex items-center gap-2">
-                  <input type="checkbox" checked={selection[key]} disabled={!available || !isParked}
+                  <input type="checkbox" checked={Boolean(selection[key])} disabled={!available || !isParked}
                     onChange={e => setSelection(previous => ({ ...previous, [key]: e.target.checked }))} />
                   {label}{!available && ' — kayıt bulunmuyor'}
                 </label>;
@@ -234,15 +239,15 @@ export default function ProfilePage() {
             </fieldset>
             <div data-share-preview className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 text-xs">
               <p>{isDemo ? 'Demo rapor — örnek kullanıcı' : 'Yerel kullanıcı — kimlik doğrulanmadı'}</p>
-              {buildShareSections(selection, vision, skin, mental).map(section => <section key={section.title}>
+              {buildShareSections(selection, vision, skin, mental,dental,hearing).map(section => <section key={section.title}>
                 <strong>{section.title}</strong><p>{section.text}</p><p>{section.dateTr}</p>
               </section>)}
-              {!buildShareSections(selection, vision, skin, mental).length && <p>En az bir mevcut sonucu seçin.</p>}
+              {!buildShareSections(selection, vision, skin, mental,dental,hearing).length && <p>En az bir mevcut sonucu seçin.</p>}
             </div>
             <p className="text-xs text-slate-400">Klinik tanı değildir. Seçtiğiniz bilgiler bu cihazın yazdırma penceresine aktarılır; hekime otomatik gönderilmez. PDF kaydetme hedefini bu pencerede siz seçersiniz.</p>
             {shareError && <p role="alert">{shareError}</p>}
             <p id="share-print-status" role="status" className="text-xs text-slate-300">
-              {!isParked ? 'Yazdırma yalnız PARK durumunda kullanılabilir.' : buildShareSections(selection, vision, skin, mental).length === 0 ? 'Yazdırmak için en az bir kayıtlı sonucu seçin.' : 'Yalnız seçtiğiniz kategoriler yazdırılır.'}
+              {!isParked ? 'Yazdırma yalnız PARK durumunda kullanılabilir.' : buildShareSections(selection, vision, skin, mental,dental,hearing).length === 0 ? 'Yazdırmak için en az bir kayıtlı sonucu seçin.' : 'Yalnız seçtiğiniz kategoriler yazdırılır.'}
             </p>
             <div className="flex justify-end gap-3 pt-2">
               <button
@@ -252,12 +257,12 @@ export default function ProfilePage() {
                 Kapat
               </button>
               <button
-                disabled={!isParked || buildShareSections(selection, vision, skin, mental).length === 0}
+                disabled={!isParked || buildShareSections(selection, vision, skin, mental,dental,hearing).length === 0}
                 aria-describedby="share-print-status"
                 onClick={() => {
                   setShareError(null);
                   try {
-                    printHealthSummary(buildShareSections(selection, vision, skin, mental), isDemo);
+                    printHealthSummary(buildShareSections(selection, vision, skin, mental,dental,hearing), isDemo);
                   } catch {
                     setShareError('Yazdırma penceresi açılamadı. Rapor indirilmedi veya gönderilmedi.');
                   }
@@ -270,8 +275,6 @@ export default function ProfilePage() {
             </div>
         </AccessibleDialog>
       )}
-      <RecordHistory category="dental" parked={isParked} />
-      <RecordHistory category="hearing" parked={isParked} />
     </div>
   );
 }

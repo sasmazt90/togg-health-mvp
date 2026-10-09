@@ -176,6 +176,9 @@ class AppointmentMatchPayload(BaseModel):
     preferredCity: Optional[str] = "İstanbul"
     maxTravelTimeMin: Optional[int] = 30
     useBrowserAgent: Optional[bool] = True
+    availableWindows: List[dict] = []
+    timeZone: str = "Europe/Istanbul"
+    durationMin: int = 45
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -381,24 +384,25 @@ def match_appointments(payload: AppointmentMatchPayload):
     search_result = provider.search_slots(specialty=specialty, city=city)
     slots = search_result.get("slots", [])
 
-    processed_slots = []
+    from care_provider import available_window_match
+    from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+    if not 15<=payload.durationMin<=120 or len(payload.availableWindows)>30:
+        raise HTTPException(422,'INVALID_MATCH_WINDOW')
+    try:ZoneInfo(payload.timeZone)
+    except ZoneInfoNotFoundError:raise HTTPException(422,'INVALID_TIME_ZONE') from None
+    try:available_window_match(None,payload.availableWindows,payload.durationMin,payload.timeZone)
+    except ValueError:raise HTTPException(422,'INVALID_MATCH_WINDOW') from None
+    processed_slots=[]
     for slot in slots:
-        date_time_str = slot.get("dateTime", "")
-        has_conflict = False
-        if date_time_str:
-            has_conflict = calendar_provider.has_conflict(date_time_str)
-
-        travel_info = TravelTimeProvider.calculate_travel_time_min(slot.get("locationLabel", ""))
-
-        processed_slots.append({
-            **slot,
-            "calendarConflict": has_conflict,
-            "calendarFits": not has_conflict if date_time_str else True,
-            "calendarBadge": "Demo Takvim (Yerel Simülasyon)",
-            "travelTimeMin": travel_info["estimatedMinutes"],
-            "trafficBadge": travel_info["trafficBadge"],
-            "matchScore": 95 if not has_conflict else 70
-        })
+        date_time_str=slot.get('dateTime','')
+        try:fits=available_window_match(date_time_str,payload.availableWindows,payload.durationMin,payload.timeZone)
+        except ValueError:raise HTTPException(422,'INVALID_MATCH_WINDOW') from None
+        if fits is False:continue
+        demo=slot.get('sourceType')=='DEMO'
+        conflict=calendar_provider.has_conflict(date_time_str,payload.durationMin) if demo and date_time_str else None
+        travel=TravelTimeProvider.calculate_travel_time_min(slot.get('locationLabel',''))
+        processed_slots.append({**slot,'calendarConflict':conflict,'calendarFits':fits,'calendarBadge':'Kullanıcının uygun zaman aralığı' if fits is not None else 'Saat doğrulanmadı',
+                                'travelTimeMin':travel['estimatedMinutes'],'trafficBadge':travel['trafficBadge'],'matchScore':None,'durationMin':payload.durationMin,'timeZone':payload.timeZone})
 
     return {
         "status": search_result.get("status", "SUCCESS"),

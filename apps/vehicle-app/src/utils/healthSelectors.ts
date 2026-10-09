@@ -1,3 +1,5 @@
+import { readHealthRecords,recordDate } from './healthRecords';
+import { HEALTH_MODULES } from './healthModules';
 /**
  * Attune.more Dynamic Health Selectors
  * Lisans: UNLICENSED
@@ -158,7 +160,7 @@ export function getSkinSummary(demoMode: boolean = isDemoMode()): SkinSummaryDat
     const isBaseline = !!parsed.isBaseline;
     const regionNameTr = parsed.highestChangeRegion || (isBaseline ? 'Referans Tarama' : 'Tüm Bölgeler');
     const changePct = Number(parsed.highestChangePct || 0);
-    const changeLabel = parsed.comparisonUnavailable ? 'Karşılaştırılamadı' : isBaseline
+    const changeLabel = parsed.analysisMode==='instant-appearance-v2'?'Mevcut görünüm analizi':parsed.comparisonUnavailable ? 'Karşılaştırılamadı' : isBaseline
       ? 'Referans Kaydedildi'
       : `Kızarıklık piksel göstergesi: ${changePct > 0 ? '+' : ''}${changePct}%`;
 
@@ -169,7 +171,7 @@ export function getSkinSummary(demoMode: boolean = isDemoMode()): SkinSummaryDat
       regionNameTr,
       changePct,
       changeLabel,
-      recommendation: parsed.referenceDeleted ? 'Yeni referans taraması gerekiyor' : parsed.comparisonUnavailable ? 'Uyumlu ışık/netlik/poz koşullarında yeniden deneyin' : isBaseline ? 'Sonraki uygun taramayla karşılaştırılacak' : parsed.referralSuggested ? 'Uzman görüşü önerildi' : 'Referans bandında',
+      recommendation: parsed.analysisMode==='instant-appearance-v2'?'Bölge ve kriter sonuçlarını inceleyin':parsed.referenceDeleted ? 'Yeni referans taraması gerekiyor' : parsed.comparisonUnavailable ? 'Uyumlu ışık/netlik/poz koşullarında yeniden deneyin' : isBaseline ? 'Sonraki uygun taramayla karşılaştırılacak' : parsed.referralSuggested ? 'Uzman görüşü önerildi' : 'Referans bandında',
       isBaseline,
       rawRecord: parsed
     };
@@ -236,7 +238,7 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
       {
         id: 'demo-skin',
         dateTr: '21 Eylül 2026',
-        moduleName: 'Cilt Kontrolü',
+        moduleName: HEALTH_MODULES.skin.name,
         badgeClass: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60',
         description: 'Sağ yanak bölgesinde baz çizgiye göre +%22 doku varyansı ve kızarıklık eğilimi kaydedildi. Uzman yönlendirme önerisi Care Agent\'a iletildi.',
         isDemo: true
@@ -244,7 +246,7 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
       {
         id: 'demo-mental',
         dateTr: '19 Eylül 2026',
-        moduleName: 'Ruhsal İyi Oluş',
+        moduleName: HEALTH_MODULES.mental.name,
         badgeClass: 'bg-indigo-950/60 text-indigo-400 border-indigo-800/60',
         description: 'Akşam dönüş yolunda uyku düzensizliği ve yorgunluk teması öne çıktı. Seans hafızası güncellenerek rahatlatıcı kabin rehberliği sağlandı.',
         isDemo: true
@@ -252,7 +254,7 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
       {
         id: 'demo-vision',
         dateTr: '18 Eylül 2026',
-        moduleName: 'Görme Kontrolü',
+        moduleName: HEALTH_MODULES.vision.name,
         badgeClass: 'bg-cyan-950/60 text-togg-turquoise border-cyan-800/60',
         description: 'Kontrast hassasiyetinde baz çizgiye göre hafif değişim eğilimi (1.55 LogCS) izlendi. Keskinlik 20/30 seviyesinde sabit kaldı.',
         isDemo: true
@@ -267,7 +269,7 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
     items.push({
       id: `real-skin-${skin.rawRecord.id || '1'}`,
       dateTr: skin.dateTr,
-      moduleName: 'Cilt Kontrolü',
+      moduleName: HEALTH_MODULES.skin.name,
       badgeClass: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60',
       description: skin.rawRecord.clinicalNoteTr || `${skin.regionNameTr} bölgesinde ${skin.changeLabel} kaydedildi.`,
       isDemo: false
@@ -279,7 +281,7 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
     items.push({
       id: `real-vision-${vision.rawRecord.id || '1'}`,
       dateTr: vision.dateTr,
-      moduleName: 'Görme Kontrolü',
+      moduleName: HEALTH_MODULES.vision.name,
       badgeClass: 'bg-cyan-950/60 text-togg-turquoise border-cyan-800/60',
       description: ['landolt-orientation-guided-v2','spoken-letter-v1'].includes(vision.rawRecord.protocolVersion) ? `Cihaz koşullarında görev · ${vision.contrastSummary}. ${vision.acuitySummary}.` : `Görme keskinliği ${vision.acuitySummary}. Kontrast hassasiyeti ${vision.contrastSummary}.`,
       isDemo: false
@@ -291,12 +293,15 @@ export function getHealthTimeline(demoMode: boolean = isDemoMode()): HealthTimel
     items.push({
       id: 'real-mental',
       dateTr: mental.dateTr,
-      moduleName: 'Ruhsal İyi Oluş',
+      moduleName: HEALTH_MODULES.mental.name,
       badgeClass: 'bg-indigo-950/60 text-indigo-400 border-indigo-800/60',
       description: `Öne çıkan tema: ${mental.primaryTheme}. Toplam ${mental.sessionCountLabel}.`,
       isDemo: false
     });
   }
 
+  for(const category of ['dental','hearing'] as const){
+    try {const records=readHealthRecords(category);for(const row of records.slice(-1))items.push({id:`real-${category}-${row.id}`,dateTr:recordDate(row),moduleName:HEALTH_MODULES[category].name,badgeClass:'bg-cyan-950/60 text-togg-turquoise border-cyan-800/60',description:row.summaryText||'Yerel ön değerlendirme',isDemo:false});}catch{}
+  }
   return items;
 }

@@ -4,6 +4,7 @@ All maps have fixed physical digital scales (never per-image min/max). Coordinat
 refer to the original opaque PNG. Display pixels are never changed. Pixel filters
 are applied to a separate face-scale-normalized copy, not the displayed photo.
 """
+from instant_appearance import instant_proxy, UNIT as INSTANT_UNIT
 import base64
 import hashlib
 import math
@@ -14,7 +15,7 @@ from skimage.filters import gabor
 from skin_scan_baseline.oiliness import oiliness_map
 from skin_scan_baseline.blemishes import blemish_map
 
-VERSION = 'appearance-cv-1'
+VERSION = 'appearance-cv-2'
 LIMITS = {'minFacePixels': 180, 'analysisFacePixels': 320, 'maxClippedFraction': .03}
 
 
@@ -278,23 +279,11 @@ def analyze_skin(payload):
             lines *= outer > 0
             add('lines', np.mean(lines[valid])*100 if valid.any() else 0, 'directional-line-index-0-100', lines, limitation=detail_reason)
         if region != 'nose':
-            geom, geom_reason = contour_geometry(points,region,conditions,payload.get('temporal',[]))
+            value,components,signal,lines,limitation=instant_proxy(gray,base&~clipping&(gray>.12),points,region,conditions,scale,origin,bgr.shape,hair,(face_support>0)&(exclusion==0)&~clipping&(gray>.12))
             criterion = 'bags' if region == 'periorbital' else 'sag'
-            item = row(region,criterion,None,'normalized-contour-ratio',area,conditions,reason or geom_reason,
-                       components=geom,kind='longitudinal_measurement')
-            if region=='periorbital' and geom is not None:
-                evidence=[sample for sample in payload.get('temporal',[]) if isinstance(sample,dict) and sample.get('eyelidEdge') is not None and sample.get('underEyeContrast') is not None]
-                if len(evidence)<3:
-                    geom=None;item['limitationCode']='TEMPORAL_EDGE_SUPPORT_MISSING'
-                else:
-                    edges=np.array([sample['eyelidEdge'] for sample in evidence]);shadows=np.array([sample['underEyeContrast'] for sample in evidence])
-                    if np.std(edges)>max(.008,np.mean(edges)*.25) or np.std(shadows)>max(.008,np.mean(shadows)*.25):
-                        geom=None;item['limitationCode']='EYELID_EDGE_OR_LIGHT_UNSTABLE'
-                    else:geom.update(edgeMean=float(edges.mean()),shadowContrast=float(shadows.mean()),edgeSamples=len(evidence))
-            if geom is not None and reason is None:
-                item.update(value=geom['ratio'],quality='valid',limitationCode='REFERENCE_CREATED')
-                contours[region]=geom
-            items.append(item)
+            add(criterion,value or 0,INSTANT_UNIT,signal,limitation=reason or limitation,components=components)
+            if value is not None and reason is None and lines:
+                contours[region]=dict(points=lines[0],lines=lines,features=[])
         response[region]=items
     return dict(methodVersion=VERSION,photoId=source_hash,measurements=response,maps=maps,contours=contours,
                 storage='volatile-memory-only',sourceWidth=bgr.shape[1],sourceHeight=bgr.shape[0])

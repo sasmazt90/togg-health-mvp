@@ -15,7 +15,7 @@ export interface SkinSnapshot {
   previewCrop?:Crop;
   photoId?:string;
   landmarks?:{x:number;y:number;z?:number}[];
-  contoursMeasured?:Record<string,{points:{x:number;y:number}[];features:number[]}>;
+  contoursMeasured?:Record<string,{points:{x:number;y:number}[];lines?:{x:number;y:number}[][];features:number[]}>;
   localMaps?:Record<string,import('./skinLocalMaps').SkinLocalMap>;
   localAnalysis?:{loadMs:number;analysisMs:number;allocatedBytes:number};
 }

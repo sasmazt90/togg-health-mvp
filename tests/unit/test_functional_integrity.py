@@ -75,7 +75,7 @@ def test_skin_demo_mode_allows_fixture_with_separate_keys():
 # ---------------------------------------------------------------------------
 # 3. First Real Scan: Baseline Creation
 # ---------------------------------------------------------------------------
-def test_skin_first_real_scan_creates_baseline_no_fake_delta():
+def test_current_skin_first_scan_is_independent_of_reference_no_fake_delta():
     """İlk başarılı tarama referans baz çizgisini kaydetmeli, sahte +22 delta veya referral üretmemelidir."""
     skin_analyzer = root_dir / "apps" / "vehicle-app" / "src" / "utils" / "skinAnalyzer.ts"
     content = skin_analyzer.read_text(encoding="utf-8")
@@ -88,8 +88,10 @@ def test_skin_first_real_scan_creates_baseline_no_fake_delta():
 
     skin_page = root_dir / "apps" / "vehicle-app" / "src" / "app" / "skin" / "page.tsx"
     page_content = skin_page.read_text(encoding="utf-8")
-    assert "STORAGE_KEYS.SKIN_BASELINE" in page_content
-    assert "isFirstScan" in page_content
+    assert "localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE)" not in page_content
+    assert "initializeMissingContourReferences" not in page_content
+    assert "analysisMode: 'instant-appearance-v2'" in page_content
+    assert "highestChangePct: 0" in page_content
 
 
 # ---------------------------------------------------------------------------

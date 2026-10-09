@@ -21,6 +21,7 @@ for(let bits=0;bits<8;bits++) {
  assert.equal(serialized.includes('20/20'),selection.vision);
  assert.equal(serialized.includes('Burun'),selection.skin);
 }
+const dental={title:'Diş Sağlığı',text:'8 görünür aday',dateTr:'4 Ekim'},hearing={title:'İşitme Sağlığı',text:'−1 dB SNR',dateTr:'5 Ekim'};for(let bits=0;bits<32;bits++){const selected={vision:!!(bits&1),skin:!!(bits&2),mental:!!(bits&4),dental:!!(bits&8),hearing:!!(bits&16)},sections=build(selected,vision,skin,mental,dental,hearing);assert.equal(sections.length,Object.values(selected).filter(Boolean).length);assert.equal(JSON.stringify(sections).includes('8 görünür aday'),selected.dental);assert.equal(JSON.stringify(sections).includes('−1 dB SNR'),selected.hearing);}
 assert.deepEqual(build({vision:true,skin:true,mental:true},{hasData:false},{hasData:false},{hasData:false}),[]);
 """
-    subprocess.run(['node','-e',script],cwd=root,check=True,input=json.dumps({'output':str(tmp_path/'share.cjs')}),text=True,encoding='utf-8')
+    subprocess.run(['node','-e',"require('./tests/unit/ts_loader.js');\n"+script],cwd=root,check=True,input=json.dumps({'output':str(tmp_path/'share.cjs')}),text=True,encoding='utf-8')

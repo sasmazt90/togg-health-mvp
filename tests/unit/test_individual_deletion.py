@@ -85,4 +85,4 @@ const before=new Map(map);failKey=keys[0];
 
 @pytest.mark.parametrize('category', ['vision', 'skin', 'mental', 'dental', 'hearing'])
 def test_client_legacy_ids_delete_rollback_reopen_and_no_raw_media(tmp_path, category):
-    subprocess.run(['node', '-e', NODE], input=json.dumps({'dir': str(tmp_path), 'category': category}), text=True, check=True, cwd=Path(__file__).resolve().parents[2])
+    subprocess.run(['node', '-e', "require('./tests/unit/ts_loader.js');\n"+NODE], input=json.dumps({'dir': str(tmp_path), 'category': category}), text=True, check=True, cwd=Path(__file__).resolve().parents[2])

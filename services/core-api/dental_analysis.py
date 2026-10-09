@@ -76,7 +76,7 @@ def projected_contour_overlap(contours,axis):
     return float(np.mean(ratios)) if ratios else None
 
 
-def contours_and_alignment(image,tooth,mouth,p):
+def contours_and_alignment(image,tooth,mouth,p,row_center=None,source_mouth_width=None):
     """Marker controlled watershed on visible enamel, no invented FDI/teeth."""
     distance=cv2.distanceTransform(tooth.astype(np.uint8),cv2.DIST_L2,5)
     if distance.max()<2:return [],None,'TOOTH_BOUNDARIES_UNRELIABLE'
@@ -86,7 +86,7 @@ def contours_and_alignment(image,tooth,mouth,p):
     gradient=np.hypot(cv2.Sobel(gray,cv2.CV_32F,1,0),cv2.Sobel(gray,cv2.CV_32F,0,1))
     labels=watershed(gradient,markers,mask=tooth,compactness=.002)
     contours=[];rows={'upper':[],'lower':[]}
-    center=(p[13,1]+p[14,1])/2;mouth_width=float(np.linalg.norm(p[78]-p[308]))
+    center=row_center if row_center is not None else (p[13,1]+p[14,1])/2;mouth_width=source_mouth_width if source_mouth_width is not None else float(np.linalg.norm(p[78]-p[308]))
     for label in range(1,count+1):
         cc,_=cv2.findContours((labels==label).astype(np.uint8),cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
         if not cc:continue
@@ -242,4 +242,4 @@ def analyze_dental(payload):
                 if support:candidate['viewSupport']=sorted(set(support+[view['pose']]));confirmed.append(candidate)
             usable=consistent and (bool(confirmed) or no_candidates)
             item.update(quality='valid' if usable else 'insufficient',value=sum(c['areaPixels'] for c in confirmed)/item['evaluatedArea']*100 if usable else None,limitationCode=None if usable else 'VIEW_DISAGREEMENT',viewSupport=len(supported),unconfirmedCandidateCount=len(item['candidates'])-len(confirmed),candidates=confirmed if usable else [])
-    return dict(methodVersion='dental-visible-v1',views=views,storage='volatile-memory-only',clinicalValidation=False)
+    return dict(methodVersion='dental-visible-v1',sourceType='camera',views=views,storage='volatile-memory-only',clinicalValidation=False)

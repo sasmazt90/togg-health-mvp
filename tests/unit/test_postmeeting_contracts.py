@@ -24,7 +24,7 @@ for(const id of ['dry','sag','acne','oil'])assert.equal(rows.find(i=>i.id===id).
 assert(measureSkinIndicators(ctx,snapshot,{isValid:false}).forehead.every(i=>i.score===null));
 const full={};for(const region of ['forehead','rightCheek','leftCheek','nose','chin','periorbital'])full[region]=indicatorIds(region).map(id=>({id,score:null,method:'unavailable',reason:'No validated measurement'}));assert(validSkinIndicators(full));full.forehead[0].score=NaN;assert(!validSkinIndicators(full));full.forehead[0].score=null;full.forehead[1].score=0;assert(!validSkinIndicators(full));
 '''
- subprocess.run(['node','-e',script],cwd=root,input=json.dumps({'dir':str(tmp_path).replace('\\','/')}),text=True,check=True)
+ subprocess.run(['node','-e',"require('./tests/unit/ts_loader.js');\n"+script],cwd=root,input=json.dumps({'dir':str(tmp_path).replace('\\','/')}),text=True,check=True)
 
 def test_snapshot_source_and_no_segmentation_preload():
  root=Path(__file__).resolve().parents[2]
@@ -48,4 +48,4 @@ const map=new Map();global.localStorage={getItem:k=>map.get(k)??null,setItem:(k,
 const H=require(dir+'/healthRecords.js'),K=require(dir+'/attuneMode.js').STORAGE_KEYS;
 (async()=>{map.set(K.SKIN_BASELINE,'legacy-metrics-unchanged');map.set(K.SKIN_SINGLE_SIGNS_BASELINE,JSON.stringify({id:'v3'}));map.set(K.SKIN_HISTORY,JSON.stringify([{id:'v3',schemaVersion:3,isBaseline:true,comparisonScope:'single-front-v1'},{id:'comparison',schemaVersion:3,baselineId:'v3',indicators:{forehead:[{id:'tone',score:2,referenceDelta:1}]}}]));await H.deleteHealthRecord('skin','v3');assert.equal(map.get(K.SKIN_BASELINE),'legacy-metrics-unchanged');assert(!map.has(K.SKIN_SINGLE_SIGNS_BASELINE));const remaining=H.readHealthRecords('skin')[0];assert.equal(remaining.indicators.forehead[0].score,2);assert(!('referenceDelta' in remaining.indicators.forehead[0]));assert(remaining.comparisonUnavailable);map.set(H.RECORD_JOURNAL,JSON.stringify({[K.SKIN_SINGLE_SIGNS_BASELINE]:'restored-v3-reference'}));await H.prepareHealthRecords('skin');assert.equal(map.get(K.SKIN_SINGLE_SIGNS_BASELINE),'restored-v3-reference');assert(!map.has(H.RECORD_JOURNAL));})().catch(e=>{console.error(e);process.exitCode=1});
 '''
- subprocess.run(['node','-e',script],cwd=root,input=json.dumps({'dir':str(tmp_path)}),text=True,check=True)
+ subprocess.run(['node','-e',"require('./tests/unit/ts_loader.js');\n"+script],cwd=root,input=json.dumps({'dir':str(tmp_path)}),text=True,check=True)

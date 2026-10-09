@@ -89,6 +89,7 @@ export interface SkinAnalysisResult {
   highestChangePct: number;
   referralSuggested: boolean;
   isBaseline: boolean;
+  analysisMode?: 'instant-appearance-v2';
   clinicalNoteTr: string;
   usedMediaPipe: boolean;
   baselineId?: string;

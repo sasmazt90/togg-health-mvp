@@ -1,4 +1,6 @@
 'use client';
+import { careHref,HEALTH_MODULES } from '../../utils/healthModules';
+import { useGuidance } from '../../utils/audioGuidance';
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Volume2, VolumeX, HeartPulse } from 'lucide-react';
@@ -19,6 +21,8 @@ export default function MentalPage() {
   const { isParked } = useVehicle();
   const router = useRouter();
   const c = useMentalConversation(isParked);
+  const guidance=useGuidance('mental',isParked&&c.voiceEnabled);
+  useEffect(()=>{if(!c.active&&isParked&&c.voiceEnabled)guidance.phase(c.phase,c.phase==='completed'?'mental-complete':'mental-entry');else guidance.cancel();},[guidance,c.phase,c.active,c.voiceEnabled,isParked]);
   const [completionOpen, setCompletionOpen] = useState(false);
   useEffect(() => { if (c.phase === 'completed') setCompletionOpen(true); else setCompletionOpen(false); }, [c.phase]);
   const [input, setInput] = useState('');
@@ -38,7 +42,7 @@ export default function MentalPage() {
       sourceModule: 'MENTAL', specialty: 'Klinik Psikoloji', reasonSummary: 'Kullanıcının klinik psikolog seçeneklerini inceleme talebi.',
       timestamp: new Date().toISOString(), isDemo: demo, metricsSummary: { recurringThemes: [...new Set(c.history.flatMap(h => h.themes))] }
     })); } catch {}
-    router.push('/care?specialty=Klinik%20Psikoloji&from=mental' + (demo ? '&demo=1' : ''));
+    router.push(careHref('mental') + (demo ? '&demo=1' : ''));
   };
   let angle = 0;
   const gradient = stats.rows.map((row, i) => { const start = angle; angle += row.percent * 3.6; return `${COLORS[i % COLORS.length]} ${start}deg ${angle}deg`; }).join(', ');
@@ -51,11 +55,11 @@ export default function MentalPage() {
   return <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
     <section className="bg-cockpit-surface border border-white/10 rounded-2xl p-6 space-y-5">
       {demo && <p className="text-amber-200">Demo / Örnek içerik — gerçek görüşme geçmişiniz değildir.</p>}
-      <div className="flex items-center gap-2 text-togg-turquoise"><HeartPulse /><span>Ruhsal İyi Oluş</span></div>
-      <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold">Bugün nasıl hissediyorsunuz?</h1><InformationButton title="Ruhsal iyi oluş"><p>Park halinde konuşabilir veya yazabilirsiniz. Bu hizmet klinik tanı ve acil yardım hizmeti değildir. Sesli yanıt yapay zekâ tarafından üretilir.</p></InformationButton></div>
+      <div className="flex items-center gap-2 text-togg-turquoise"><HeartPulse /><span>{HEALTH_MODULES.mental.name}</span></div>
+      <div className="flex items-center justify-between gap-3"><h1 className="text-2xl font-bold">Bugün nasıl hissediyorsunuz?</h1><InformationButton title={HEALTH_MODULES.mental.name}><p>Park halinde konuşabilir veya yazabilirsiniz. Bu hizmet klinik tanı ve acil yardım hizmeti değildir. Sesli yanıt yapay zekâ tarafından üretilir.</p></InformationButton></div>
       <p className="text-sm text-slate-300">Park halinde konuşabilir veya yazarak devam edebilirsiniz. Bu hizmet klinik tanı veya acil yardım hizmeti değildir.</p>
       <div className="flex gap-3">
-        <button onClick={() => c.active ? c.phase === 'permission' && !c.messages.length ? c.cancelConversation() : void c.finish() : c.start()} disabled={!isParked || c.phase === 'ending' || (!c.active && !c.serviceConsent)} className="flex-1 bg-togg-turquoise text-togg-darkBlue font-bold p-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-400 disabled:cursor-not-allowed flex gap-2 justify-center items-center">{c.active ? <MicOff /> : <Mic />}<span>{c.active ? c.phase === 'permission' && !c.messages.length ? 'Başlatmayı iptal et' : 'Görüşmeyi Bitir' : 'Görüşmeyi Başlat'}</span></button>
+        <button onClick={() => {guidance.cancel();return c.active ? c.phase === 'permission' && !c.messages.length ? c.cancelConversation() : void c.finish() : c.start();}} disabled={!isParked || c.phase === 'ending' || (!c.active && !c.serviceConsent)} className="flex-1 bg-togg-turquoise text-togg-darkBlue font-bold p-4 rounded-xl disabled:bg-slate-800 disabled:text-slate-400 disabled:cursor-not-allowed flex gap-2 justify-center items-center">{c.active ? <MicOff /> : <Mic />}<span>{c.active ? c.phase === 'permission' && !c.messages.length ? 'Başlatmayı iptal et' : 'Görüşmeyi Bitir' : 'Görüşmeyi Başlat'}</span></button>
         <button onClick={() => c.setVoiceEnabled(!c.voiceEnabled)} className="border border-white/20 rounded-xl p-3" aria-label={c.voiceEnabled ? 'Sesli yanıtı kapat' : 'Sesli yanıtı aç'}>{c.voiceEnabled ? <Volume2 /> : <VolumeX />}</button>
       </div>
       {c.active && <button onClick={c.phase==='paused'?c.continueConversation:c.pause} className="min-h-11 px-4 rounded-xl border border-white/20">{c.phase==='paused'?'Devam et':'Duraklat'}</button>}

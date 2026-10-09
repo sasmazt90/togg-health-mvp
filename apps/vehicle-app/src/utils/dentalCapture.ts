@@ -2,7 +2,7 @@ import type { FaceAlignment } from './skinAnalyzer';
 export type DentalPose='FRONT'|'RIGHT'|'LEFT'|'BITE';
 export const DENTAL_POSES:DentalPose[]=['FRONT','RIGHT','LEFT','BITE'];
 export const DENTAL_GUIDANCE:Record<DentalPose,string>={FRONT:'Başınız karşıda. Ağzınızı rahatça açın; ön dişleriniz görünsün.',RIGHT:'Başınızı kendi sağınıza hafifçe çevirin; ağzınızı rahatça açık tutun.',LEFT:'Başınızı kendi solunuza hafifçe çevirin; ağzınızı rahatça açık tutun.',BITE:'Başınız karşıda. Dişlerinizi doğal, rahat kapanışta tutun; ön dişleriniz görünsün. Zorlamayın.'};
-export type DentalCapture={photo:string;photoId:string;width:number;height:number;pose:DentalPose;landmarks:{x:number;y:number;z?:number}[];conditions:Record<string,number>};
+export type DentalCapture={sourceType?:'camera'|'upload';photo:string;photoId:string;width:number;height:number;pose:DentalPose;landmarks:{x:number;y:number;z?:number}[];conditions:Record<string,number>};
 export function assessDentalCapture(ctx:CanvasRenderingContext2D,a:FaceAlignment,pose:DentalPose){
  const points=a.landmarks,reasons:string[]=[];if(!points||points.length<468||!a.faceDetected||!a.isMediaPipeActive)return {valid:false,reasons:['Yüz algılanamadı.'],opening:0,visibleFraction:0};
  const width=ctx.canvas.width,height=ctx.canvas.height,p=points.map(v=>({x:v.x*width,y:v.y*height}));

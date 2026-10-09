@@ -1,8 +1,9 @@
+import { HEALTH_MODULES } from './healthModules';
 import { STORAGE_KEYS } from './attuneMode';
 
 export type HealthCategory = 'vision' | 'skin' | 'mental' | 'dental' | 'hearing';
 export type HealthRecord = { id: string; date?: string; timestamp?: string; dateTr?: string; [key: string]: any };
-export const RECORD_LABELS = { vision: 'Görme testi', skin: 'Cilt analizi', mental: 'Ruhsal iyi oluş özeti', dental: 'Diş görünümü', hearing: 'Cihazda duyulabilirlik' };
+export const RECORD_LABELS = Object.fromEntries(Object.entries(HEALTH_MODULES).map(([key,module])=>[key,module.name])) as Record<HealthCategory,string>;
 export const RECORD_JOURNAL = 'attune_health_transaction_v1';
 const KEYS = {
   vision: { history: 'togg_health_vision_history', latest: STORAGE_KEYS.LATEST_VISION },

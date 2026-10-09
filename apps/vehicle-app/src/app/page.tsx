@@ -1,4 +1,6 @@
 'use client';
+import { HEALTH_MODULES } from '../utils/healthModules';
+import { useGuidance } from '../utils/audioGuidance';
 
 import { InformationButton } from '../components/InformationButton';
 import React, { useState, useEffect } from 'react';
@@ -34,6 +36,9 @@ import {
 } from '../utils/healthSelectors';
 
 export default function CockpitDashboard() {
+  const voice=useGuidance('cockpit');
+  useEffect(()=>voice.phase('entry','cockpit-entry'),[voice]);
+
   const { isParked } = useVehicle();
   const [isDemo, setIsDemo] = useState<boolean>(false);
   const [vision, setVision] = useState<VisionSummaryData>(EMPTY_VISION_SUMMARY);
@@ -89,7 +94,7 @@ export default function CockpitDashboard() {
               </span>
               <span className="text-slate-600">•</span>
               <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
-                Ruhsal İyi Oluş
+                {HEALTH_MODULES.mental.name}
               </span>
               <span className="text-slate-600">•</span>
               <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-slate-300">
@@ -114,7 +119,7 @@ export default function CockpitDashboard() {
 
       {/* 2. Dört Eşit Modül Kartı Grid (1600x900 ilk ekranda görünür) */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-        {/* Modül 1: Görme Kontrolü */}
+        {/* Modül 1: Göz Sağlığı */}
         <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -128,7 +133,7 @@ export default function CockpitDashboard() {
 
             <div>
               <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
-                Görme Kontrolü
+                {HEALTH_MODULES.vision.name}
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                 Yönergeli yön hizalama ön değerlendirmesi.
@@ -166,7 +171,7 @@ export default function CockpitDashboard() {
           </div>
         </div>
 
-        {/* Modül 2: Cilt Kontrolü */}
+        {/* Modül 2: Cilt Sağlığı */}
         <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -180,7 +185,7 @@ export default function CockpitDashboard() {
 
             <div>
               <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
-                Cilt Kontrolü
+                {HEALTH_MODULES.skin.name}
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                 Ön ve yan pozlarda cilt değişimlerini izleyin.
@@ -220,7 +225,7 @@ export default function CockpitDashboard() {
           </div>
         </div>
 
-        {/* Modül 3: Ruhsal İyi Oluş */}
+        {/* Modül 3: Ruh Sağlığı */}
         <div className="bg-cockpit-surface border border-white/10 rounded-2xl p-5 flex flex-col justify-between hover:border-togg-turquoise/40 transition-all duration-200 shadow-xl group">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -234,7 +239,7 @@ export default function CockpitDashboard() {
 
             <div>
               <h2 className="text-base font-bold text-white group-hover:text-togg-turquoise transition-colors">
-                Ruhsal İyi Oluş
+                {HEALTH_MODULES.mental.name}
               </h2>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                 Konuşun veya yazın; görüşme özetinizi izleyin.

@@ -27,11 +27,11 @@ const {SkinRegionSummary}=load('apps/vehicle-app/src/components/skin/SkinRegionS
 for(const [value,expected] of [[.4,0],[.5,1],[32.4,32],[32.5,33],[99.5,100]]) {
  const indicators=[{id:'redness',label:'Redness',score:value,reason:'Color index'},{id:'oil',label:'Oil',score:null,reason:'No validated measurement'}];
  const html=renderToStaticMarkup(React.createElement(SkinRegionSummary,{currentRegion:{nameTr:'Region',metrics:{},indicators},onOpenModal:()=>{},onNavigateToCare:()=>{}}));
- assert(new RegExp('data-skin-score="[^"]*">'+expected+'</span>').test(html));
+ assert(new RegExp('data-skin-score="[^"]*"[^>]*>'+expected+'</span>').test(html));
  assert(html.includes('aria-valuenow="'+expected+'"'));
  assert.equal((html.match(/role="meter"/g)||[]).length,1);
  assert(html.includes('No validated measurement'));assert.equal(indicators[0].score,value);
 }
 '''
- result=subprocess.run(['node','-e',script],cwd=ROOT,capture_output=True,text=True,encoding='utf8')
+ result=subprocess.run(['node','-e',"require('./tests/unit/ts_loader.js');\n"+script],cwd=ROOT,capture_output=True,text=True,encoding='utf8')
  assert result.returncode==0,result.stdout+result.stderr

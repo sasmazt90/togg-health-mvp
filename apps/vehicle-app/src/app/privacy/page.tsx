@@ -293,7 +293,7 @@ export default function PrivacyPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Kabin Mikrofonu</h2><InformationButton title="Kabin Mikrofonu"><p>Mikrofon yalnız görüşmeyi başlattığınızda kullanılır. Tarayıcı/cihaz izni ayrıca gerekir; bu tercih onu onaylamaz. Konuşma tanıma hizmeti sesi buluta aktarabilir. Aktarım Ruhsal İyi Oluş ekranındaki hizmet onayına bağlıdır. Ham ses uygulamada saklanmaz.</p></InformationButton></div>
+              <div className="flex items-center justify-between gap-3"><h2 className="text-base font-bold text-white">Kabin Mikrofonu</h2><InformationButton title="Kabin Mikrofonu"><p>Mikrofon yalnız görüşmeyi başlattığınızda kullanılır. Tarayıcı/cihaz izni ayrıca gerekir; bu tercih onu onaylamaz. Konuşma tanıma hizmeti sesi buluta aktarabilir. Aktarım Ruh Sağlığı ekranındaki hizmet onayına bağlıdır. Ham ses uygulamada saklanmaz.</p></InformationButton></div>
             </div>
           </div>
 
@@ -406,7 +406,7 @@ export default function PrivacyPage() {
                 <span>Bu işlem yerel bellekteki tüm kayıtları kalıcı olarak temizler!</span>
               </div>
               <p className="text-xs text-slate-300 leading-relaxed">
-                Tüm görme testleri, cilt baz çizgisi ve seans hafızası sıfırlanacaktır.
+                Beş sağlık modülünün yerel kayıtları ve eski kişisel cilt referansları silinecektir.
               </p>
               <div className="flex gap-3 pt-1">
                 <button

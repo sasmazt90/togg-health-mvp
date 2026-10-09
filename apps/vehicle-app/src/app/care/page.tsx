@@ -1,7 +1,9 @@
 'use client';
+import { HEALTH_MODULES,HEALTH_MODULE_IDS,HealthModule } from '../../utils/healthModules';
+import { useGuidance } from '../../utils/audioGuidance';
 
 import { InformationButton } from '../../components/InformationButton';
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { AccessibleDialog } from '../../components/AccessibleDialog';
 import { useSearchParams } from 'next/navigation';
 import { useVehicle } from '../../context/VehicleContext';
@@ -38,16 +40,22 @@ interface CareSlot {
   travelTimeMin: number;
   calendarConflict: boolean;
   sourceBadge: string;
-  matchScore: number;
+  matchScore: number|null;
+  calendarFits?:boolean|null;
   bookingUrl?: string;
 }
 
 function CareContent() {
+  const voice=useGuidance('care');
+  useEffect(()=>voice.phase('entry','care-entry'),[voice]);
+
   const { state, isParked } = useVehicle();
   const searchParams = useSearchParams();
   const paramSpecialty = searchParams.get('specialty');
   const paramFrom = searchParams.get('from');
 
+  const [availableStart,setAvailableStart]=useState(''),[availableEnd,setAvailableEnd]=useState(''),[duration,setDuration]=useState(45);
+  const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>(paramSpecialty || 'Dermatoloji');
   const [filterType, setFilterType] = useState<'ALL' | 'IN_PERSON' | 'ONLINE'>('ALL');
   const [slots, setSlots] = useState<CareSlot[]>([]);
@@ -73,6 +81,7 @@ function CareContent() {
   }, [isParked]);
 
   useEffect(() => {
+    if(paramSpecialty){setSelectedSpecialty(paramSpecialty);setReferralContext(null);return;}
     try {
       const stored = localStorage.getItem('togg_active_referral_context');
       if (stored) {
@@ -85,7 +94,7 @@ function CareContent() {
     } catch { /* Unreadable context is preserved, never exposed in logs. */ }
   }, [paramSpecialty]);
 
-  const fetchAppointments = async (specialty: string, controller: AbortController, generation: number) => {
+  const fetchAppointments = useCallback(async (specialty: string, controller: AbortController, generation: number) => {
     setLoading(true); setSlots([]); setSearchNotice(null);
     const deadline = setTimeout(() => controller.abort(), 12000);
     try {
@@ -97,141 +106,27 @@ function CareContent() {
           specialty,
           preferredCity: 'İstanbul',
           maxTravelTimeMin: 30,
-          useBrowserAgent: true
+          useBrowserAgent: true, timeZone:timezone,durationMin:duration,
+          availableWindows:availableStart&&availableEnd?[{start:availableStart,end:availableEnd}]:[]
         })
       });
 
       if (res.ok) {
         const data = await res.json();
         if (generation !== searchGeneration.current) return;
-        setSlots(data.matchedSlots || []);
+        setSlots((data.matchedSlots || []).map((slot:CareSlot)=>({...slot,displayTime:slot.dateTime&&Number.isFinite(Date.parse(slot.dateTime))?new Date(slot.dateTime).toLocaleString('tr-TR',{timeZone:timezone,dateStyle:'short',timeStyle:'short'}):'Saati sağlayıcıda doğrulayın'})));
       } else {
         throw new Error('API Hatası');
       }
     } catch {
       if (generation !== searchGeneration.current) return;
-      setSearchNotice('Uzman arama hizmetine ulaşılamadı. Aşağıdaki seçenekler örnektir; güncel uygunluk veya randevu onayı değildir. Yeniden deneyebilirsiniz.');
-      // Demo Hekim Verileri
-      if (specialty === 'Dermatoloji') {
-        setSlots([
-          {
-            id: 'care-01',
-            specialty: 'Dermatoloji',
-            providerName: 'Uzm. Dr. B. Kaya (Demo Hekim)',
-            title: 'Dermatoloji Uzmanı',
-            clinicName: 'Demo Dermatoloji Kliniği',
-            locationLabel: 'Ataşehir, İstanbul',
-            isOnline: false,
-            displayTime: 'Yarın 18:20',
-            travelTimeMin: 14,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 96,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          },
-          {
-            id: 'care-02',
-            specialty: 'Dermatoloji',
-            providerName: 'Uzm. Dr. K. Arslan (Demo Hekim)',
-            title: 'Klinik Dermatolog',
-            clinicName: 'Demo Kadıköy Cilt Sağlığı Merkezi',
-            locationLabel: 'Moda, İstanbul',
-            isOnline: false,
-            displayTime: 'Çarşamba 11:30',
-            travelTimeMin: 18,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 90,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          },
-          {
-            id: 'care-03',
-            specialty: 'Dermatoloji',
-            providerName: 'Doç. Dr. A. Erdem (Demo Danışman)',
-            title: 'Dermatoloji & Estetik Konsültanı',
-            clinicName: 'Demo Online Teledermatoloji',
-            locationLabel: 'Görüntülü Görüşme',
-            isOnline: true,
-            displayTime: 'Yarın 20:00',
-            travelTimeMin: 0,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 88,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          }
-        ]);
-      } else if (specialty === 'Göz Hastalıkları') {
-        setSlots([
-          {
-            id: 'care-vis-01',
-            specialty: 'Göz Hastalıkları',
-            providerName: 'Uzm. Dr. A. Yılmaz (Demo Hekim)',
-            title: 'Oftalmoloji & Refraktif Muayene',
-            clinicName: 'Demo Göz Sağlığı Merkezi',
-            locationLabel: 'Üsküdar, İstanbul',
-            isOnline: false,
-            displayTime: 'Yarın 15:40',
-            travelTimeMin: 12,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 95,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          },
-          {
-            id: 'care-vis-02',
-            specialty: 'Göz Hastalıkları',
-            providerName: 'Op. Dr. E. Çetin (Demo Hekim)',
-            title: 'Göz Hastalıkları Uzmanı',
-            clinicName: 'Demo Göztepe Polikliniği',
-            locationLabel: 'Kadıköy, İstanbul',
-            isOnline: false,
-            displayTime: 'Perşembe 10:00',
-            travelTimeMin: 16,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 89,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          }
-        ]);
-      } else {
-        setSlots([
-          {
-            id: 'care-men-01',
-            specialty: 'Klinik Psikoloji',
-            providerName: 'Uzm. Psk. C. Bilgin (Demo Danışman)',
-            title: 'Uzman Klinik Psikolog',
-            clinicName: 'Demo Kabin & Online Terapi',
-            locationLabel: 'Online Görüntülü',
-            isOnline: true,
-            displayTime: 'Bu Akşam 20:30',
-            travelTimeMin: 0,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 98,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          },
-          {
-            id: 'care-men-02',
-            specialty: 'Klinik Psikoloji',
-            providerName: 'Psk. Dr. E. Sönmez (Demo Danışman)',
-            title: 'Bilişsel Davranışçı Terapist',
-            clinicName: 'Bağdat Caddesi Psikoloji Enstitüsü',
-            locationLabel: 'Kadıköy, İstanbul',
-            isOnline: false,
-            displayTime: 'Çarşamba 17:00',
-            travelTimeMin: 15,
-            calendarConflict: false,
-            sourceBadge: 'Demo Randevu Verisi',
-            matchScore: 91,
-            bookingUrl: 'https://www.doktortakvimi.com'
-          }
-        ]);
-      }
+      setSearchNotice('Uzman arama hizmetine ulaşılamadı. Yeniden deneyebilir veya başka branş seçebilirsiniz.');
+      setSlots([]);
     } finally {
       clearTimeout(deadline);
       if (generation === searchGeneration.current) setLoading(false);
     }
-  };
+  },[availableStart,availableEnd,duration,timezone]);
 
   const invalidateSearch = () => { searchGeneration.current++; activeSearch.current?.abort(); activeSearch.current = null; };
   useEffect(() => {
@@ -239,7 +134,7 @@ function CareContent() {
     const generation = ++searchGeneration.current;
     void fetchAppointments(selectedSpecialty, controller, generation);
     return () => { invalidateSearch(); controller.abort(); };
-  }, [selectedSpecialty]);
+  }, [selectedSpecialty,fetchAppointments]);
 
   const filteredSlots = slots.filter((slot) => {
     if (filterType === 'IN_PERSON') return !slot.isOnline;
@@ -252,6 +147,7 @@ function CareContent() {
 
   const handleSelectSlot = (slot: CareSlot) => {
     if (!isParked) return;
+    void voice.say('care-select');
     setSelectedSlot(slot);
     setConsentApproved(false);
     setConfirmationStep('CONFIRM_MODAL');
@@ -294,11 +190,11 @@ function CareContent() {
 
           <div className="flex items-center gap-2 self-start md:self-auto text-xs bg-slate-950/80 px-3 py-1.5 rounded-xl border border-white/10 text-slate-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Demo Takvim • Tahmini Ulaşım</span>
+            <span>Uygun Zaman • Uzman Seçenekleri</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3"><p data-care-limits className="text-xs text-amber-200">Takvim ve ulaşım örnektir. Burada randevu oluşturulmaz.</p><InformationButton title="Uzman seçenekleri"><p>Kişisel takvim ve canlı rota entegrasyonu yoktur. Takvim ve ulaşım alanları örnektir. Harici sayfada uygunluğu kontrol edip randevuyu kendiniz tamamlarsınız. Paylaşım ayrı eylemde onaylanır; yönlendirme hazırlamak bilgilerinizi hekime göndermez.</p></InformationButton></div>
+        <div className="flex items-center gap-3"><p data-care-limits className="text-xs text-amber-200">Burada randevu oluşturulmaz.</p><InformationButton title="Uzman seçenekleri"><p>Seçtiğiniz zaman aralığı ve görüşme süresi yalnız kaynağın doğrulanmış saatleriyle eşleştirilir. Kişisel takvim ve canlı rota entegrasyonu yoktur. Ulaşım süresi örnektir. Harici sayfada uygunluğu kontrol edip randevuyu kendiniz tamamlarsınız. Paylaşım ayrı eylemde onaylanır; yönlendirme hazırlamak bilgilerinizi hekime göndermez.</p></InformationButton></div>
 
         {/* AKTİF SEVK BAĞLAMI BİLDİRİMİ */}
         {referralContext && (
@@ -307,9 +203,7 @@ function CareContent() {
               <Sparkles className="w-4 h-4 text-togg-turquoise shrink-0" />
               <div className="text-slate-200">
                 <span className="font-bold text-white">
-                  {referralContext.sourceModule === 'SKIN' && 'Cilt Analizi → Dermatoloji'}
-                  {referralContext.sourceModule === 'VISION' && 'Görme Kontrolü → Göz Hastalıkları'}
-                  {referralContext.sourceModule === 'MENTAL' && 'Ruhsal İyi Oluş → Klinik Psikoloji'}
+                  {HEALTH_MODULES[referralContext.sourceModule.toLowerCase() as HealthModule]?.name||'Sağlık sonucu'} → {referralContext.specialty}
                 </span>
                 <span className="text-slate-400 mx-1.5">•</span>
                 <span className="text-slate-300 text-[11px]">{referralContext.reasonSummary}</span>
@@ -332,7 +226,7 @@ function CareContent() {
         <div className="flex flex-wrap items-center justify-between gap-4 pt-1 border-t border-white/10">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-semibold text-slate-400 mr-1">Branş:</span>
-            {['Dermatoloji', 'Göz Hastalıkları', 'Diş Hekimliği', 'Kulak Burun Boğaz', 'Klinik Psikoloji'].map((spec) => (
+            {Array.from(new Set(HEALTH_MODULE_IDS.flatMap(id=>HEALTH_MODULES[id].specialties))).map((spec) => (
               <button
                 key={spec}
                 onClick={() => setSelectedSpecialty(spec)}
@@ -365,6 +259,7 @@ function CareContent() {
         </div>
       </section>
 
+      <div className="flex flex-wrap gap-3 items-end"><label className="text-sm">Uygun zaman başlangıcı<input type="datetime-local" value={availableStart} onChange={e=>setAvailableStart(e.target.value)} className="block mt-1 bg-slate-900 rounded-lg p-2 border border-white/20 max-w-full"/></label><label className="text-sm">Uygun zaman bitişi<input type="datetime-local" value={availableEnd} min={availableStart} onChange={e=>setAvailableEnd(e.target.value)} className="block mt-1 bg-slate-900 rounded-lg p-2 border border-white/20 max-w-full"/></label><label className="text-sm">Görüşme süresi<select value={duration} onChange={e=>setDuration(Number(e.target.value))} className="block mt-1 bg-slate-900 p-2 rounded-lg">{[30,45,60].map(v=><option key={v} value={v}>{v} dakika</option>)}</select></label><span className="text-xs text-slate-400">{timezone}</span></div>
       {loading && <p role="status" className="p-4 text-sm text-slate-300">Uzman seçenekleri hazırlanıyor…</p>}
       {searchNotice && <div role="status" className="p-4 rounded-xl border border-amber-800 text-sm text-amber-200"><p>{searchNotice}</p><button className="underline mt-2" onClick={() => { invalidateSearch(); const controller = new AbortController(); activeSearch.current = controller; const generation = ++searchGeneration.current; void fetchAppointments(selectedSpecialty, controller, generation); }}>Yeniden ara</button></div>}
       {!loading && !filteredSlots.length && <p role="status" className="p-4 text-sm">Bu filtre için uygun seçenek bulunamadı. Diğer görüşme türlerini inceleyebilirsiniz.</p>}
@@ -410,7 +305,7 @@ function CareContent() {
 
                 <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>{featuredSlot.dateTime ? (featuredSlot.calendarConflict ? 'Demo takvim: örnek çakışma' : 'Demo takvim: örnek çakışma yok') : 'Demo takvim: saat doğrulanmadı'}</span>
+                  <span>{featuredSlot.calendarFits===true?'Seçtiğiniz zaman aralığına uygun':'Saat uygunluğu doğrulanmadı'}</span>
                 </span>
               </div>
             </div>

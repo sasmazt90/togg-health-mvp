@@ -85,4 +85,4 @@ const changed=structuredClone(reference);changed.captures.LEFT.quality.avgLumina
 const result=M.compareMultiAngle(changed,reference);assert.deepEqual(result.unavailable,['LEFT']);assert.equal(result.regions.rightCheek.changeFromBaselinePct,undefined);assert.equal(result.regions.leftCheek.changeFromBaselinePct,0);
 assert.throws(()=>M.compareMultiAngle(reference,{...reference,schemaVersion:1}),/INVALID_REFERENCE/);
 """
-    subprocess.run(['node', '-e', script], cwd=ROOT, check=True, input=json.dumps({'dir': str(tmp_path).replace('\\', '/')}), text=True, encoding='utf-8')
+    subprocess.run(['node', '-e',"require('./tests/unit/ts_loader.js');\n"+script], cwd=ROOT, check=True, input=json.dumps({'dir': str(tmp_path).replace('\\', '/')}), text=True, encoding='utf-8')

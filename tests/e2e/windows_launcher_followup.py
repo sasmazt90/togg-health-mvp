@@ -47,7 +47,7 @@ with sync_playwright() as pw:
   cold_ready_seconds=time.monotonic()-cold_started
   initial=state();active=HOME/'chrome-verification-profile/DevToolsActivePort';wait(debug_ready)
   wait(debug_ready);debug_port=int(active.read_text().splitlines()[0]);browser=pw.chromium.connect_over_cdp('http://127.0.0.1:'+str(debug_port));context=browser.contexts[0]
-  page=context.pages[0];expect(page.get_by_role('link',name='Ruhsal Sağlık',exact=True)).to_be_visible();page.goto(initial['url']+'/mental')
+  page=context.pages[0];expect(page.get_by_role('button',name='Sağlık Merkezi',exact=True)).to_be_visible();page.goto(initial['url']+'/mental')
   expect(page.get_by_role('button',name='Görüşmeyi Başlat',exact=True)).to_be_visible();page.evaluate('localStorage.setItem("attune_launch_verification_marker","persistent-owned-test")')
   results['coldOpen']={'status':'PASS','state':initial,'buildId':(ROOT/'apps/vehicle-app/.next/BUILD_ID').read_text().strip(),'actualServicesAndBrowserReadySeconds':cold_ready_seconds}
   assert start().wait(timeout=15)==0;page.wait_for_timeout(800)

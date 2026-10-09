@@ -2,7 +2,7 @@ import type { SkinSnapshot } from './skinSnapshot';
 import type { ImageQuality } from './skinAnalyzer';
 import { researchTarget, isAdmittedResearchMeasurement } from './skinResearchAdapter';
 export const SKIN_SIGN_CONTRACT='regional-appearance-v4';
-export type SkinMeasurement={scope:'regional'|'whole-face';region?:string;target?:string;methodVersion:string;modelHash:string|null;datasetHash?:string|null;evidenceHash?:string|null;unit:'color-index-0-100'|'visible-highlight-area-percent'|'class-probability'|'ordinal-grade'|'lesion-count'|'percent-visible-area'|'candidate-count'|'relative-color-index-0-100'|'directional-line-index-0-100'|'normalized-contour-ratio';rawValue:number|null;confidence:number|null;quality:'valid'|'invalid'|'insufficient';validation:'analytic-pixel-index'|'development-only'|'independently-validated'|'unavailable'|'appearance-proxy';unavailableReason:string|null};
+export type SkinMeasurement={scope:'regional'|'whole-face';region?:string;target?:string;methodVersion:string;modelHash:string|null;datasetHash?:string|null;evidenceHash?:string|null;unit:'color-index-0-100'|'visible-highlight-area-percent'|'class-probability'|'ordinal-grade'|'lesion-count'|'percent-visible-area'|'candidate-count'|'relative-color-index-0-100'|'directional-line-index-0-100'|'normalized-contour-ratio'|'contour-fold-index-0-100';rawValue:number|null;confidence:number|null;quality:'valid'|'invalid'|'insufficient';validation:'analytic-pixel-index'|'development-only'|'independently-validated'|'unavailable'|'appearance-proxy';unavailableReason:string|null};
 export type SkinIndicator={appearance?:import('./appearanceMeasurements').AppearanceMeasurement;id:string;label:string;score:number|null;referenceDelta?:number;reason:string;method:string;unit:string;sampleCount:number;measurement?:SkinMeasurement};
 export type SkinIndicators=Record<string,SkinIndicator[]>;
 export const SIGN_LABELS:Record<string,string>={tone:'Ton eşitsizliği',oil:'Yağlı görünüm',redness:'Kızarıklık eğilimi',acne:'Sivilce görünümü',sag:'Sarkma',dry:'Cilt kuruluğu',dark:'Göz altı morluğu',bags:'Göz altı torbaları',lines:'Kaz ayakları'};
@@ -23,9 +23,9 @@ export function validMeasurement(row:SkinIndicator,region:string) {
  const appearance=row.appearance;
  if(appearance){
   const m=row.measurement;
-  return appearance.region===region&&['appearance_proxy','longitudinal_measurement'].includes(appearance.type)&&appearance.methodVersion==='appearance-cv-1'&&
+  return appearance.region===region&&['appearance_proxy','longitudinal_measurement'].includes(appearance.type)&&['appearance-cv-1','appearance-cv-2'].includes(appearance.methodVersion)&&
    !!m&&m.validation==='appearance-proxy'&&m.region===region&&m.rawValue===appearance.value&&row.score===appearance.value&&
-   ['percent-visible-area','candidate-count','relative-color-index-0-100','directional-line-index-0-100','normalized-contour-ratio'].includes(appearance.unit)&&
+   ['percent-visible-area','candidate-count','relative-color-index-0-100','directional-line-index-0-100','normalized-contour-ratio','contour-fold-index-0-100'].includes(appearance.unit)&&
    ['valid','invalid','insufficient'].includes(appearance.quality)&&
    (appearance.value===null?!!appearance.limitationCode:Number.isFinite(appearance.value)&&appearance.quality==='valid')&&
    !!appearance.captureConditions&&!!appearance.evaluatedArea&&Array.isArray(appearance.uncertainty);

@@ -1,16 +1,25 @@
+import { HEALTH_MODULES } from './healthModules';
+import { readHealthRecords,recordDate } from './healthRecords';
 import { VisionSummaryData, SkinSummaryData, MentalSummaryData } from './healthSelectors';
 
-export interface ShareSelection { vision: boolean; skin: boolean; mental: boolean }
+export interface ShareSelection { vision: boolean; skin: boolean; mental: boolean; dental?:boolean; hearing?:boolean }
 export interface ShareSection { title: string; text: string; dateTr: string }
 
-export function buildShareSections(selection: ShareSelection, vision: VisionSummaryData, skin: SkinSummaryData, mental: MentalSummaryData): ShareSection[] {
+export function measuredShareSection(category:'dental'|'hearing'):ShareSection|null {
+  const r=readHealthRecords(category).at(-1);if(!r)return null;
+  const text=category==='dental'?(r.sourceType==='upload'?'Yüklenen tek fotoğraf':'Kamera')+' · '+(r.measurements||[]).map((v:any)=>`${v.pose}: ${v.caries?.value==null?'Çürük adayı değerlendirilemiyor':v.caries.value+' görünür aday'}; birikim ${v.accumulation?.value==null?'değerlendirilemiyor':Math.round(v.accumulation.value)+'% görünür sınır alanı'}`).join('. '):r.thresholds?r.thresholds.map((t:any)=>`${t.ear==='left'?'Sol':'Sağ'} ${t.frequency} Hz: ${t.value==null?'eşik bulunamadı':t.value+' dBFS peak'}`).join('. '):`${r.validTrials} geçerli üçlü · ${r.value==null?'kararlı eşik bulunamadı':r.value+' dB SNR'}`;
+  return {title:HEALTH_MODULES[category].name,dateTr:recordDate(r),text};
+}
+export function buildShareSections(selection: ShareSelection, vision: VisionSummaryData, skin: SkinSummaryData, mental: MentalSummaryData,dental?:ShareSection|null,hearing?:ShareSection|null): ShareSection[] {
   const sections: ShareSection[] = [];
-  if (selection.vision && vision.hasData) sections.push({ title: 'Görme', dateTr: vision.dateTr,
+  if (selection.vision && vision.hasData) sections.push({ title: HEALTH_MODULES.vision.name, dateTr: vision.dateTr,
     text: `Keskinlik: ${vision.acuitySummary}. Kontrast: ${vision.contrastSummary}.` });
-  if (selection.skin && skin.hasData) sections.push({ title: 'Cilt', dateTr: skin.dateTr,
+  if (selection.skin && skin.hasData) sections.push({ title: HEALTH_MODULES.skin.name, dateTr: skin.dateTr,
     text: `${skin.regionNameTr}: ${skin.changeLabel}. ${skin.recommendation}.` });
-  if (selection.mental && mental.hasData) sections.push({ title: 'Ruhsal iyi oluş', dateTr: mental.dateTr,
+  if (selection.mental && mental.hasData) sections.push({ title: HEALTH_MODULES.mental.name, dateTr: mental.dateTr,
     text: `Kayıtlı temalar: ${mental.primaryTheme}. ${mental.sessionCountLabel}.` });
+  if(selection.dental&&dental)sections.push(dental);
+  if(selection.hearing&&hearing)sections.push(hearing);
   return sections;
 }
 

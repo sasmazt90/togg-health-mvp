@@ -1,4 +1,6 @@
  'use client';
+import Link from 'next/link';
+import {careHref} from '../utils/healthModules';
 import { LetterResult, LETTER_RULES, performanceBySize, Accuracy } from '../utils/spokenVision';
 import { InformationButton } from './InformationButton';
 function value(a:Accuracy){return a.percentage===null?'Yeterli yanıt yok':`${a.correct}/${a.total} · %${Math.round(a.percentage)}`;}
@@ -9,5 +11,5 @@ export function LetterVisionResult({result}:{result:LetterResult}){
    <p>“Göremiyorum”: {result.trials.filter(t=>t.eye===eye&&t.valid&&t.notVisible).length} geçerli tanıma başarısızlığı. Teknik veya çözümlenemeyen yanıt: {invalid.length} değerlendirme dışı.</p>{reasons.map(reason=><p key={reason}>{({camera:'Kamera / güncel görüntü',position:'Konum değişimi',eye:'Göz koşulu',uncertain:'Belirsiz göz kanıtı',ASR_UNCLEAR:'Konuşma çözümlenemedi',ASR_LOW_CONFIDENCE:'Konuşma güveni düşük'} as Record<string,string>)[reason||'']||reason}: {invalid.filter(t=>t.invalidReason===reason).length}</p>)}
   </div>;})}
   <InformationButton title="Harf görevinin anlamı"><p>Harf doğruluğu doğru harf/geçerli yanıt; yön doğruluğu ayırt edilebilir hedef yönüne uygun yanıt/geçerli yön denemesi; birleşik doğruluk ikisi doğru/geçerli iki bileşenli denemedir. Simetrik yönler eşdeğer kabul edilir. Göremiyorum bu paydalara yanlış olarak katılır; teknik hatalar ve çözümlenemeyen konuşma katılmaz.</p><p>İki ardışık doğru harf boyutu 10^0,1 (yaklaşık 1,259) çarpanıyla küçültür; bir yanlış harf veya göremiyorum büyütür. Yalnız yön hatası boyutu artırmaz. Başlangıç {LETTER_RULES.startPx}, alt {LETTER_RULES.minPx}, üst {LETTER_RULES.maxPx} CSS pikselidir. Göz başına {LETTER_RULES.perEye}, toplam {LETTER_RULES.maxValid} geçerli deneme bir UX sınırıdır. Levitt’in transformed up-down yaklaşımı ve 0,1 log boyut adımı bu tasarımı açıklar; döndürülmüş harf görevi klinik ETDRS testi değildir. Tek doğru yanıttan eşik üretilmez.</p><p>Fiziksel ekran ölçeği ve göz-ekran mesafesi doğrulanmadı. Kesin santimetre, görme açısı, logMAR, Snellen veya göz numarası üretilmez. Yalnız başlangıca göre yüz ölçeği değişimi izlenir.</p></InformationButton>
- </section>;
+ <Link className="inline-flex min-h-11 items-center rounded-xl border border-white/20 px-4" href={careHref('vision')}>Uzman seçenekleri</Link></section>;
 }

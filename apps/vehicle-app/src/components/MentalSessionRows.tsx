@@ -21,7 +21,7 @@ export function MentalSessionRows({records,onDelete,parked,busy}:{records:Health
     <div data-session-rows className="max-h-80 overflow-y-auto overscroll-contain space-y-2 pr-1">
       {sorted.map(r=><article key={r.id} data-record-id={r.id} className="flex gap-2 items-center rounded-xl border border-white/10 p-2">
         <button type="button" onClick={()=>setOpened(r.id)} className="min-h-11 flex-1 min-w-0 text-left rounded-lg px-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-togg-turquoise" aria-haspopup="dialog"><time className="text-sm block">{label(r)}</time><span className="text-xs text-slate-400">{r.transcriptConsented&&r.transcript?.length?'Konuşma ve özet':'Özet kaydı'}</span></button>
-        <button type="button" disabled={!parked||busy} onClick={()=>onDelete(r)} aria-label={`Ruhsal iyi oluş özeti kaydını sil: ${recordDate(r)}`} className="min-h-11 rounded-lg border border-rose-400/40 text-rose-200 px-4 disabled:opacity-40">Sil</button>
+        <button type="button" disabled={!parked||busy} onClick={()=>onDelete(r)} aria-label={`Ruh Sağlığı özeti kaydını sil: ${recordDate(r)}`} className="min-h-11 rounded-lg border border-rose-400/40 text-rose-200 px-4 disabled:opacity-40">Sil</button>
       </article>)}
     </div>
     {selected&&<AccessibleDialog title="Görüşme kaydı" onClose={()=>{if(!busy)setOpened(null);}} className="w-full max-w-2xl rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4">

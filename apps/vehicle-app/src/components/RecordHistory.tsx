@@ -1,55 +1,54 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { AccessibleDialog } from './AccessibleDialog';
-import { LetterVisionResult } from './LetterVisionResult';
-import { LetterResult } from '../utils/spokenVision';
-import { MentalSessionRows } from './MentalSessionRows';
-import { ContinuousVisionResult, OrientationResult } from './ContinuousVisionResult';
-import { HealthCategory, HealthRecord, RECORD_LABELS, prepareHealthRecords, deleteHealthRecord, recordDate } from '../utils/healthRecords';
-
-export function RecordHistory({ category, parked }: { category: HealthCategory; parked: boolean }) {
-  const [records, setRecords] = useState<HealthRecord[]>([]);
-  const [selected, setSelected] = useState<HealthRecord | null>(null);
-  const [viewed, setViewed] = useState<OrientationResult | LetterResult | null>(null);
-  const [healthViewed,setHealthViewed]=useState<HealthRecord|null>(null);
-  const [notice, setNotice] = useState('');
-  const [busy, setBusy] = useState(false);
-  const inFlight = useRef(false);
-  const heading = useRef<HTMLHeadingElement>(null);
-  const parkedRef = useRef(parked); parkedRef.current = parked;
-  useEffect(() => {
-    let mounted = true;
-    const refresh = () => { void prepareHealthRecords(category).then(rows => { if (mounted) setRecords(rows); }).catch(error => { if (mounted) setNotice(error.message); }); };
-    refresh(); window.addEventListener('attune-records', refresh); window.addEventListener('storage', refresh);
-    return () => { mounted = false; window.removeEventListener('attune-records', refresh); window.removeEventListener('storage', refresh); };
-  }, [category]);
-  const close = () => { if (!inFlight.current) setSelected(null); };
-  const remove = async () => {
-    if (!selected || !parkedRef.current || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setNotice('');
-    try { setNotice(await deleteHealthRecord(category, selected.id)); setSelected(null); requestAnimationFrame(() => heading.current?.focus()); }
-    catch (error) { setNotice((error as Error).message); }
-    finally { inFlight.current = false; setBusy(false); }
-  };
-  return <section data-record-history={category} className="space-y-3">
-    <h2 ref={heading} tabIndex={-1} className="font-bold">{RECORD_LABELS[category]} kayıtları</h2>
-    <p className="text-sm text-slate-400">{records.length} {category === 'mental' ? 'kayıtlı görüşme' : 'kayıt'}</p>
-    {notice && <p role="status" className="text-sm text-amber-200">{notice}</p>}
-    {!records.length && <p className="text-sm text-slate-400">Henüz kayıt yok.</p>}
-    {category === 'mental' ? <MentalSessionRows records={records} onDelete={r=>{setNotice('');setSelected(r);}} parked={parked} busy={busy}/> : records.map(r => <article key={r.id} data-record-id={r.id} className="rounded-xl border border-white/10 p-3 space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2"><time className="text-xs text-slate-400">{recordDate(r)}</time><button type="button" disabled={!parked || busy} aria-label={`${RECORD_LABELS[category]} kaydını sil: ${recordDate(r)}`} onClick={() => { setNotice(''); setSelected(r); }} className="min-h-11 px-4 rounded-xl border border-rose-400/40 text-rose-200 disabled:opacity-40 disabled:cursor-not-allowed">Sil</button></div>
-      <p className="text-sm break-words">{category === 'dental'||category==='hearing'?r.summaryText||'Yerel ön değerlendirme; klinik tanı değildir.':category === 'skin' ? r.clinicalNoteTr || `${r.highestChangeRegion || 'Cilt'} • ${r.isBaseline ? 'Referans taraması' : r.comparisonUnavailable ? 'Karşılaştırma yok' : 'Analiz sonucu'}` : r.protocolVersion==='spoken-letter-v1' ? `Harf tanıma · ${r.trials?.filter((t:any)=>t.valid).length||0} geçerli deneme · Klinik keskinlik hesaplanmadı.` : ['landolt-orientation-continuous-v1','landolt-orientation-guided-v2'].includes(r.protocolVersion) ? `Açısal ön değerlendirme · ${r.validTrials || 0} geçerli deneme · ${r.notVisible || 0} göremedi. Görme keskinliği bu protokolle hesaplanmadı.` : `Eski dört yönlü protokol · Keskinlik: ${r.acuityRightSnellen || '—'} • ${r.acuityLeftSnellen || '—'}`}</p>
-      {category==='vision'&&['landolt-orientation-guided-v2','spoken-letter-v1'].includes(r.protocolVersion)&&Array.isArray(r.trials)&&<button className="min-h-11 px-4 rounded-xl border border-white/20 disabled:opacity-40" disabled={!parked} onClick={()=>setViewed(r as OrientationResult)}>Sonucu Aç</button>}
-      {(category==='dental'||category==='hearing')&&<button className="min-h-11 px-4 rounded-xl border border-white/20 disabled:opacity-40" disabled={!parked} onClick={()=>setHealthViewed(r)}>Sonucu Aç</button>}
-    </article>)}
-    {healthViewed&&<AccessibleDialog title={RECORD_LABELS[category]+' sonucu'} onClose={()=>setHealthViewed(null)} className="w-full max-w-2xl rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4"><div className="flex justify-between gap-3"><time>{recordDate(healthViewed)}</time><button className="min-h-11 min-w-11 rounded-xl border border-white/20" aria-label="Sonuç penceresini kapat" onClick={()=>setHealthViewed(null)}>✕</button></div><p>{healthViewed.summaryText}</p>{category==='hearing'?healthViewed.thresholds?<div className="grid sm:grid-cols-2 gap-3">{healthViewed.thresholds.map((t:any,i:number)=><p key={i}>{t.ear==='left'?'Sol':'Sağ'} · {t.frequency} Hz{t.repeat?' tekrar':''}: {t.value===null?'Eşik bulunamadı':t.value+' dBFS peak'}</p>)}</div>:<p>{healthViewed.validTrials} geçerli üçlü · {Math.round((healthViewed.digitAccuracy||0)*100)}% doğru sayı · {healthViewed.value===null?'Kararlı eşik bulunamadı':Math.round(healthViewed.value)+' dB SNR'}</p>:<div className="space-y-3">{healthViewed.measurements?.map((v:any,i:number)=><p key={i}>{v.pose==='FRONT'?'Ön':v.pose==='RIGHT'?'Sağ':v.pose==='LEFT'?'Sol':'Doğal kapanış'}: {v.caries?.value===null||!v.caries?'Çürük adayı sonucu yok':v.caries.value+' görünür çürük adayı'} · {v.accumulation?.value===null||!v.accumulation?'Birikim ölçümü yok':Math.round(v.accumulation.value)+'% görünür sınır alanında birikim adayı'}</p>)}</div>}<p className="text-sm text-slate-400">Fotoğraf ve ham ses saklanmaz. Sonuç klinik tanı veya donanım kalibrasyonu değildir.</p></AccessibleDialog>}
-    {viewed&&<AccessibleDialog title={viewed.protocolVersion==='spoken-letter-v1'?'Harf tanıma sonucu':'Yön hizalama sonucu'} onClose={()=>setViewed(null)} className="w-full max-w-2xl rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4"><div className="flex justify-between gap-3"><time>{recordDate(viewed)}</time><button className="min-h-11 min-w-11 rounded-xl border border-white/20" aria-label="Sonuç penceresini kapat" onClick={()=>setViewed(null)}>✕</button></div>{viewed.protocolVersion==='spoken-letter-v1'?<LetterVisionResult result={viewed as LetterResult}/>:<ContinuousVisionResult result={viewed as OrientationResult}/>}</AccessibleDialog>}
-    {selected && <AccessibleDialog title="Bu kaydı silmek istiyor musunuz?" onClose={close} className="w-full max-w-lg rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3"><h2 className="text-lg font-bold">Bu kaydı silmek istiyor musunuz?</h2><button type="button" disabled={busy} aria-label="Silme penceresini kapat" onClick={close} className="min-h-11 min-w-11 rounded-xl border border-white/20 disabled:opacity-40">✕</button></div>
-      <p>{RECORD_LABELS[category]} · {recordDate(selected)}</p><p className="text-sm text-slate-300">Bu işlem geri alınamaz.</p>
-      {notice && <p role="alert" className="text-sm text-amber-200">{notice}</p>}
-      {!parked && <p role="status">Silme yalnız PARK durumunda kullanılabilir.</p>}
-      <div className="flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={close} className="min-h-11 rounded-xl border border-white/20 px-4 disabled:opacity-40">Hayır, vazgeç</button><button type="button" disabled={busy || !parked} onClick={() => void remove()} className="min-h-11 rounded-xl bg-rose-700 px-4 disabled:bg-slate-800 disabled:text-slate-400 disabled:cursor-not-allowed">{busy ? 'Siliniyor…' : 'Evet, sil'}</button></div>
-    </AccessibleDialog>}
-  </section>;
+import Link from 'next/link';
+import {useEffect,useRef,useState} from 'react';
+import {AccessibleDialog} from './AccessibleDialog';
+import {InformationButton} from './InformationButton';
+import {ResultValue} from './ResultValue';
+import {LetterVisionResult} from './LetterVisionResult';
+import {ContinuousVisionResult,OrientationResult} from './ContinuousVisionResult';
+import {LetterResult} from '../utils/spokenVision';
+import {spokenText} from '../utils/spokenText';
+import {translateMood} from '../utils/mentalHistory';
+import {HealthCategory,HealthRecord,prepareHealthRecords,deleteHealthRecord,recordDate,RECORD_LABELS} from '../utils/healthRecords';
+import {HEALTH_MODULE_IDS,HEALTH_MODULES,careHref} from '../utils/healthModules';
+import {APPEARANCE_UNITS} from '../utils/appearanceMeasurements';
+import {useGuidance} from '../utils/audioGuidance';
+type Row={category:HealthCategory;record:HealthRecord};
+const button='min-h-11 px-4 rounded-xl border border-white/20 disabled:opacity-40';
+function status(category:HealthCategory,r:HealthRecord){if(category==='skin')return r.analysisMode==='instant-appearance-v2'?'Anlık görünüm':r.isBaseline?'Referans taraması':r.comparisonUnavailable?'Karşılaştırma yok':'Analiz sonucu';return category==='mental'?'Tamamlanan görüşme':'Tamamlanan ön değerlendirme';}
+export function RecordHistory({category='all',parked}:{category?:HealthCategory|'all';parked:boolean}){
+ const [rows,setRows]=useState<Row[]>([]),[filter,setFilter]=useState<HealthCategory|'all'>('all'),[selected,setSelected]=useState<Row|null>(null),[viewed,setViewed]=useState<Row|null>(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true);
+ const inFlight=useRef(false),heading=useRef<HTMLHeadingElement>(null),parkedRef=useRef(parked);parkedRef.current=parked;
+ const voice=useGuidance('records',parked);
+ useEffect(()=>{let live=true;let generation=0;const refresh=async()=>{const run=++generation;setLoading(true);const types=category==='all'?HEALTH_MODULE_IDS:[category];const results=await Promise.allSettled(types.map(async c=>({category:c,records:await prepareHealthRecords(c)})));if(!live||run!==generation)return;const next:Row[]=[];const failed:string[]=[];results.forEach((v,i)=>{if(v.status==='fulfilled')v.value.records.forEach(record=>next.push({category:v.value.category,record}));else failed.push(RECORD_LABELS[types[i]]);});next.sort((a,b)=>Date.parse(b.record.timestamp||b.record.date||b.record.completedAt||'')-Date.parse(a.record.timestamp||a.record.date||a.record.completedAt||''));setRows(next);setNotice(failed.length?failed.join(', ')+': kayıtlar okunamadı; veriler korunuyor.':'');setLoading(false);};void refresh();window.addEventListener('attune-records',refresh);window.addEventListener('storage',refresh);return()=>{live=false;window.removeEventListener('attune-records',refresh);window.removeEventListener('storage',refresh);};},[category]);
+ useEffect(()=>{if(viewed&&!rows.some(v=>v.category===viewed.category&&v.record.id===viewed.record.id))setViewed(null);},[rows,viewed]);
+ const remove=async()=>{if(!selected||!parkedRef.current||inFlight.current)return;inFlight.current=true;setBusy(true);try{setNotice(await deleteHealthRecord(selected.category,selected.record.id));setSelected(null);requestAnimationFrame(()=>heading.current?.focus());}catch(error){setNotice((error as Error).message);}finally{inFlight.current=false;setBusy(false);}};
+ const list=rows.filter(v=>filter==='all'||v.category===filter);
+ const closeDelete=()=>{if(!inFlight.current){voice.cancel();setSelected(null);}};
+ return <section data-record-history={category} className="space-y-3">
+  <h2 ref={heading} tabIndex={-1} className="font-bold">{category==='all'?'Sağlık kayıtları':RECORD_LABELS[category]+' kayıtları'}</h2>
+  {category==='all'&&<div className="flex flex-wrap gap-2" aria-label="Kayıt türü"><button className={button} aria-pressed={filter==='all'} onClick={()=>setFilter('all')}>Tümü</button>{HEALTH_MODULE_IDS.map(c=><button key={c} className={button} aria-pressed={filter===c} onClick={()=>setFilter(c)}>{HEALTH_MODULES[c].name}</button>)}</div>}
+  <p className="text-sm text-slate-400">{loading?'Kayıtlar hazırlanıyor…':list.length+' kayıt'}</p>
+  {notice&&<p role="status" className="text-sm text-amber-200">{notice}</p>}
+  {!loading&&!list.length&&<p className="text-sm text-slate-400">Henüz kayıt yok.</p>}
+  {list.map(v=><article key={v.category+v.record.id} data-record-id={v.record.id} data-record-category={v.category} className="rounded-xl border border-white/10 p-4 space-y-3 min-w-0">
+   <div className="flex flex-wrap justify-between items-start gap-2"><p className="text-sm font-semibold">{RECORD_LABELS[v.category]}</p><time className="text-sm text-slate-400">{recordDate(v.record)}</time></div>
+   <ResultValue value={null} status={status(v.category,v.record)}/>
+   <div className="flex flex-wrap gap-2"><button className={button} disabled={!parked||busy} aria-haspopup="dialog" onClick={()=>{setViewed(v);void voice.say('record-open');}}>Sonucu Aç</button><button className={button+' border-rose-400/40 text-rose-200'} disabled={!parked||busy} aria-label={RECORD_LABELS[v.category]+' kaydını sil: '+recordDate(v.record)} onClick={()=>{setNotice('');setSelected(v);void voice.say('record-delete');}}>Sil</button></div>
+  </article>)}
+  {viewed&&<AccessibleDialog title={RECORD_LABELS[viewed.category]+' sonucu'} onClose={()=>{voice.cancel();setViewed(null);}} className="w-full max-w-3xl rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4">
+   <div className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-bold">{RECORD_LABELS[viewed.category]}</h2><time className="text-sm text-slate-400">{recordDate(viewed.record)}</time></div><button className={button} aria-label="Sonuç penceresini kapat" onClick={()=>{voice.cancel();setViewed(null);}}>✕</button></div>
+   <RecordDetail row={viewed}/>
+   <InformationButton title="Yöntem ve kaynak"><p>Yöntem: {viewed.record.methodVersion||viewed.record.indicatorContract||viewed.record.protocolVersion||'Eski kayıt yöntemi'}. {viewed.category==='dental'?'Kaynak: '+(viewed.record.sourceType==='upload'?'Yüklenen tek fotoğraf':'Kamera'):''} Fotoğraf, maske ve ham ses bu kayda eklenmez. Eski yöntemler yeni yöntem olarak etiketlenmez.</p></InformationButton>
+   <Link className={button+' inline-flex items-center'} href={careHref(viewed.category,undefined,viewed.record.id)}>Uzman seçenekleri</Link>
+  </AccessibleDialog>}
+  {selected&&<AccessibleDialog title="Bu kaydı silmek istiyor musunuz?" onClose={closeDelete} className="w-full max-w-lg rounded-2xl border border-white/20 bg-cockpit-surface p-5 space-y-4"><h2 className="text-lg font-bold">Bu kaydı silmek istiyor musunuz?</h2><p>{RECORD_LABELS[selected.category]} · {recordDate(selected.record)}</p><p className="text-sm">Bu işlem geri alınamaz.</p><div className="flex flex-wrap gap-3"><button className={button} disabled={busy} onClick={closeDelete}>Hayır, vazgeç</button><button className={button+' bg-rose-700'} disabled={busy||!parked} onClick={()=>void remove()}>{busy?'Siliniyor…':'Evet, sil'}</button></div></AccessibleDialog>}
+ </section>;
+}
+function RecordDetail({row:{category,record:r}}:{row:Row}){
+ if(category==='vision')return r.protocolVersion==='spoken-letter-v1'?<LetterVisionResult result={r as LetterResult}/>:Array.isArray(r.trials)&&['landolt-orientation-guided-v2','landolt-orientation-continuous-v1'].includes(r.protocolVersion)?<ContinuousVisionResult result={r as OrientationResult}/>:<p>Eski protokol · {r.acuityRightSnellen||'—'} / {r.acuityLeftSnellen||'—'}</p>;
+ if(category==='mental')return <div className="space-y-4"><p className="text-sm">Başlangıç: {r.startedAt?new Date(r.startedAt).toLocaleString('tr-TR'):'Başlangıç zamanı kaydedilmemiş.'} · Bitiş: {r.completedAt?new Date(r.completedAt).toLocaleString('tr-TR'):'Bitiş zamanı kaydedilmemiş.'}</p><div data-session-transcript className="space-y-3">{r.transcriptConsented&&Array.isArray(r.transcript)?r.transcript.filter((m:any)=>['USER','AI'].includes(m.sender)&&typeof m.text==='string').map((m:any,i:number)=><article key={i} data-session-author={m.sender} className="p-3 rounded-xl border border-white/10"><p className="text-xs text-slate-400">{m.sender==='USER'?'Siz':'Attune'}</p><p className="text-sm whitespace-pre-line break-words">{spokenText(m.text)}</p></article>):<p className="text-sm text-slate-400">Bu kayıtta konuşma dökümü bulunmuyor.</p>}</div><h3>Özet</h3><p className="text-sm whitespace-pre-line break-words" data-summary-provider={r.providerType}>{spokenText(translateMood(r.summaryText||'Özet bulunmuyor.'))}</p></div>;
+ if(category==='skin')return r.indicators?<div className="space-y-4">{Object.entries(r.indicators).map(([region,rows])=><section key={region} className="space-y-2"><h3 className="font-semibold">{({forehead:'Alın',rightCheek:'Sağ yanak',leftCheek:'Sol yanak',nose:'T-Bölgesi',chin:'Çene',periorbital:'Göz çevresi'} as Record<string,string>)[region]||region}</h3><div className="grid sm:grid-cols-2 gap-3">{(rows as any[]).map(v=><div key={v.id} className="rounded-xl border border-white/10 p-3"><p className="text-sm">{v.label}</p><ResultValue value={v.score===null?null:v.appearance?.type==='longitudinal_measurement'?v.score*1000:v.score} status={v.appearance?.limitationCode==='REFERENCE_CREATED'?'Referans oluşturuldu':undefined} unit={v.appearance?.type==='longitudinal_measurement'?'× 10⁻³ kontur oranı':v.unit||APPEARANCE_UNITS[v.appearance?.unit]}/></div>)}</div></section>)}</div>:<p>{r.clinicalNoteTr||'Eski cilt değerlendirmesi; yeni görünüm kriterlerine dönüştürülmez.'}</p>;
+ if(category==='hearing')return r.thresholds?<div className="grid sm:grid-cols-2 gap-3">{r.thresholds.map((t:any,i:number)=><p key={i} className="text-sm">{t.ear==='left'?'Sol':'Sağ'} · {t.frequency} Hz{t.repeat?' tekrar':''}: {t.value===null?'Eşik bulunamadı':t.value+' dBFS peak'}</p>)}</div>:<div><p>{r.validTrials} geçerli üçlü · {Math.round((r.digitAccuracy||0)*100)}% doğru sayı</p><ResultValue value={r.value} status={r.value===null?'Kararlı eşik bulunamadı':undefined} unit="dB SNR"/></div>;
+ return <div className="space-y-3">{r.measurements?.map((v:any,i:number)=><section key={i} className="rounded-xl border border-white/10 p-3 space-y-2"><h3>{v.pose==='BITE'?'Doğal kapanış':v.pose==='RIGHT'?'Sağ':v.pose==='LEFT'?'Sol':'Ön'}</h3><p className="text-sm">Çürük adayı: {v.caries?.value===null||!v.caries?'Değerlendirilemiyor':v.caries.value+' görünür aday'}</p><p className="text-sm">Birikim: {v.accumulation?.value===null||!v.accumulation?'Değerlendirilemiyor':Math.round(v.accumulation.value)+'% görünür sınır alanı'}</p><p className="text-xs text-slate-400">{v.accumulation?.evidenceScope==='single-photo-appearance-unconfirmed'?'Tek fotoğraf görünümü; çoklu açı doğrulaması yok.':''}</p>{v.alignment?.rows&&Object.entries(v.alignment.rows).map(([side,x]:[string,any])=><p key={side}>{side==='upper'?'Üst':'Alt'} dizilim: {x.value===null?'Değerlendirilemiyor':Math.round(x.value)+'° yön dağılımı'}</p>)}</section>)}</div>;
 }

@@ -2,7 +2,7 @@
 Closes only windows belonging to its verified product Chrome profile. Other
 visible Chrome windows are inventoried and preserved. No user storage changes.
 """
-import argparse,hashlib,json,os,socket,subprocess,time,urllib.request
+import argparse,base64,hashlib,json,os,socket,subprocess,time,urllib.request
 from pathlib import Path
 import psutil,pythoncom,win32gui,win32process,win32con
 from win32com.shell import shell
@@ -27,7 +27,7 @@ expected=(ROOT/'scripts/windows-launcher/start_togg.pyw').read_text('utf8').repl
 assert installed==expected
 assert (HOME/'backend_host.py').read_bytes()==(ROOT/'scripts/windows-launcher/backend_host.py').read_bytes()
 source={}
-for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/windows-launcher','apps/vehicle-app/public/audio','third-party/combined-health','package.json','package-lock.json','apps/vehicle-app/package.json').splitlines():
+for rel in git('ls-files','apps/vehicle-app/src','services/core-api','scripts/windows-launcher','apps/vehicle-app/public/audio','third-party/combined-health','shared','package.json','package-lock.json','apps/vehicle-app/package.json').splitlines():
  source[rel]=hashlib.sha256((ROOT/rel).read_bytes()).hexdigest()
 # The exported weights/diagnostics are loaded by Python, not compiled into Next.
 # Keep source/build freshness strict for program code, banks and notices. The
@@ -75,6 +75,9 @@ for route in ['skin','vision','mental','dental','hearing','privacy','profile']:
   html=response.read().decode();assert all(rel in html for rel in manifest['/'+route+'/page'] if '/app/'+route+'/page-' in rel)
 with urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=5) as response:runtime=json.loads(response.read())
 assert runtime['runtimeIsolated'] and runtime['runtimeVersions']=={'fastapi':'0.135.4','starlette':'1.3.1','aiohttp':'3.14.3','PIL':'12.3.0'}
+guidance=json.loads((ROOT/'apps/vehicle-app/public/audio/guidance/manifest.json').read_text('utf8'))
+for entry in guidance['entries'].values():
+ with urllib.request.urlopen('http://127.0.0.1:3000'+entry['url'],timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==entry['sha256']
 bank=json.loads((ROOT/'apps/vehicle-app/public/audio/hearing-bank/manifest.json').read_text('utf8'))
 for entry in [*bank['digits'],bank['noise']]:
  with urllib.request.urlopen('http://127.0.0.1:3000'+entry['url'],timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==entry['sha256']
@@ -82,8 +85,9 @@ model=json.loads((ROOT/'services/core-api/models/dental-yolox-s.json').read_text
 assert hashlib.sha256((ROOT/'services/core-api/models/dental-yolox-s.onnx').read_bytes()).hexdigest()==model['modelHash']
 # Public source fixture only: prove this installed normal launcher actually loads
 # and runs the checkpoint, rather than merely checking a file on disk.
-fixture=(ROOT/'audit-results/combined-health-20261008/dental-runtime/front-fixture-request.json').read_bytes()
-request=urllib.request.Request('http://127.0.0.1:8000/api/local-health/dental',data=fixture,headers={'Content-Type':'application/json'},method='POST')
+public=json.loads((ROOT/'audit-results/current-health-20261009/public-positive.json').read_text('utf8'));raw=Path(public['path']).read_bytes();assert hashlib.sha256(raw).hexdigest()==public['sourceSHA256']
+fixture=json.dumps({'processingConsent':True,'photo':'data:image/jpeg;base64,'+base64.b64encode(raw).decode()}).encode()
+request=urllib.request.Request('http://127.0.0.1:8000/api/local-health/dental-upload',data=fixture,headers={'Content-Type':'application/json'},method='POST')
 with urllib.request.urlopen(request,timeout=30) as response:dental=json.loads(response.read())
 assert dental['views'][0]['quality']['valid'] and dental['views'][0]['caries']['quality']=='valid'
 assert dental['views'][0]['caries']['modelHash']==model['modelHash']
@@ -102,5 +106,5 @@ assert all(row['preserved'] for row in preserved),'Pre-existing Chrome window ch
 os.startfile(str(LINK));reopened=wait(live_state)
 for rel,digest in hashes.items():
  with urllib.request.urlopen('http://127.0.0.1:3000/_next/'+rel,timeout=5) as response:assert hashlib.sha256(response.read()).hexdigest()==digest
-proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':target,'shortcutArguments':arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'runtimeVersions':runtime['runtimeVersions'],'runtimeIsolated':True,'dentalModelHash':model['modelHash'],'actualNormalDentalModelInference':True,'dentalInferenceFixture':'public-front-only-not-physical-acceptance','digitBankVersion':bank['version'],'digitBankServedHashesMatch':True,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
+proof={'status':'PASS','sourceHead':head,'branch':git('branch','--show-current'),'buildId':build,'shortcut':str(LINK),'shortcutTarget':target,'shortcutArguments':arguments,'productRoot':str(ROOT),'sourceFileSHA256':source,'servedChunkSHA256':hashes,'routeChunks':manifest,'runtimeVersions':runtime['runtimeVersions'],'runtimeIsolated':True,'dentalModelHash':model['modelHash'],'actualNormalDentalModelInference':True,'dentalInferenceFixture':'public-intraoral-upload-not-physical-acceptance','guidanceVersion':guidance['version'],'guidanceServedHashesMatch':True,'digitBankVersion':bank['version'],'digitBankServedHashesMatch':True,'installedLauncherMatchesSource':True,'repeatUsesOwnedServices':True,'lastOwnedWindowStopsServices':True,'otherChromeWindows':preserved,'reopenedState':reopened,'leftRunning':True,'physicalCameraAcceptance':'OPEN','subjectiveSpeechAcceptance':'OPEN'}
 OUT.write_text(json.dumps(proof,indent=2),'utf8');print(json.dumps({k:proof[k] for k in ['status','sourceHead','buildId','branch','productRoot','leftRunning']}))

@@ -125,3 +125,5 @@ services/core-api/models/*.onnx
 services/core-api/models/*.npz
 !apps/vehicle-app/public/audio/hearing-bank/*.wav
 .runtime/
+
+!apps/vehicle-app/public/audio/guidance/*.mp3

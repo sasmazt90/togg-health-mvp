@@ -1,4 +1,6 @@
 'use client';
+import {careHref} from '../../utils/healthModules';
+import { useGuidance,qualityGuidance } from '../../utils/audioGuidance';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,7 +10,7 @@ import {
   FaceAlignment,
   ImageQuality,
   RegionMetrics,
-  SkinAnalysisResult, SkinReferenceMetadata, canCompareSkinReference
+  SkinAnalysisResult
 } from '../../utils/skinAnalyzer';
 import {
   SkinRegionId,
@@ -24,9 +26,9 @@ import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
 import { SKIN_ANGLES, ANGLE_LABELS, AngleCapture, SkinAngle, MultiAngleReference, matchesSkinAngle, angleGuidance, captureSkinAngle, compareMultiAngle } from '../../utils/skinMultiAngle';
 import { SkinSnapshot, snapshotRawSkinFrame as snapshotSkinFrame, snapshotAngleForRegion, assertCompleteFace } from '../../utils/skinSnapshot';
-import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators, canCompareIndicator } from '../../utils/skinIndicators';
+import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators } from '../../utils/skinIndicators';
 import {skinTemporalSupport} from '../../utils/skinTemporalSupport';
-import { analyzeAppearance,attachAppearance,compareAppearance,initializeMissingContourReferences } from '../../utils/appearanceMeasurements';
+import { analyzeAppearance,attachAppearance } from '../../utils/appearanceMeasurements';
 import { SkinLocalAnalysis } from '../../utils/skinLocalMaps';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
@@ -38,7 +40,6 @@ import { SkinActionsModal } from '../../components/skin/SkinActionsModal';
 import { AlertTriangle, RefreshCw, ShieldAlert } from 'lucide-react';
 
 export default function SkinPage() {
-  const volatileReference=useRef<any>(null);
   const resultPersisted=useRef(false);
   const storageAllowed=()=>localStorage.getItem('attune_privacy_skin_save_allowed')==='true';
   const temporalSupport=useRef<ReturnType<typeof skinTemporalSupport>[]>([]);
@@ -108,6 +109,9 @@ export default function SkinPage() {
     status: 'NO_FACE'
   });
   const [guidanceText, setGuidanceText] = useState<string>('Lütfen başınızı sabit tutun.');
+  const voice=useGuidance('skin',isParked);
+  useEffect(()=>{if(isParked)voice.phase(scanState+':'+angleIndex,scanState==='READY'?'skin-entry':scanState==='COMPLETED'?'skin-complete':scanState==='CAMERA_ACTIVE'?(['skin-front','skin-right','skin-left'] as const)[angleIndex]:undefined);},[voice,isParked,scanState,angleIndex]);
+  useEffect(()=>{const id=scanState==='CAMERA_ACTIVE'&&!preparationPhase&&!guidanceText.startsWith('Hizalama uygun')?qualityGuidance(guidanceText):undefined;voice.issue(id||'',id);},[voice,guidanceText,scanState,preparationPhase]);
 
   const snapshotFrames = useRef<Partial<Record<SkinAngle, SkinSnapshot>>>({});
   const snapshotRecord = useRef<string | null>(null);
@@ -204,7 +208,6 @@ export default function SkinPage() {
   useEffect(() => {
     const revoke = () => {
       if (!parkedRef.current || !isCameraAllowed()) {
-        volatileReference.current=null;
         acquisitionRef.current += 1;
         snapshotFrames.current = {}; snapshotRecord.current = null; setSnapshots({});
         if (demoTimerRef.current) clearInterval(demoTimerRef.current);
@@ -402,38 +405,7 @@ export default function SkinPage() {
     await addLocalMaps(acceptedSnapshot,ctx,qualToUse.isValid,validCapture,undefined,indicators,{yaw:alignToUse.yaw,pitch:alignToUse.pitch,roll:alignToUse.roll,scaleRatio:alignToUse.scaleRatio,avgLuminance:qualToUse.avgLuminance,blurScore:qualToUse.blurScore});
     if(!validCapture())return;
 
-    // Baseline kontrolü (İlk tarama mı, sonraki tarama mı?)
-    let baselineData: Record<string, RegionMetrics> | null = null;
-    try {
-      const storedBaseline = localStorage.getItem(STORAGE_KEYS.SKIN_BASELINE);
-      if (storedBaseline !== null) {
-        const parsed = JSON.parse(storedBaseline);
-        if (!parsed || REGION_ORDER.some(id => !parsed[id] ||
-          ![parsed[id].rednessScore, parsed[id].luminanceScore, parsed[id].textureVariance]
-            .every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100))) {
-          throw new Error('Invalid reference');
-        }
-        baselineData = parsed;
-      }
-    } catch {
-      setErrorMessage('Mevcut referans okunamadı. Referansınız değiştirilmedi; bu tarama kaydedilmedi.');
-      setScanState('ERROR');
-      return;
-    }
-
     const capturePose = { yaw: alignToUse.yaw, pitch: alignToUse.pitch, roll: alignToUse.roll, scaleRatio: alignToUse.scaleRatio };
-    const signsRaw=localStorage.getItem('attune_skin_appearance_single_reference_v1');
-    let signsPrior:any;
-    try {
-      signsPrior=JSON.parse(signsRaw||'null')||volatileReference.current;
-      if(signsPrior && (signsPrior.schemaVersion!==3 || signsPrior.indicatorContract!==SKIN_SIGN_CONTRACT || !validSkinIndicators(signsPrior.indicators)))throw Error('INCOMPATIBLE_SIGN_REFERENCE');
-    } catch {setErrorMessage('Yeni renk referansı okunamadı. Mevcut referanslar korunuyor; tarama kaydedilmedi.');setScanState('ERROR');return;}
-    const isFirstScan=!signsPrior;
-    const comparisonUnavailable=!!signsPrior && !canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:signsPrior.quality,pose:signsPrior.pose},qualToUse,capturePose);
-    if(signsPrior)for(const [region,rows] of Object.entries(indicators))for(const row of rows){
-      const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));
-      if(row.appearance)compareAppearance(row,previous,!comparisonUnavailable,signsPrior.id);else if(!comparisonUnavailable&&row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;
-    }
     // Legacy metrics remain available to old records; they do not drive V3 claims.
     const comparison = SkinAnalyzer.compareWithBaseline(regionMetrics, null, 20.0);
 
@@ -446,29 +418,22 @@ export default function SkinPage() {
       highestChangeRegion: '',
       highestChangePct: 0,
       referralSuggested: false,
-      isBaseline: isFirstScan,
-      clinicalNoteTr: 'Bölgesel görünüm vekilleri ve kişisel kontur takibi; hastalık veya kalibre klinik şiddet değildir.',
-      baselineId: signsPrior?.id,
-      baselineTimestamp: signsPrior?.timestamp,
-      comparisonUnavailable,
+      isBaseline: false, analysisMode: 'instant-appearance-v2',
+      clinicalNoteTr: 'Mevcut taramanın bölgesel görünüm vekilleri; hastalık veya kalibre klinik şiddet değildir.',
+      comparisonUnavailable: false,
       comparisonScope: 'single-front-v1', capturePose,
-      comparisonReasons: comparisonUnavailable ? ['capture-conditions-incompatible'] : [],
+      comparisonReasons: [],
       usedMediaPipe: true
     };
 
-    const addedContourReference=initializeMissingContourReferences(signsPrior,indicators,comparisonUnavailable?[]:Object.keys(indicators),finalResult.id);
-    // Yalnızca canPersistResult doğrulaması geçerse gerçek sonuç kalıcı olarak saklanır
+    // Current-session measurements never read/write personal reference keys.
     if (validSkinIndicators(indicators) && SkinAnalyzer.canPersistResult(finalResult)) {
       try {
         resultPersisted.current=storageAllowed();
-        if(resultPersisted.current)await appendHealthRecord('skin', finalResult, isFirstScan ? {
-          ['attune_skin_appearance_single_reference_v1']: JSON.stringify({id:finalResult.id,timestamp:finalResult.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,quality:qualToUse,pose:capturePose})
-        } : addedContourReference?{['attune_skin_appearance_single_reference_v1']:JSON.stringify(addedContourReference)}:{}, () => validCapture() && storageAllowed() && localStorage.getItem('attune_skin_appearance_single_reference_v1')===signsRaw);
-        if(addedContourReference)volatileReference.current=addedContourReference;
-        if(isFirstScan)volatileReference.current={id:finalResult.id,timestamp:finalResult.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,quality:qualToUse,pose:capturePose};
+        if(resultPersisted.current)await appendHealthRecord('skin', finalResult, {}, () => validCapture() && storageAllowed());
         if (!validCapture()) return;
       } catch (e) {
-        setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Referans veya geçmiş kaydı oluşturulduğu doğrulanamadı.');
+        setErrorMessage('Tarama metrikleri hesaplandı ancak kayıt tamamlanamadı. Geçmiş kaydı oluşturulduğu doğrulanamadı.');
         setScanState('ERROR');
         return;
       }
@@ -495,43 +460,27 @@ export default function SkinPage() {
     const validCapture = () => mountedRef.current && parkedRef.current && acquisitionRef.current === acquisition && isCameraAllowed();
     const current: MultiAngleReference = { id: crypto.randomUUID(), timestamp: new Date().toISOString(), schemaVersion: 2, scope: 'three-angle-v2', captures };
     try {
-      const priorRaw = localStorage.getItem(STORAGE_KEYS.SKIN_MULTI_BASELINE);
-      const prior: MultiAngleReference | null = JSON.parse(priorRaw || 'null');
-      const comparison = compareMultiAngle(current, prior);
-      const signsRaw=localStorage.getItem('attune_skin_appearance_reference_v1');
-      const signsPrior=JSON.parse(signsRaw||'null')||volatileReference.current;
-      if(signsPrior && (signsPrior.schemaVersion!==3 || signsPrior.indicatorContract!==SKIN_SIGN_CONTRACT || !validSkinIndicators(signsPrior.indicators)))throw Error('INCOMPATIBLE_SIGN_REFERENCE');
+      const comparison = compareMultiAngle(current, null);
       const indicators=Object.assign({},captures.FRONT.indicators,captures.RIGHT.indicators,captures.LEFT.indicators);
-      const incompatible:string[]=[];
-      if(signsPrior)for(const [region,rows] of Object.entries(indicators)){
-        const angle=snapshotAngleForRegion(region,true),base=signsPrior.captures?.[angle],capture=captures[angle];
-        const compatible=base&&canCompareSkinReference({id:signsPrior.id,timestamp:signsPrior.timestamp,schemaVersion:1,scope:'single-front-v1',quality:base.quality,pose:base.pose},capture.quality,capture.pose);
-        if(!compatible)incompatible.push(region);
-        for(const row of rows){const previous=signsPrior.indicators?.[region]?.find((v:any)=>canCompareIndicator(row,v));if(row.appearance)compareAppearance(row,previous,compatible,signsPrior.id);else if(compatible&&row.score!==null&&typeof previous?.score==='number')row.referenceDelta=Math.round((row.score-previous.score)*10)/10;}
-      }
       const finalResult: SkinAnalysisResult = {
         schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,
         id: current.id, timestamp: current.timestamp, quality: captures.FRONT.quality, regions: comparison.regions,
-        usedMediaPipe: true, isBaseline: !signsPrior, highestChangeRegion: '',
+        usedMediaPipe: true, isBaseline: false, analysisMode: 'instant-appearance-v2', highestChangeRegion: '',
         highestChangePct: 0, referralSuggested: false,
-        comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose, baselineId: signsPrior?.id, baselineTimestamp: signsPrior?.timestamp,
-        comparisonUnavailable: incompatible.length > 0, comparisonReasons: incompatible.length?['capture-conditions-incompatible']:[],
-        clinicalNoteTr: 'Bölgesel renk, görünüm vekilleri ve kişisel kontur takibi. Hastalık tanısı veya kalibre edilmiş klinik şiddet değildir; eski ölçümler yeni yönteme dönüştürülmez.'
+        comparisonScope: 'three-angle-v2', capturePose: captures.FRONT.pose,
+        comparisonUnavailable: false, comparisonReasons: [],
+        clinicalNoteTr: 'Mevcut taramanın bölgesel renk ve görünüm vekilleri. Hastalık tanısı veya kalibre edilmiş klinik şiddet değildir; eski ölçümler yeni yönteme dönüştürülmez.'
       };
       if (!validSkinIndicators(indicators) || !SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
       // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
-      const addedContourReference=initializeMissingContourReferences(signsPrior,indicators,Object.keys(indicators).filter(region=>!incompatible.includes(region)),current.id);
-      const referenceChanges:Record<string,string|null>=!signsPrior?{['attune_skin_appearance_reference_v1']:JSON.stringify({id:current.id,timestamp:current.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,captures})}:addedContourReference?{['attune_skin_appearance_reference_v1']:JSON.stringify(addedContourReference)}:{};
       resultPersisted.current=storageAllowed();
-      if(resultPersisted.current)await appendHealthRecord('skin', finalResult, referenceChanges, () => validCapture() && storageAllowed() && localStorage.getItem('attune_skin_appearance_reference_v1') === signsRaw);
-      if(addedContourReference)volatileReference.current=addedContourReference;
-      if(!signsPrior)volatileReference.current={id:current.id,timestamp:current.timestamp,schemaVersion:3,indicatorContract:SKIN_SIGN_CONTRACT,indicators,captures};
+      if(resultPersisted.current)await appendHealthRecord('skin', finalResult, {}, () => validCapture() && storageAllowed());
       if (!validCapture()) return;
       snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
       setMediaStream(null); setIsLiveVideo(false);
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {
-      setErrorMessage('Üç açılı ölçüm veya referans kaydı doğrulanamadı. Eski tek açılı referansınız değiştirilmedi.'); setScanState('ERROR');
+      setErrorMessage('Üç açılı ölçüm veya geçmiş kaydı doğrulanamadı.'); setScanState('ERROR');
     } finally { persistingRef.current = false; }
   };
   const finishMultiRef = useRef(finishMultiScan);
@@ -819,7 +768,7 @@ export default function SkinPage() {
         localStorage.setItem(STORAGE_KEYS.REFERRAL_CONTEXT, JSON.stringify(referralContext));
       }
     } catch (e) {}
-    router.push('/care?specialty=Dermatoloji&from=skin');
+    router.push(careHref('skin'));
   };
 
   // Sürüş emniyeti kilidi
@@ -833,7 +782,7 @@ export default function SkinPage() {
           <span className="text-[11px] font-mono uppercase tracking-widest text-amber-400 font-bold px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
             Sürüş Emniyeti Devrede • {state.currentSpeed} km/s
           </span>
-          <h1 className="text-2xl font-extrabold text-white">Cilt Kontrolü Kilitlendi</h1>
+          <h1 className="text-2xl font-extrabold text-white">Cilt Sağlığı Kilitlendi</h1>
           <p className="text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
             Cilt analizi kamera odaklanması ve yüz hizalaması gerektirdiğinden, sürüş güvenliğiniz için araç hareket halindeyken kullanılamaz.
           </p>
@@ -870,7 +819,7 @@ export default function SkinPage() {
             <span className="text-[11px] font-mono uppercase tracking-widest text-amber-400 font-bold px-3 py-1 bg-amber-500/10 rounded-full border border-amber-500/20">
               Analiz Motoru Bildirimi
             </span>
-            <h2 className="text-2xl font-extrabold text-white">Cilt Kontrolü Başlatılamadı</h2>
+            <h2 className="text-2xl font-extrabold text-white">Cilt Sağlığı Başlatılamadı</h2>
             <p className="text-sm text-slate-300 leading-relaxed max-w-md mx-auto">
               {errorMessage || 'Cilt analiz motoru kullanılamıyor. Lütfen kamera iznini ve bağlantınızı kontrol edip tekrar deneyin.'}
             </p>
@@ -908,7 +857,7 @@ export default function SkinPage() {
       {/* ============================================================ */}
       {scanState === 'CAMERA_ACTIVE' && (
         <>
-        {!isDemoMode() && <div data-angle-progress className="flex flex-wrap items-center gap-3"><p>{multiAngle ? `Aşama ${angleIndex + 1}/3: ${ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}` : 'Ön poz'}</p><InformationButton title="Kamera ve pozlar"><p>Önizleme aynasızdır. Yönler anatomik sağ ve solunuzdur. Ön pozdan alın, burun, çene ve göz çevresi; yan pozdan görünen yanak ölçülür. Tamamlanan pozlar: {completedAngles.map(a=>ANGLE_LABELS[a]).join(', ') || 'henüz yok'}. Ekrandaki büyütme yalnız görüntüleme içindir; kalite ham kamera karesinden ölçülür.</p></InformationButton><button onClick={() => { consecutiveValidFramesRef.current = 0; setScanProgress(Math.round(angleIndex * 100 / 3)); setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { acquisitionRef.current++; activeScanRef.current=false; setPreparationPhase(null); setScanState('READY'); setMediaStream(null); }} className="text-sm underline">Taramayı İptal Et</button></div>}
+        {!isDemoMode() && <div data-angle-progress className="flex flex-wrap items-center gap-3"><p>{multiAngle ? `Aşama ${angleIndex + 1}/3: ${ANGLE_LABELS[SKIN_ANGLES[angleIndex]]}` : 'Ön poz'}</p><InformationButton title="Kamera ve pozlar"><p>Önizleme aynasızdır. Yönler anatomik sağ ve solunuzdur. Ön pozdan alın, burun, çene ve göz çevresi; yan pozdan görünen yanak ölçülür. Tamamlanan pozlar: {completedAngles.map(a=>ANGLE_LABELS[a]).join(', ') || 'henüz yok'}. Ekrandaki büyütme yalnız görüntüleme içindir; kalite ham kamera karesinden ölçülür.</p></InformationButton><button onClick={() => { void voice.repeat();consecutiveValidFramesRef.current = 0; setScanProgress(Math.round(angleIndex * 100 / 3)); setGuidanceText('İstenen pozu yeniden deneyin.'); }} className="text-sm underline">Bu açıyı tekrar dene</button><button onClick={() => { acquisitionRef.current++; activeScanRef.current=false; setPreparationPhase(null); setScanState('READY'); setMediaStream(null); }} className="text-sm underline">Taramayı İptal Et</button></div>}
         {preparationPhase && <div role="status" data-portrait-preparation={preparationPhase} className="flex items-center gap-3 py-3 text-sm text-togg-turquoise"><span aria-hidden="true" className="h-5 w-5 rounded-full border-2 border-current border-r-transparent animate-spin"/><span>{guidanceText} Bu aşamada geçen süre: {preparationSeconds} sn.</span></div>}
         <SkinActiveScan
           preparing={!!preparationPhase}

@@ -1,4 +1,6 @@
 'use client';
+import Link from 'next/link';
+import {careHref} from '../utils/healthModules';
 import { ContinuousTrial, summarizeContinuousTrials, eyeInstruction } from '../utils/continuousVision';
 export interface OrientationResult {
   id:string; date:string; protocolVersion:'landolt-orientation-guided-v2'; trials:ContinuousTrial[];
@@ -20,5 +22,5 @@ export function ContinuousVisionResult({result}:{result:OrientationResult}) {
       {(['RIGHT','LEFT','BOTH'] as const).map(eye=><p key={eye}>{eyeInstruction(eye)}</p>)}
       <ol className="space-y-2">{result.trials.map((t,i)=><li key={i} className="text-sm">{i+1}. {t.eye==='RIGHT'?'Sağ':t.eye==='LEFT'?'Sol':'İki göz'} · {t.visibility==='not-visible'?'Göremedi':'Hata '+t.minimumCircularError?.toFixed(1)+'°'} · Boyut {t.stimulusSizeMm.toFixed(2)} mm (manuel ölçek) · Kontrast {(t.contrast*100).toFixed(1)}% · {Math.round(t.responseMs)} ms</li>)}</ol>
     </details>
-  </div>;
+  <Link className="inline-flex min-h-11 items-center rounded-xl border border-white/20 px-4" href={careHref('vision')}>Uzman seçenekleri</Link></div>;
 }
