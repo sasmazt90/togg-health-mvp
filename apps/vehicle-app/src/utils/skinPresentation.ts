@@ -2,7 +2,7 @@ import type { SkinIndicator } from './skinIndicators';
 
 // These are display colors only, never clinical decision thresholds.
 export const SKIN_DISPLAY_DIRECTION: Record<string, 'adverse' | 'positive' | 'neutral'> = {
-  tone: 'adverse', redness: 'adverse', oil: 'adverse', dry: 'adverse', sag: 'adverse', bags: 'adverse', dark: 'adverse', lines: 'adverse', acne: 'neutral',
+  tone: 'adverse', redness: 'adverse', oil: 'adverse', dry: 'adverse', sag: 'adverse', bags: 'adverse', dark: 'adverse', lines: 'adverse', acne: 'adverse',
 };
 const stops = [[52, 211, 153], [251, 146, 60], [248, 75, 85]];
 export function appearanceColor(value: number, direction: 'adverse' | 'positive' | 'neutral' = 'adverse') {
@@ -15,6 +15,6 @@ export function skinDisplayKind(row: SkinIndicator): 'percent' | 'count' | 'cont
   const unit = row.appearance?.unit || row.measurement?.unit || row.unit;
   if (row.appearance?.type === 'longitudinal_measurement' || unit === 'normalized-contour-ratio') return 'contour';
   if (['candidate-count', 'lesion-count'].includes(unit) || row.id === 'acne' && /aday/.test(row.unit)) return 'count';
-  if (['relative-color-index-0-100', 'color-index-0-100', 'directional-line-index-0-100', 'contour-fold-index-0-100', 'percent-visible-area', 'visible-highlight-area-percent'].includes(unit) || ['tone', 'redness'].includes(row.id) && /100/.test(row.unit)) return 'percent';
+  if (['appearance-score-0-100', 'relative-color-index-0-100', 'color-index-0-100', 'directional-line-index-0-100', 'contour-fold-index-0-100', 'percent-visible-area', 'visible-highlight-area-percent'].includes(unit) || ['tone', 'redness'].includes(row.id) && /100/.test(row.unit)) return 'percent';
   return 'other';
 }

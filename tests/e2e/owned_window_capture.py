@@ -5,7 +5,7 @@ from pathlib import Path
 import psutil
 
 
-def capture_owned_window(page, profile, destination):
+def capture_owned_window(page, profile, destination, *, maximize=True):
     assert os.name == 'nt'
     user = ctypes.windll.user32
     user.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
@@ -43,7 +43,7 @@ def capture_owned_window(page, profile, destination):
     current_thread = ctypes.windll.kernel32.GetCurrentThreadId()
     foreground_thread = user.GetWindowThreadProcessId(previous, None)
     attached = user.AttachThreadInput(current_thread, foreground_thread, True)
-    user.ShowWindow(handle, 3)
+    user.ShowWindow(handle, 3 if maximize else 1)
     user.SetForegroundWindow(handle)
     if attached:
         user.AttachThreadInput(current_thread, foreground_thread, False)
@@ -55,13 +55,18 @@ def capture_owned_window(page, profile, destination):
         from PIL import ImageGrab
         bounds = wintypes.RECT()
         assert user.GetWindowRect(handle, ctypes.byref(bounds))
+        expected_sizes={(bounds.right-bounds.left, bounds.bottom-bounds.top)}
+        visible_bounds=wintypes.RECT()
+        if ctypes.windll.dwmapi.DwmGetWindowAttribute(handle,9,ctypes.byref(visible_bounds),ctypes.sizeof(visible_bounds))==0:
+            expected_sizes.add((visible_bounds.right-visible_bounds.left,visible_bounds.bottom-visible_bounds.top))
         # Chrome's compositor can briefly return a blank PrintWindow frame
         # after focus/scroll. Retry this same verified HWND; never substitute
         # a desktop or unrelated foreground-window capture.
         for attempt in range(5):
             image = ImageGrab.grab(window=handle)
-            assert image.width >= 1200 and image.height >= 600
-            if any(hi-lo > 20 for lo, hi in image.getextrema()):
+            # Narrow windows are valid. If Windows exports mismatched bounds,
+            # use the existing explicitly labelled compositor path below.
+            if image.size in expected_sizes and any(hi-lo > 20 for lo, hi in image.getextrema()):
                 break
             page.wait_for_timeout(500)
         else:
@@ -93,7 +98,8 @@ def capture_owned_window(page, profile, destination):
             return {'ownedWindow': True, 'ownedForeground': False,
                     'nativeWindowCapture': False, 'browserCompositorCapture': True,
                     'browserExportPixels': pixels, 'dimensions': dimensions,
-                    'capture': 'Headed Chrome compositor at actual native zoom; Windows exact HWND returned blank',
+                    'capture': 'Headed Chrome compositor at actual native zoom; Windows HWND was blank or had mismatched bounds',
+                    'windowsExportPixels':list(image.size),'expectedHWNDPixels':[list(v) for v in expected_sizes],
                     'compositorRetries': 5}
         image.save(destination)
         return {'ownedWindow': True, 'ownedForeground': False,

@@ -21,6 +21,10 @@ with tempfile.TemporaryDirectory(prefix='attune-photo-retention-') as profile,sy
  p.get_by_label('Cilt ölçümlerini ve kişisel sayısal referansı bu tarayıcıda sakla').check();photo.click();expect(photo).to_be_checked();p.screenshot(path=str(OUT/'explicit-photo-consent.png'),full_page=True)
  scans=[];candidateChecks=[]
  for n in range(3):
+  if n:
+   # Reopen the owned browser so the finite photographic camera fixture starts
+   # from its first frame. This also verifies persistence between real scans.
+   c.close();c=launch();c.add_init_script(constants['INIT']);c.add_init_script(constants['APPEARANCE']);p=c.new_page();p.on('pageerror',lambda e:errors.append(str(e)))
   p.goto('http://127.0.0.1:3000/skin');p.get_by_role('button',name='Analizi Başlat',exact=True).click();start=time.monotonic();trace=[]
   while not p.get_by_text('Cilt Analizi Tamamlandı',exact=True).count() and time.monotonic()-start<300:
    p.wait_for_timeout(2000);trace.append(p.evaluate('({body:document.body.innerText,canvas:{...document.querySelector("canvas")?.dataset}})'));(OUT/f'trace-{n}.json').write_text(json.dumps(trace,ensure_ascii=False),'utf8')
@@ -34,6 +38,10 @@ with tempfile.TemporaryDirectory(prefix='attune-photo-retention-') as profile,sy
    assert hashlib.sha256(Image.open(io.BytesIO(base64.b64decode(snapshot['dataUrl'].split(',')[1]))).convert('RGBA').tobytes()).hexdigest()==snapshot['photoId']
    assert all(m['photoId']==snapshot['photoId'] and m['pose']==pose for m in snapshot['localMaps'].values())
   proof=dict(id=record['id'],sourceByRegion={},shaByRegion={},poseByRegion={},storeBytes=entry['bytes'],seconds=time.monotonic()-start)
+  assert p.get_by_role('heading',name='Genel Bakış',exact=True).count()==1 and p.locator('[data-skin-mesh]').count()==0
+  assert record['general']['captureId']==frames['FRONT']['photoId'] and record['general']['analysisId']==record['id']
+  proof['overviewCaptureId']=record['general']['captureId']
+  p.get_by_role('button',name='Sonraki Bölge',exact=True).click()
   for region in ['forehead','rightCheek','leftCheek','nose','chin','periorbital']:
    svg=p.locator('[data-skin-snapshot]');assert svg.locator('[data-skin-mesh]').get_attribute('data-skin-mesh')==region
    proof['sourceByRegion'][region]=svg.get_attribute('data-snapshot-photoid');proof['shaByRegion'][region]=hashlib.sha256(svg.locator('image').first.get_attribute('href').encode()).hexdigest()
@@ -43,6 +51,10 @@ with tempfile.TemporaryDirectory(prefix='attune-photo-retention-') as profile,sy
  c.close();c=launch();p=c.new_page();p.on('pageerror',lambda e:errors.append(str(e)));p.goto('http://127.0.0.1:3000/profile');assert len(rows(p))==3
  for n,scan in enumerate(scans):
   dialog=open_record(p,scan['id'])
+  assert dialog.get_by_role('heading',name='Genel Bakış',exact=True).count()==1
+  assert dialog.locator('[data-skin-snapshot]').get_attribute('data-snapshot-photoid')==scan['overviewCaptureId']
+  assert dialog.locator('[data-skin-mesh]').count()==0
+  dialog.get_by_role('button',name='Sonraki Bölge',exact=True).click()
   for region in ['forehead','rightCheek','leftCheek','nose','chin','periorbital']:
    svg=dialog.locator('[data-skin-snapshot]');assert svg.get_attribute('data-snapshot-photoid')==scan['sourceByRegion'][region]
    assert hashlib.sha256(svg.locator('image').first.get_attribute('href').encode()).hexdigest()==scan['shaByRegion'][region]
@@ -52,7 +64,8 @@ with tempfile.TemporaryDirectory(prefix='attune-photo-retention-') as profile,sy
    if region!='periorbital':
     boxes=frame.get('acneCandidates',{}).get(region,[]);acne=next(v['appearance'] for v in numeric['indicators'][region] if v['id']=='acne')
     dialog.locator('[data-skin-record-indicator="acne"]').click();assert dialog.locator('[data-acne-candidate]').count()==len(boxes)
-    if acne['quality']=='valid':assert acne['value']==len(boxes)
+    if acne['quality']=='valid':
+     assert acne['components']['candidateCount']==len(boxes) and acne['value']==acne['components']['candidateBoxCoveragePercent']
     acneMap=frame.get('localMaps',{}).get(region+':acne')
     if acneMap:expect(dialog.locator('[data-skin-local-fill="acne"]')).to_be_visible()
     candidateChecks.append(dict(id=scan['id'],region=region,count=len(boxes),value=acne['value'],quality=acne['quality'],localMap=bool(acneMap)))

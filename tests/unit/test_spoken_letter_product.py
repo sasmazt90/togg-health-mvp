@@ -83,7 +83,7 @@ def test_component_metrics_log_steps_and_recomputation(tmp_path):
  run(tmp_path,"""
 const s=new V.SpokenLetterSession();s.present(1000);s.beginResponse(1000);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');const size=s.sizePx;
 assert(s.respond({letter:'P',orientation:'left'},c,1100,s.presentationId));assert.equal(s.sizePx,size);assert.deepEqual(V.scoreLetterTrial(s.trials[0]),{letterCorrect:true,orientationCorrect:false,combinedCorrect:false});
-s.present(1100);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');assert(s.respond({letter:'P',orientation:'down'},c,1150,s.presentationId));assert(Math.abs(s.sizePx-size*10**.1)<1e-10);
+s.present(1100);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');assert(s.respond({letter:'P',orientation:'down'},c,1150,s.presentationId));assert.equal(s.sizePx,Math.min(V.LETTER_RULES.maxPx,size/V.LETTER_RULES.shrinkRatio));
 s.present(1200);s.letter='P';s.orientation='right';s.transform=V.legacyTransform('right');assert(s.respond({letter:'F',orientation:'right'},c,1300,s.presentationId));assert.deepEqual(V.scoreLetterTrial(s.trials[2]),{letterCorrect:false,orientationCorrect:true,combinedCorrect:false});
 s.present(1300);assert(s.respond({command:'not-visible'},c,1400,s.presentationId));
 const rows=V.performanceBySize(s.ledger,'RIGHT');assert.equal(rows.reduce((n,r)=>n+r.letter.total,0),4);assert.equal(rows.reduce((n,r)=>n+r.orientation.correct,0),1);assert.equal(rows.reduce((n,r)=>n+r.combined.correct,0),0);

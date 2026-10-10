@@ -13,7 +13,7 @@ const datetime = (time: number) => new Date(time).toLocaleString('tr-TR', { date
 const selectClass = 'min-h-11 w-full rounded-xl border border-white/20 bg-slate-950 px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-togg-turquoise';
 const colors = ['#00c2e7', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#60a5fa'];
 
-function HistoryChart({ series, kind }: { series: HistorySeries; kind: 'line' | 'bar' }) {
+export function HistoryChart({ series, kind }: { series: HistorySeries; kind: 'line' | 'bar' }) {
   const [active, setActive] = useState<HistoryPoint | null>(null);
   const tooltipId = useId();
   const points = series.points, valid = points.filter(p => p.value !== null);
@@ -88,7 +88,7 @@ function AnalysisPanel({ module, records }: { module: HealthModule; records: His
       {criteria.length > 0 && <label className="space-y-1 text-xs text-slate-400">Ölçüm<select className={selectClass} value={criterion} onChange={e => { setCriterion(e.target.value); setRegion(''); setMethod(''); }} >{criteria.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label>}
       {regions.length > 0 && <label className="space-y-1 text-xs text-slate-400">{module === 'vision' ? 'Göz' : module === 'hearing' ? 'Kulak / frekans' : module === 'dental' ? 'Görünüm / sıra' : 'Bölge'}<select className={selectClass} value={region} onChange={e => { setRegion(e.target.value); setMethod(''); }}>{regions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>}
       {sources.length > 1 && <label className="space-y-1 text-xs text-slate-400">Fotoğraf kaynağı<select className={selectClass} value={source} onChange={e => { setSource(e.target.value); setMethod(''); }}>{sources.map(s => <option key={s}>{s}</option>)}</select></label>}
-      {comparable.length > 1 && <label className="space-y-1 text-xs text-slate-400 sm:col-span-2">Karşılaştırılabilir seri<select className={selectClass} value={selected?.id || ''} onChange={e => setMethod(e.target.value)}>{comparable.map((s, index) => <option key={s.id} value={s.id}>{s.method} · Seri {index + 1} · {new Date(s.points.find(p => p.value !== null)?.time || s.points[0].time).toLocaleDateString('tr-TR')}</option>)}</select></label>}
+      {comparable.length > 1 && <label className="space-y-1 text-xs text-slate-400 sm:col-span-2">Karşılaştırılabilir seri<select className={selectClass} value={selected?.id || ''} onChange={e => setMethod(e.target.value)}>{comparable.map((s, index) => <option key={s.id} value={s.id}>Seri {index + 1} · {new Date(s.points.find(p => p.value !== null)?.time || s.points[0].time).toLocaleDateString('tr-TR')}</option>)}</select></label>}
       {(series || themes) && <label className="space-y-1 text-xs text-slate-400">Grafik<select className={selectClass} value={kind} onChange={e => setChart(e.target.value)}>{themes ? <option value="donut">Tema halkası</option> : <option value="line">Çizgi</option>}<option value="bar">Çubuk</option></select></label>}
     </div>
     {!hasRangeRecords ? <p className="py-12 text-center text-sm text-slate-400">{records.length ? 'Seçilen tarih aralığında kayıt yok.' : 'Henüz kayıt yok.'}</p> : themes ? <ThemeChart distribution={distribution} kind={kind === 'bar' ? 'bar' : 'donut'}/> : series ? <HistoryChart key={JSON.stringify([series.id, series.points, kind])} series={series} kind={kind === 'bar' ? 'bar' : 'line'}/> : <p className="py-12 text-center text-sm text-slate-400">Kayıtlarda grafik için desteklenen sayısal ölçüm yok.</p>}

@@ -37,7 +37,7 @@ def test_exif_same_oriented_pixels_and_limits(monkeypatch):
 def test_actual_current_skin_determinism_quality_not_historical_refs():
  im=np.full((400,500,3),(100,130,175),np.uint8);payload=skin_input(im)
  first=analyze_skin(payload);second=analyze_skin({**payload,'historicalReference':{'corrupt':'ignored'}})
- assert first==second and first['methodVersion']=='appearance-cv-4'
+ assert first==second and first['methodVersion']=='appearance-cv-6'
  for rows in first['measurements'].values():
   assert all(r['referenceId'] is None and r['type']=='appearance_proxy' for r in rows)
  invalid=analyze_skin({**payload,'qualityValid':False})
@@ -84,7 +84,7 @@ def test_upload_exact_trained_model_positive_and_source_coords(bite_confirmation
  info=json.loads(path.read_text('utf8'));raw=Path(info['path']).read_bytes();assert hashlib.sha256(raw).hexdigest()==info['sourceSHA256']
  result=analyze_upload({'photo':'data:image/jpeg;base64,'+base64.b64encode(raw).decode(),'biteConfirmed':bite_confirmation})
  view=result['views'][0];assert view['sourceType']=='upload' and not view['quality']['fullFaceRequired'] and not view['quality']['motionGateApplied']
- assert view['pose']=='FRONT' and result['methodVersion']=='dental-visible-upload-v2'
+ assert view['pose']=='FRONT' and result['methodVersion']=='dental-visible-upload-v3'
  assert view['caries']['modelHash']=='eafaca8139e4447b1aa64375156aa47764affd91cf0594392b896ea78463bf03' and view['caries']['value']>0
  for c in view['caries']['candidates']:
   b=c['bounds'];assert 0<=b['x']<view['sourceWidth'] and 0<=b['y']<view['sourceHeight'] and b['x']+b['width']<=view['sourceWidth'] and b['y']+b['height']<=view['sourceHeight']

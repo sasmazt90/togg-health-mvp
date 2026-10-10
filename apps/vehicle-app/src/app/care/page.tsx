@@ -111,6 +111,7 @@ function CareContent() {
       if (res.ok) {
         const data = await res.json();
         if (generation !== searchGeneration.current) return;
+        if (data.status === 'FALLBACK_BLOCKED') setSearchNotice('Canlı uzman uygunluğu doğrulanamadı. Branşa ait sağlayıcı aramasını açabilirsiniz.');
         setSlots((data.matchedSlots || []).map((slot:CareSlot)=>({...slot,displayTime:slot.dateTime&&Number.isFinite(Date.parse(slot.dateTime))?new Date(slot.dateTime).toLocaleString('tr-TR',{timeZone:timezone,dateStyle:'short',timeStyle:'short'}):'Saati sağlayıcıda doğrulayın'})));
       } else {
         throw new Error('API Hatası');

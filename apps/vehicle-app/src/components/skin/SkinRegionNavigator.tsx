@@ -14,7 +14,7 @@ interface SkinRegionNavigatorProps {
 export const SkinRegionNavigator: React.FC<SkinRegionNavigatorProps> = ({
   currentRegion,
   onPrev,
-  onNext, total = REGION_ORDER.length
+  onNext, total = currentRegion.viewTotal || REGION_ORDER.length
 }) => {
   return (
     <div className="flex items-center justify-center gap-5 select-none mt-4" data-skin-navigation>

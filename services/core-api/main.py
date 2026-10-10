@@ -164,9 +164,9 @@ class SpeechPayload(BaseModel):
 class CreateSessionPayload(BaseModel):
     summaryText: str
     recurringThemes: List[str]
-    durationSeconds: Optional[int] = 180
-    moodBefore: Optional[str] = "TIRED"
-    moodAfter: Optional[str] = "RELAXED"
+    durationSeconds: Optional[int] = None
+    moodBefore: Optional[str] = None
+    moodAfter: Optional[str] = None
     escalationSuggested: Optional[bool] = False
     suggestedAction: Optional[str] = None
     saveMentalSummaries: StrictBool = False
@@ -357,9 +357,9 @@ def record_mental_session(payload: CreateSessionPayload):
     return SessionMemoryManager.add_session(
         summary_text=payload.summaryText,
         recurring_themes=payload.recurringThemes,
-        duration_seconds=payload.durationSeconds or 180,
-        mood_before=payload.moodBefore or "TIRED",
-        mood_after=payload.moodAfter or "RELAXED",
+        duration_seconds=payload.durationSeconds,
+        mood_before=payload.moodBefore,
+        mood_after=payload.moodAfter,
         escalation_suggested=payload.escalationSuggested or False,
         suggested_action=payload.suggestedAction,
         save_mental_summaries=payload.saveMentalSummaries

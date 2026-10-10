@@ -14,7 +14,7 @@ with sync_playwright() as pw:
    c=pw.chromium.launch_persistent_context(profile,channel='chrome',headless=False,no_viewport=True,args=['--window-size=1600,1000']);p=c.new_page();errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
    try:
     capture_owned_window(p,profile,OUT/(str(zoom)+'00-owned-window.png'))
-    for route in ('dental','hearing','privacy','profile'):
+    for route in ('dental','hearing','privacy','profile','vision','skin','mental'):
      p.goto('http://127.0.0.1:3000/'+route);dims=p.evaluate('({inner:innerWidth,outer:outerWidth,dpr:devicePixelRatio,doc:document.documentElement.scrollWidth,css:document.body.style.zoom||"1"})')
      assert dims['doc']<=dims['inner'] and dims['css']=='1'
      if zoom==2:assert dims['dpr']>=2 and dims['inner']<dims['outer']*.65

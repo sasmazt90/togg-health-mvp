@@ -7,6 +7,12 @@
     "D",
     "d"
   ],
+  "classDefinitions": {
+    "D": "decay in permanent teeth",
+    "d": "decay in primary teeth",
+    "source": "https://www.nature.com/articles/s41597-025-05647-9",
+    "scope": "Original dataset labels; not different diseases. Separate class evaluation retained."
+  },
   "codeRevision": "6ddff4824372906469a7fae2dc3206c7aa4bbaee",
   "codeLicense": "Apache-2.0",
   "startupWeights": "none; random initialization",

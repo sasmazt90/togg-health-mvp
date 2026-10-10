@@ -127,3 +127,4 @@ services/core-api/models/*.npz
 .runtime/
 
 !apps/vehicle-app/public/audio/guidance/*.mp3
+!apps/vehicle-app/public/audio/vision-speech/*.mp3

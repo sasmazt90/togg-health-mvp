@@ -29,7 +29,9 @@ export interface MetricItem {
 
 export interface SkinRegionData {
   indicators?:import('../utils/skinIndicators').SkinIndicator[];
-  id: SkinRegionId;
+  id: SkinRegionId | 'overview';
+  viewTotal?: number;
+  skinType?: import('../utils/skinOverview').SkinOverview['skinType'];
   index: number;
   nameTr: string;
   badgeText: string;

@@ -39,10 +39,23 @@ export default function DentalPage(){
  };
  const upload=async(file:File)=>{
   if(!consent||!parked.current)return;stop();const run=epoch.current;captures.current=[];setResult(undefined);setUploading(true);setPhase('analysis');setNotice('Fotoğraf yerel olarak açılıyor ve yönü düzeltiliyor…');
-  abort.current=new AbortController();const deadline=setTimeout(()=>abort.current?.abort(),30000);
+  abort.current=new AbortController();let deadline:ReturnType<typeof setTimeout>|undefined;
   try{
    const photo=await validateDentalFile(file);if(run!==epoch.current||!parked.current)return;
-   const response=await fetch('http://localhost:8000/api/local-health/dental-upload',{method:'POST',headers:{'Content-Type':'application/json'},signal:abort.current.signal,body:JSON.stringify({processingConsent:true,photo})});
+   // The same on-device face model anchors a full portrait to its inner mouth.
+   // A partial intraoral photo need not contain a face or obtain camera access.
+   const bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});
+   let photoLandmarks:FaceAlignment['landmarks'];
+   try{
+    if(bitmap.width*bitmap.height>24000000||Math.max(bitmap.width,bitmap.height)>8192)throw Error(UPLOAD_REASONS.PIXEL_LIMIT);
+    const canvas=document.createElement('canvas'),factor=Math.min(1,640/Math.max(bitmap.width,bitmap.height));canvas.width=Math.round(bitmap.width*factor);canvas.height=Math.round(bitmap.height*factor);canvas.getContext('2d')!.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    setNotice('Fotoğraftaki ağız konumu cihazda hazırlanıyor…');inference.current=new SkinInference();await inference.current.initialize();if(run!==epoch.current||!parked.current)return;
+    const alignment=await inference.current.assessAlignment(canvas);if((alignment.faceCount||0)>1)throw Error('Fotoğrafta yalnız bir kişinin dişleri görünmeli.');if(alignment.faceDetected)photoLandmarks=alignment.landmarks;
+   }finally{bitmap.close();inference.current?.close();inference.current=undefined;}
+   if(run!==epoch.current||!parked.current)return;
+   if(abort.current.signal.aborted)throw new DOMException('Fotoğraf işlemi zaman aşımına uğradı.','AbortError');
+   setNotice('Görünür diş yüzeyleri cihazda analiz ediliyor…');deadline=setTimeout(()=>abort.current?.abort(),30000);
+   const response=await fetch('http://localhost:8000/api/local-health/dental-upload',{method:'POST',headers:{'Content-Type':'application/json'},signal:abort.current.signal,body:JSON.stringify({processingConsent:true,photo,photoLandmarks})});
    const value=await response.json();if(run!==epoch.current||!parked.current)return;if(!response.ok)throw Error(UPLOAD_REASONS[value.detail]||'Yerel fotoğraf analizi tamamlanamadı.');
    const view=value.views?.[0];if(value.views?.length!==1||view.sourceType!=='upload'||view.sourceWidth!==value.source?.sourceWidth||view.sourceHeight!==value.source?.sourceHeight||!/^[a-f0-9]{64}$/.test(view.photoId))throw Error('Kaynak fotoğraf eşleşmesi doğrulanamadı.');
    captures.current=[{photo:value.normalizedPhoto,photoId:view.photoId,width:view.sourceWidth,height:view.sourceHeight,pose:view.pose,landmarks:[],conditions:{},sourceType:'upload'}];

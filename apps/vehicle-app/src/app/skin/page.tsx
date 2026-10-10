@@ -31,6 +31,7 @@ import { SkinSnapshot, snapshotRawSkinFrame as snapshotSkinFrame, snapshotAngleF
 import { measureSkinIndicators, SKIN_SIGN_CONTRACT, validSkinIndicators } from '../../utils/skinIndicators';
 import {skinTemporalSupport} from '../../utils/skinTemporalSupport';
 import { analyzeAppearance,attachAppearance } from '../../utils/appearanceMeasurements';
+import { buildSkinViewModel, skinViewOrder, overviewFromResponse, validSkinOverview, type SkinViewId } from '../../utils/skinOverview';
 import { SkinLocalAnalysis } from '../../utils/skinLocalMaps';
 import { SkinStartView } from '../../components/skin/SkinStartView';
 import { SkinActiveScan } from '../../components/skin/SkinActiveScan';
@@ -52,7 +53,8 @@ export default function SkinPage() {
     if(indicators&&conditions&&snapshot.landmarks){
       if(!snapshot.photoId){const digest=await crypto.subtle.digest('SHA-256',ctx.getImageData(0,0,snapshot.width,snapshot.height).data);snapshot.photoId=Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,'0')).join('');}
       const result=await analyzeAppearance(snapshot,valid,conditions,temporalSupport.current,current);
-      if(current()){attachAppearance(indicators,result);snapshot.localMaps={...snapshot.localMaps,...result.maps};snapshot.contoursMeasured=result.contours;snapshot.acneCandidates=Object.fromEntries(Object.entries(result.measurements).map(([region,rows])=>[region,rows.find(v=>v.id==='acne'&&v.value!==null)?.components.bounds||[]]));}
+      if(current()){attachAppearance(indicators,result);snapshot.general=overviewFromResponse(result);snapshot.localMaps=result.maps;snapshot.contoursMeasured=result.contours;snapshot.acneCandidates=Object.fromEntries(Object.entries(result.measurements).map(([region,rows])=>[region,rows.find(v=>v.id==='acne'&&v.value!==null)?.components.bounds||[]]));
+        snapshot.acneCandidates.overview=[...new Map(Object.values(snapshot.acneCandidates).flat().map((box:any)=>[box.candidateId||`${box.x}:${box.y}:${box.width}:${box.height}`,box])).values()];}
     }
   };
   useEffect(()=>()=>{localAnalysis.current?.cancel();},[]);
@@ -72,7 +74,7 @@ export default function SkinPage() {
   const [angleIndex, setAngleIndex] = useState(0);
   const [completedAngles, setCompletedAngles] = useState<SkinAngle[]>([]);
   const angleRuntime = useRef({ enabled: true, index: 0, captures: {} as Partial<Record<SkinAngle, AngleCapture>> });
-  const [selectedRegionId, setSelectedRegionId] = useState<SkinRegionId>('forehead');
+  const [selectedRegionId, setSelectedRegionId] = useState<SkinViewId>('forehead');
   const [activeModal, setActiveModal] = useState<'trend' | 'observation' | 'actions' | null>(null);
 
   // Video & Canvas referansları (MediaPipe kamera ve analiz motoru)
@@ -284,15 +286,15 @@ export default function SkinPage() {
 
   // Döngüsel bölge navigasyonu
   const handlePrevRegion = () => {
-    const currentIdx = REGION_ORDER.indexOf(selectedRegionId);
-    const prevIdx = (currentIdx - 1 + REGION_ORDER.length) % REGION_ORDER.length;
-    setSelectedRegionId(REGION_ORDER[prevIdx]);
+    const order = skinViewOrder(analysisResult);
+    const currentIdx = order.indexOf(selectedRegionId);
+    setSelectedRegionId(order[(currentIdx - 1 + order.length) % order.length]);
   };
 
   const handleNextRegion = () => {
-    const currentIdx = REGION_ORDER.indexOf(selectedRegionId);
-    const nextIdx = (currentIdx + 1) % REGION_ORDER.length;
-    setSelectedRegionId(REGION_ORDER[nextIdx]);
+    const order = skinViewOrder(analysisResult);
+    const currentIdx = order.indexOf(selectedRegionId);
+    setSelectedRegionId(order[(currentIdx + 1) % order.length]);
   };
 
   // Demo modda kamera olmadan sentetik portreyle doğrudan deterministik tarama
@@ -430,8 +432,11 @@ export default function SkinPage() {
       usedMediaPipe: true
     };
 
+    finalResult.analysisId=finalResult.id;
+    finalResult.general=acceptedSnapshot.general ? {...acceptedSnapshot.general,analysisId:finalResult.id} : undefined;
+    finalResult.captures={FRONT:{captureId:acceptedSnapshot.photoId!,pose:"FRONT",sourceWidth:acceptedSnapshot.width,sourceHeight:acceptedSnapshot.height}};
     // Current-session measurements never read/write personal reference keys.
-    if (validSkinIndicators(indicators) && SkinAnalyzer.canPersistResult(finalResult)) {
+    if (validSkinIndicators(indicators) && validSkinOverview(finalResult.general,finalResult.id) && SkinAnalyzer.canPersistResult(finalResult)) {
       try {
         resultPersisted.current=storageAllowed();
         if(resultPersisted.current)await appendHealthRecord('skin', finalResult, {}, () => validCapture() && storageAllowed());
@@ -448,7 +453,7 @@ export default function SkinPage() {
     }
 
     const snapshot = acceptedSnapshot;
-    snapshotFrames.current = { FRONT: snapshot }; rememberSkinSnapshots(finalResult.id,{FRONT:snapshot}); await persistPhotos(finalResult.id,{FRONT:snapshot},validCapture); if(!validCapture())return; setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
+    snapshotFrames.current = { FRONT: snapshot }; rememberSkinSnapshots(finalResult.id,{FRONT:snapshot}); await persistPhotos(finalResult.id,{FRONT:snapshot},validCapture); if(!validCapture())return; setSelectedRegionId(finalResult.general ? 'overview' : 'forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
     setMediaStream(null); setIsLiveVideo(false);
     setAnalysisResult(finalResult);
     // En yüksek değişimin olduğu bölgeye odaklan veya varsayılan sağ yanak
@@ -475,12 +480,15 @@ export default function SkinPage() {
         comparisonUnavailable: false, comparisonReasons: [],
         clinicalNoteTr: 'Mevcut taramanın bölgesel renk ve görünüm vekilleri. Hastalık tanısı veya kalibre edilmiş klinik şiddet değildir; eski ölçümler yeni yönteme dönüştürülmez.'
       };
-      if (!validSkinIndicators(indicators) || !SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
+      finalResult.analysisId=finalResult.id;
+      finalResult.general=snapshotFrames.current.FRONT?.general ? {...snapshotFrames.current.FRONT.general,analysisId:finalResult.id} : undefined;
+      finalResult.captures=Object.fromEntries(Object.entries(snapshotFrames.current).map(([pose,frame])=>[pose,{captureId:frame.photoId!,pose,sourceWidth:frame.width,sourceHeight:frame.height}]));
+      if (!validSkinIndicators(indicators) || !validSkinOverview(finalResult.general,finalResult.id) || !SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
       // Numeric history never contains pixels; photo retention has separate consent.
       resultPersisted.current=storageAllowed();
       if(resultPersisted.current)await appendHealthRecord('skin', finalResult, {}, () => validCapture() && storageAllowed());
       if (!validCapture()) return;
-      rememberSkinSnapshots(finalResult.id,snapshotFrames.current); await persistPhotos(finalResult.id,snapshotFrames.current,validCapture); if(!validCapture())return; setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
+      rememberSkinSnapshots(finalResult.id,snapshotFrames.current); await persistPhotos(finalResult.id,snapshotFrames.current,validCapture); if(!validCapture())return; setSelectedRegionId(finalResult.general ? 'overview' : 'forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
       setMediaStream(null); setIsLiveVideo(false);
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {
@@ -752,7 +760,7 @@ export default function SkinPage() {
   // Care modülüne yönlendirme (Dermatoloji el sıkışması)
   const handleNavigateToCare = () => {
     const isDemo = isDemoMode();
-    const currentRegion = buildSkinRegionViewModel(selectedRegionId, analysisResult, isDemo);
+    const currentRegion = buildSkinViewModel(selectedRegionId, analysisResult, isDemo);
     const referralContext = {
       sourceModule: 'SKIN',
       specialty: 'Dermatoloji',
@@ -799,7 +807,7 @@ export default function SkinPage() {
     );
   }
 
-  const currentRegionData: SkinRegionData = buildSkinRegionViewModel(
+  const currentRegionData: SkinRegionData = buildSkinViewModel(
     selectedRegionId,
     analysisResult,
     isDemoMode()
@@ -911,6 +919,7 @@ export default function SkinPage() {
       {activeModal === 'trend' && (
         <SkinTrendModal
           region={currentRegionData}
+          analysisId={analysisResult?.id}
           onClose={() => setActiveModal(null)}
         />
       )}

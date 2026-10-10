@@ -113,9 +113,9 @@ class SessionMemoryManager:
         cls,
         summary_text: str,
         recurring_themes: List[str],
-        duration_seconds: int = 180,
-        mood_before: str = "TIRED",
-        mood_after: str = "RELAXED",
+        duration_seconds: Optional[int] = None,
+        mood_before: Optional[str] = None,
+        mood_after: Optional[str] = None,
         escalation_suggested: bool = False,
         suggested_action: Optional[str] = None,
         save_mental_summaries: bool = False

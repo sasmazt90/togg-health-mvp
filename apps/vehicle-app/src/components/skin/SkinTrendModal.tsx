@@ -1,51 +1,33 @@
 'use client';
 
 import { AccessibleDialog } from '../AccessibleDialog';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { TrendingUp, X, Info } from 'lucide-react';
 import { SkinRegionData, RegionTrendPoint } from '../../data/skinDemoFixture';
-import { isDemoMode, STORAGE_KEYS } from '../../utils/attuneMode';
+import { isDemoMode } from '../../utils/attuneMode';
+import { prepareHealthRecords, type HealthRecord } from '../../utils/healthRecords';
+import { buildHistorySeries } from '../../utils/healthHistorySeries';
+import { HistoryChart } from '../HealthHistoryOverview';
 
 interface SkinTrendModalProps {
   region: SkinRegionData;
   onClose: () => void;
+  analysisId?:string;
+  selectedCriterion?:string|null;
 }
 
-export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose }) => {
+export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose, analysisId, selectedCriterion }) => {
   const isDemo = isDemoMode();
+  const [records,setRecords]=useState<HealthRecord[]>([]),[readError,setReadError]=useState(false);
+  const [criterionChoice,setCriterionChoice]=useState(selectedCriterion||''),[seriesChoice,setSeriesChoice]=useState('');
+  useEffect(()=>{if(isDemo)return;let current=true,ticket=0;const refresh=()=>{const revision=++ticket;void prepareHealthRecords('skin').then(rows=>{if(current&&revision===ticket){setRecords(rows);setReadError(false);}}).catch(()=>{if(current&&revision===ticket)setReadError(true);});};refresh();window.addEventListener('attune-records',refresh);window.addEventListener('storage',refresh);return()=>{current=false;window.removeEventListener('attune-records',refresh);window.removeEventListener('storage',refresh);};},[isDemo]);
+  const liveSeries=useMemo(()=>buildHistorySeries('skin',records).filter(s=>s.region===region.id),[records,region.id]);
+  const criteria=[...new Map(liveSeries.map(s=>[s.criterion,{id:s.criterion,label:s.label}])).values()];
+  const criterion=criteria.some(c=>c.id===criterionChoice)?criterionChoice:criteria[0]?.id||'';
+  const comparable=liveSeries.filter(s=>s.criterion===criterion);
+  const selected=comparable.find(s=>s.id===seriesChoice)||comparable.find(s=>s.points.some(p=>p.recordId===analysisId&&p.value!==null))||[...comparable].sort((a,b)=>Math.max(0,...b.points.filter(p=>p.value!==null).map(p=>p.time))-Math.max(0,...a.points.filter(p=>p.value!==null).map(p=>p.time)))[0];
 
-  const trendPoints: RegionTrendPoint[] = useMemo(() => {
-    if (isDemo) {
-      return region.trend;
-    }
-
-    if (typeof window === 'undefined') {
-      return [];
-    }
-
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.SKIN_HISTORY);
-      if (!raw) return [];
-      const list = JSON.parse(raw);
-      if (!Array.isArray(list) || list.length === 0) return [];
-      const latest = JSON.parse(localStorage.getItem(STORAGE_KEYS.LATEST_SKIN) || 'null');
-      const scope = latest?.comparisonScope || 'single-front-v1';
-      const referenceId = latest?.baselineId || (latest?.isBaseline ? latest.id : undefined);
-
-      // Ters kronolojik olarak saklandığı için grafikte soldan sağa kronolojik dizelim
-      return [...list].reverse().filter((item: any) => (item.comparisonScope || 'single-front-v1') === scope && item.baselineId === referenceId && !item.isBaseline && !item.comparisonUnavailable && typeof item.regions?.[region.id]?.changeFromBaselinePct === 'number').map((item: any) => {
-        const d = item.timestamp ? new Date(item.timestamp) : new Date();
-        const dateStr = d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-        const val = item.regions?.[region.id]?.changeFromBaselinePct ?? 0;
-        return {
-          date: dateStr,
-          value: Number(val)
-        };
-      });
-    } catch {
-      return [];
-    }
-  }, [isDemo, region.id, region.trend]);
+  const trendPoints:RegionTrendPoint[]=useMemo(()=>isDemo?region.trend:[],[isDemo,region.trend]);
 
   const hasEnoughPoints = trendPoints.length >= 2;
 
@@ -75,6 +57,13 @@ export const SkinTrendModal: React.FC<SkinTrendModalProps> = ({ region, onClose 
   const areaStr = hasEnoughPoints
     ? `${pointsStr} ${getX(trendPoints.length - 1)},${height - padY} ${getX(0)},${height - padY}`
     : '';
+
+  if(!isDemo)return <AccessibleDialog title="Zaman İçinde Değişim" onClose={onClose} className="relative w-full max-w-xl bg-[#0B1526] border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6">
+    <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><div className="w-10 h-10 shrink-0 rounded-xl bg-togg-turquoise/10 border border-togg-turquoise/30 flex items-center justify-center text-togg-turquoise"><TrendingUp className="w-5 h-5"/></div><div><h3 className="text-lg font-bold text-white tracking-wide">Zaman İçinde Değişim</h3><p className="text-xs text-slate-400 mt-0.5">{region.nameTr}</p></div></div><button onClick={onClose} aria-label="Pencereyi kapat" className="w-11 h-11 shrink-0 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800/80"><X className="w-5 h-5"/></button></div>
+    <div className="grid gap-3 sm:grid-cols-2">{criteria.length>0&&<label className="space-y-1 text-xs text-slate-400">Ölçüm<select value={criterion} onChange={e=>{setCriterionChoice(e.target.value);setSeriesChoice('');}} className="min-h-11 w-full min-w-0 rounded-xl border border-white/20 bg-slate-950 px-3 text-sm text-white">{criteria.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select></label>}{comparable.length>1&&<label className="space-y-1 text-xs text-slate-400">Karşılaştırılabilir seri<select value={selected?.id||''} onChange={e=>setSeriesChoice(e.target.value)} className="min-h-11 w-full min-w-0 rounded-xl border border-white/20 bg-slate-950 px-3 text-sm text-white">{comparable.map((s,i)=><option key={s.id} value={s.id}>Seri {i+1} · {new Date(s.points.find(p=>p.value!==null)?.time||s.points[0].time).toLocaleDateString('tr-TR')}</option>)}</select></label>}</div>
+    <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 sm:p-5 min-h-[200px]">{readError?<p role="alert" className="py-8 text-center text-sm text-amber-200">Kayıtlar açılamadı; mevcut veriler korunuyor.</p>:selected?<HistoryChart key={JSON.stringify([selected.id,selected.points])} series={selected} kind="line"/>:<p className="py-8 text-center text-sm text-slate-400">Bu görünüm için kayıtlı karşılaştırılabilir ölçüm yok.</p>}</div>
+    <details className="text-xs text-slate-400"><summary className="cursor-pointer">Kayıtların karşılaştırılması hakkında bilgi</summary><p className="mt-2">Yalnız kayıtlı ölçümler gösterilir. Farklı yöntemler ve birimler ayrı serilerde tutulur; eksik ölçümler çizgiyi keser.</p></details>
+  </AccessibleDialog>;
 
   return (
     <AccessibleDialog title="Zaman İçinde Değişim" onClose={onClose} className="relative w-full max-w-xl bg-[#0B1526] border border-slate-700/80 rounded-2xl p-6 sm:p-7 shadow-2xl space-y-6">

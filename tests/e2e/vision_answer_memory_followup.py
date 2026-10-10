@@ -1,5 +1,5 @@
 """Separate ASR finals through the production controller; controlled, not physical acceptance."""
-import ast, base64, json, sys
+import ast, base64, json, sys,os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
@@ -23,7 +23,9 @@ def capture(p,name):
     p.wait_for_timeout(100)
     cdp=p.context.new_cdp_session(p);r=cdp.send('Page.captureScreenshot',{'format':'png','fromSurface':True,'captureBeyondViewport':False});cdp.detach();(OUT/name).write_bytes(base64.b64decode(r['data']))
 def active(p):
-    p.wait_for_function("document.querySelector('[data-vision-stage]')?.dataset.visionStage==='listening'&&probe.current&&!probe.current.aborted&&document.querySelector('[data-letter-optotype]')",timeout=15000)
+    try:p.wait_for_function("document.querySelector('[data-vision-stage]')?.dataset.visionStage==='listening'&&probe.current&&!probe.current.aborted&&document.querySelector('[data-letter-optotype]')",timeout=15000)
+    except Exception:
+        (OUT/'failure-state.json').write_text(json.dumps({'state':state(p),'body':p.locator('body').inner_text(),'recognitions':p.evaluate('probe.recognitions.map(r=>({aborted:r.aborted,results:r.results,confidence:r.confidence}))')},ensure_ascii=False,indent=2),'utf8');capture(p,'failure.png');raise
 def target(p):return p.locator('[data-vision-trial]').get_attribute('data-vision-trial')
 def state(p):
     return p.evaluate("({id:document.querySelector('[data-vision-trial]').dataset.visionTrial,stage:document.querySelector('[data-vision-stage]').dataset.visionStage,heard:[...document.querySelectorAll('p')].map(e=>e.innerText).find(t=>t.startsWith('Duyulan:'))||'',notice:document.querySelector('[data-vision-answer-notice]')?.innerText,parsed:JSON.parse(document.querySelector('canvas').dataset.visionAnswer||'null'),diagnostics:probe.sizeDiagnostics,calls:probe.calls.map(c=>c.code),size:document.querySelector('[data-letter-optotype]')?.getBoundingClientRect().width})")
@@ -39,6 +41,7 @@ proof=[]
 with sync_playwright() as pw:
     c=pw.chromium.launch_persistent_context(str(OUT/(PHASE+'-profile')),channel='chrome',headless=False,no_viewport=True,args=['--window-size=1920,1080','--window-position=0,0']);c.add_init_script(BOOT);p=c.pages[0]
     modes=['followup','low-confidence','sensor-recovery'] if PHASE=='before' else ['followup','low-confidence','sensor-recovery','letter-first','e-down','single','e-sentence','mirror-parts','correction','asr-restart','tts-ended','interim-duplicate','pause-resume']
+    if os.getenv('VISION_MEMORY_MODES'):modes=os.environ['VISION_MEMORY_MODES'].split(',')
     for mode in modes:
         p.goto('http://127.0.0.1:3000/vision')
         if mode in ['e-down','e-sentence','mirror-parts']:

@@ -34,8 +34,21 @@ def decode_upload(data):
     except UploadError:raise
     except (OSError,ValueError,UnidentifiedImageError,Image.DecompressionBombError,Image.DecompressionBombWarning):raise UploadError('DECODE_FAILED') from None
 
-def upload_roi(image):
-    """Visible enamel + adjacent colored gingiva; no full-face landmarks or camera liveness."""
+def upload_roi(image,points=None):
+    """Optional full-photo anatomy, otherwise colored intraoral support.
+    Full face and camera liveness are never prerequisites for partial uploads.
+    """
+    if points is not None:
+        from dental_analysis import mouth_geometry,dental_pixels,dental_quality
+        mouth,width,opening,_=mouth_geometry(points,image.shape)
+        tooth,glare,gum,_,gray=dental_pixels(image,mouth,native_capture=True)
+        # Accept an actual open mouth or visible natural bite from the photo;
+        # no camera movement/liveness or user checkbox is used for uploads.
+        quality=dental_quality(image,points,bite=opening<=.32)
+        if not quality['valid']:raise UploadError(quality['reasons'][0])
+        ys,xs=np.where(mouth)
+        quality.update(geometrySource='detected-inner-mouth',sourceType='upload',motionGateApplied=False,fullFaceRequired=False,roi=dict(x=int(xs.min()),y=int(ys.min()),width=int(xs.max()-xs.min()+1),height=int(ys.max()-ys.min()+1)),analysisScale=1)
+        return mouth,tooth,gum,quality
     h,w=image.shape[:2];factor=min(1,LIMITS['analysisMaxSide']/max(h,w))
     small=cv2.resize(image,None,fx=factor,fy=factor,interpolation=cv2.INTER_AREA) if factor<1 else image.copy()
     hsv=cv2.cvtColor(small,cv2.COLOR_BGR2HSV);gray=cv2.cvtColor(small,cv2.COLOR_BGR2GRAY)
@@ -47,6 +60,11 @@ def upload_roi(image):
     if count<2:raise UploadError('TEETH_NOT_VISIBLE_OR_NON_COLOR_IMAGE')
     largest=1+int(np.argmax(stats[1:,4]));x,y,bw,bh,area=stats[largest]
     if area<150 or bw/factor<100:raise UploadError('INSUFFICIENT_TOOTH_DETAIL')
+    # The fallback has no facial anatomy. A tall connected wall/window or skin
+    # patch near reddish pixels is not a visible tooth row. Require horizontal
+    # enamel/gingiva structure before allocating full-resolution masks. This
+    # rejects the recorded no-teeth portrait, rather than scoring its window.
+    if bw<bh:raise UploadError('TEETH_NOT_VISIBLE_OR_NON_COLOR_IMAGE')
     # Include enamel adjacent to the selected cluster and colored gums, while avoiding remote white backgrounds.
     support=cv2.dilate((labels==largest).astype('uint8'),np.ones((51,51),'uint8'))>0
     ys,xs=np.where(support & (enamel|gingiva));margin=max(10,int(bw*.08))
@@ -71,12 +89,26 @@ def upload_roi(image):
 def analyze_upload(payload):
     from dental_analysis import model_candidates,calculus_candidates,contours_and_alignment
     image,digest,normalized,source=decode_upload(payload.get('photo'))
-    mouth,tooth,gum,quality=upload_roi(image)
-    candidates,model=model_candidates(image,mouth)
-    deposits,border=calculus_candidates(image,tooth,gum)
+    points=payload.get('photoLandmarks');origin=(0,0);analysis=image
+    if points is not None:
+        # Operate on native mouth pixels, not the entire multi-megapixel
+        # portrait. No resizing or source color change; translate all geometry
+        # back to the original oriented photo before returning it.
+        h,w=image.shape[:2]
+        inner=np.array([[points[i]['x']*w,points[i]['y']*h] for i in [78,95,88,178,87,14,317,402,318,324,308,191,80,81,82,13,312,311,310,415]])
+        margin=max(32,int(np.ptp(inner[:,0])*.2))
+        x0=max(0,int(inner[:,0].min())-margin);y0=max(0,int(inner[:,1].min())-margin)
+        x1=min(w,int(inner[:,0].max())+margin+1);y1=min(h,int(inner[:,1].max())+margin+1)
+        if x1<=x0 or y1<=y0:raise UploadError('TEETH_NOT_VISIBLE')
+        analysis=image[y0:y1,x0:x1].copy();origin=(x0,y0)
+        points=[{**p,'x':(p['x']*w-x0)/(x1-x0),'y':(p['y']*h-y0)/(y1-y0)} for p in points]
+    mouth,tooth,gum,quality=upload_roi(analysis,points)
+    candidates,model=model_candidates(analysis,mouth)
+    model={**model,'methodVersion':'official-yolox-s-upload-'+quality['geometrySource']+'-v2'}
+    deposits,border=calculus_candidates(analysis,tooth,gum)
     meta=dict(region='visible-inner-mouth',captureConditions=quality,referenceId=None,localMap=None,modelVersion=None,modelHash=None)
     # Single-view appearance is explicitly not a multiview-confirmed candidate.
-    accumulation=dict(type='appearance_proxy',value=sum(c['areaPixels'] for c in deposits)/border*100 if border>100 else None,unit='percent-visible-border-area',methodVersion='dental-border-single-photo-v1',quality='valid' if border>100 else 'insufficient',limitationCode=None if border>100 else 'GINGIVAL_BORDER_NOT_VISIBLE',candidates=deposits,evaluatedArea=border,viewSupport=1,evidenceScope='single-photo-appearance-unconfirmed',uncertainty=['stain-food-filling-confounders','not-multiview-confirmed'],**meta)
+    accumulation=dict(type='appearance_proxy',value=sum(c['areaPixels'] for c in deposits)/border*100 if border>100 else None,unit='percent-visible-border-area',methodVersion='dental-border-single-photo-v2',quality='valid' if border>100 else 'insufficient',limitationCode=None if border>100 else 'GINGIVAL_BORDER_NOT_VISIBLE',candidates=deposits,evaluatedArea=border,viewSupport=1,evidenceScope='single-photo-appearance-unconfirmed',uncertainty=['stain-food-filling-confounders','not-multiview-confirmed'],**meta)
     contours=[];rows=None;reason='NATURAL_BITE_NOT_CONFIRMED'
     if tooth.any():
         # Infer only visible two-row support from the actual pixels. A checkbox
@@ -90,7 +122,17 @@ def analyze_upload(payload):
         segments=sorted(segments,key=lambda s:s[1]-s[0],reverse=True)[:2];segments.sort()
         if len(segments)==2 and 0<segments[1][0]-segments[0][1]<quality['roi']['width']*.08:
             split=(segments[1][0]+segments[0][1])/2
-            contours,rows,reason=contours_and_alignment(image,tooth,mouth,None,split,quality['roi']['width'])
-    alignment=dict(type='appearance_proxy',value={k:v['value'] for k,v in rows.items()} if reason is None else None,unit='degrees-of-visible-axis-dispersion',methodVersion='marker-watershed-upload-v2',quality='valid' if reason is None else 'insufficient',limitationCode=reason,rows=rows,contours=contours,evaluatedArea=int(tooth.sum()),biteConfirmation='visible-two-row-support' if reason is None else None,uncertainty=['view-perspective','visible-contour-separation','not-malocclusion'],**meta)
+            contours,rows,reason=contours_and_alignment(analysis,tooth,mouth,None,split,quality['roi']['width'])
+    alignment=dict(type='appearance_proxy',value={k:v['value'] for k,v in rows.items()} if reason is None else None,unit='degrees-of-visible-axis-dispersion',methodVersion='marker-watershed-upload-v3',quality='valid' if reason is None else 'insufficient',limitationCode=reason,rows=rows,contours=contours,evaluatedArea=int(tooth.sum()),biteConfirmation='visible-two-row-support' if reason is None else None,uncertainty=['view-perspective','visible-contour-separation','not-malocclusion'],**meta)
+    if origin!=(0,0):
+        ox,oy=origin
+        quality['roi']['x']+=ox;quality['roi']['y']+=oy
+        quality['analysisCropOrigin']={'x':ox,'y':oy}
+        for item in [*candidates,*deposits]:
+            item['bounds']['x']+=ox;item['bounds']['y']+=oy
+            if 'points' in item:item['points']=[[x+ox,y+oy] for x,y in item['points']]
+        for item in contours:
+            item['points']=[[x+ox,y+oy] for x,y in item['points']]
+            item['centroid']=[item['centroid'][0]+ox,item['centroid'][1]+oy]
     view=dict(photoId=digest,pose='FRONT',sourceWidth=image.shape[1],sourceHeight=image.shape[0],sourceType='upload',quality=quality,caries=dict(type='trained_prediction',value=len(candidates) if model['quality']=='valid' else None,unit='candidate-count',candidates=candidates,evaluatedArea=int(mouth.sum()),uncertainty=['dataset-domain-shift','visible-surface-only','confidence-is-not-severity'],**{**meta,**model}),accumulation=accumulation,alignment=alignment)
-    return dict(methodVersion='dental-visible-upload-v2',sourceType='upload',views=[view],storage='volatile-memory-only',clinicalValidation=False,source=source,normalizedPhoto=normalized)
+    return dict(methodVersion='dental-visible-upload-v3',sourceType='upload',views=[view],storage='volatile-memory-only',clinicalValidation=False,source=source,normalizedPhoto=normalized)

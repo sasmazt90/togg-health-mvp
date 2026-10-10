@@ -7,7 +7,8 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'services/core-api'))
 import main,vision_speech
 from fastapi.testclient import TestClient
 
-def test_speech_preserves_transport_chunks_and_closes(monkeypatch):
+def test_speech_preserves_transport_chunks_and_closes(monkeypatch,tmp_path):
+    monkeypatch.setattr(vision_speech,'FIXED_BANK',tmp_path)
     calls=[];closed=[]
     class Communicate:
         def __init__(self,text,voice,rate,pitch):calls.append((text,voice,rate,pitch))
@@ -25,7 +26,7 @@ def test_speech_preserves_transport_chunks_and_closes(monkeypatch):
     assert calls[0]==(vision_speech.PROMPTS['right'],'tr-TR-AhmetNeural','-10%','-10Hz')
     assert 'harf alanına bakın' in calls[0][0].lower() and 'veya örtün' in calls[0][0]
     assert 'kameraya bakın' not in calls[0][0].lower()
-    assert 'Harfi ve yönünü söyleyin' in vision_speech.PROMPTS['repeat']
+    assert 'harfi ve yönünü söyleyin' in vision_speech.PROMPTS['repeat'].lower()
     assert response.headers['cache-control']=='no-store'
 
 
@@ -45,7 +46,8 @@ def test_emel_exact_profile_preserves_chunks_and_cleanup(monkeypatch):
     assert response.content==b'onetwo' and response.status_code==200
     assert calls==[('Kişisel olmayan deneme.','tr-TR-EmelNeural','-10%','-10Hz')] and closed==[True]
 
-def test_missing_exact_voice_has_no_fallback_dispatch(monkeypatch):
+def test_missing_exact_voice_has_no_fallback_dispatch(monkeypatch,tmp_path):
+    monkeypatch.setattr(vision_speech,'FIXED_BANK',tmp_path)
     monkeypatch.setattr(vision_speech,'_catalogue',(time.monotonic(),frozenset(['it-IT-IsabellaNeural'])))
     monkeypatch.setattr(vision_speech.edge_tts,'Communicate',lambda *_a,**_kw:(_ for _ in ()).throw(AssertionError('Fallback dispatch')))
     monkeypatch.setitem(main.vehicle_state,'vehicleMoving',False)

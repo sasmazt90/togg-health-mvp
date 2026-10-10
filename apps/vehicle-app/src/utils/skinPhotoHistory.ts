@@ -30,6 +30,7 @@ function validate(frames:Frames){
  if(!entries.length||entries.length>3)throw Error('INVALID_PHOTO_RECORD');
  for(const [angle,s] of entries){
   if(!['FRONT','RIGHT','LEFT'].includes(angle)||s.angle!==angle||!s.photoId||!/^[a-f0-9]{64}$/.test(s.photoId)||!s.dataUrl.startsWith('data:image/png;base64,')||s.width<16||s.height<16||s.width*s.height>8400000)throw Error('INVALID_PHOTO_SOURCE');
+  if(s.general&&(angle!=='FRONT'||s.general.captureId!==s.photoId||s.general.pose!=='FRONT'||s.general.sourceTransform.sourceWidth!==s.width||s.general.sourceTransform.sourceHeight!==s.height))throw Error('INVALID_OVERVIEW_SOURCE');
   for(const map of Object.values(s.localMaps||{}))if(map.photoId!==s.photoId||map.pose!==angle||map.sourceWidth!==s.width||map.sourceHeight!==s.height)throw Error('INVALID_PHOTO_MAP');
  }
 }
@@ -62,4 +63,48 @@ export async function loadSkinPhotos(id:string):Promise<Frames|undefined>{
  if(permitted()&&recordExists(id))return frames;
 }
 export async function deleteSkinPhotos(id:string){await transaction<void>('readwrite',store=>{store.delete(id);});}
+export const SKIN_PHOTO_DELETE_PENDING='attune_skin_photo_delete_v1';
+const deletionBackup=(id:string)=>'delete-backup:'+id;
+/** A durable photo undo row bridges IndexedDB and the numeric undo journal.
+ * The caller holds the health-records lock; neither journal contains raw media.
+ */
+export async function deleteSkinPhotosWithRecords(id:string,apply:()=>void,rollback:()=>void,finalize:()=>void){
+ const marker={id,phase:'prepared'};
+ localStorage.setItem(SKIN_PHOTO_DELETE_PENDING,JSON.stringify(marker));
+ try{
+  await transaction<void>('readwrite',store=>{
+   const request=store.get(id);
+   request.onsuccess=()=>{try{
+    if(request.result)store.put({...request.result,id:deletionBackup(id),deleteRecoveryFor:id});
+    apply();store.delete(id);
+   }catch{store.transaction.abort();}};
+  });
+  // Only a completed IDB transaction may change the intent to committed.
+  localStorage.setItem(SKIN_PHOTO_DELETE_PENDING,JSON.stringify({...marker,phase:'committed'}));
+  finalize();
+  await transaction<void>('readwrite',store=>{store.delete(deletionBackup(id));});
+  localStorage.removeItem(SKIN_PHOTO_DELETE_PENDING);
+ }catch(error){
+  const pending=JSON.parse(localStorage.getItem(SKIN_PHOTO_DELETE_PENDING)||'null');
+  if(pending?.phase!=='committed'){
+   await recoverSkinPhotoDeletion(rollback,finalize);
+  }
+  throw error;
+ }
+}
+export async function recoverSkinPhotoDeletion(rollback:()=>void,finalize:()=>void){
+ const raw=localStorage.getItem(SKIN_PHOTO_DELETE_PENDING);if(!raw)return;
+ const marker=JSON.parse(raw);
+ if(!marker||typeof marker.id!=='string'||!marker.id||!['prepared','committed'].includes(marker.phase))throw Error('INVALID_PHOTO_DELETE_JOURNAL');
+ await transaction<void>('readwrite',store=>{
+  const request=store.get(deletionBackup(marker.id));
+  request.onsuccess=()=>{try{
+   if(marker.phase==='prepared'&&request.result){const {deleteRecoveryFor,...row}=request.result;if(deleteRecoveryFor!==marker.id)throw Error('INVALID_PHOTO_DELETE_BACKUP');store.put({...row,id:marker.id});}
+   if(marker.phase==='committed')store.delete(marker.id);
+   store.delete(deletionBackup(marker.id));
+  }catch{store.transaction.abort();}};
+ });
+ if(marker.phase==='prepared')rollback();else finalize();
+ localStorage.removeItem(SKIN_PHOTO_DELETE_PENDING);
+}
 export async function clearSkinPhotos(){await transaction<void>('readwrite',store=>{store.clear();});}

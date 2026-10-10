@@ -18,7 +18,8 @@ with sync_playwright() as pw:
  p.evaluate("async()=>{const V=await import('./vision_bundle.mjs');window.m=await V.FaceLandmarker.createFromOptions(await V.FilesetResolver.forVisionTasks('http://127.0.0.1:6932/wasm'),{baseOptions:{modelAssetPath:'http://127.0.0.1:6932/face.task'},runningMode:'IMAGE',numFaces:1,outputFacialTransformationMatrixes:true});}")
  p.evaluate('(js)=>{window.dental={};new Function("exports",js)(dental);}',js)
  rows=[]
- payload=json.loads((out/'dental-camera/capture-request-private.json').read_text());capture=payload['captures'][0]
+ import os
+ payload=json.loads(Path(os.environ.get('DENTAL_CAPTURE_INPUT',str(out/'dental-camera/capture-request-private.json'))).read_text());capture=payload['captures'][0]
  original,_=decode_photo(capture['photo']);mouth,_,_,_=mouth_geometry(capture['landmarks'],original.shape)
  negative=out/'dental-negative';negative.mkdir(exist_ok=True)
  covered=original.copy();covered[cv2.dilate(mouth.astype(np.uint8),np.ones((15,15),np.uint8))>0]=(40,40,40)

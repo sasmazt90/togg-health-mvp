@@ -24,7 +24,9 @@ with sync_playwright() as pw:
     result=page.evaluate('''async ({compiled,bytes})=>{
       const helper={};new Function('exports',compiled)(helper);
       const pcm=new Uint8Array(bytes);let cancelled=false;
-      const response=()=>new Response(new ReadableStream({start(controller){controller.enqueue(pcm);setTimeout(()=>{if(!cancelled)controller.close();},1800);},cancel(){cancelled=true;}}),{headers:{'Content-Type':'audio/mpeg'}});
+      // Keep the transport open until focus cancellation. Under concurrent
+      // inference, native playback may legitimately start after 1.8 seconds.
+      let delayed;const response=()=>new Response(new ReadableStream({start(controller){controller.enqueue(pcm);delayed=setTimeout(()=>{if(!cancelled)controller.close();},60000);},cancel(){cancelled=true;clearTimeout(delayed);}}),{headers:{'Content-Type':'audio/mpeg'}});
       localStorage.removeItem('attune_hearing_audio_focus');
       const audio=new Audio();audio.volume=.05;let played=false;
       const playing=new Promise((resolve,reject)=>{audio.addEventListener('playing',()=>{played=true;resolve();},{once:true});setTimeout(()=>reject(Error('Actual voice did not play')),5000);});
@@ -41,6 +43,7 @@ with sync_playwright() as pw:
       stream.cancel();resumed.cancel();audio.removeAttribute('src');allowed.removeAttribute('src');URL.revokeObjectURL(stream.url);URL.revokeObjectURL(resumed.url);localStorage.removeItem('attune_hearing_audio_focus');
       return {played,pausedByHearing,readingCancelled,error,rejected,playedAfterExpired};
     }''',{'compiled':compiled,'bytes':list(destination.read_bytes())})
+    print(json.dumps(result),flush=True)
     assert result['played'] and result['pausedByHearing'] and result['readingCancelled']
     assert result['error']=='AbortError' and result['rejected']=='İşitme testi ses çıkışını kullanıyor.'
     assert result['playedAfterExpired']

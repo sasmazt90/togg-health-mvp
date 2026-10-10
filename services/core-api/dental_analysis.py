@@ -189,7 +189,7 @@ def model_candidates(image,mouth):
         selected=cv2.dnn.NMSBoxes([boxes[i] for i in indices],[confidences[i] for i in indices],_manifest['confidenceThreshold'],.45)
         keep.extend(indices[int(i)] for i in np.asarray(selected).ravel())
     candidates=[dict(bounds=dict(zip(('x','y','width','height'),boxes[i])),classCode=_manifest['classes'][class_values[i]],confidence=confidences[i]) for i in keep]
-    return candidates,dict(quality='valid',methodVersion='official-yolox-s-local-v1',modelHash=_manifest['modelHash'],modelVersion=_manifest['modelVersion'],datasetLicense='CC-BY-4.0',evaluation=_manifest['evaluation'],runtimeVersions=_model_runtime,limitationCode='VISIBLE_SURFACE_ONLY_NOT_DIAGNOSIS',inputRegion='actual-inner-mouth-with-15-percent-source-margin')
+    return candidates,dict(quality='valid',methodVersion='official-yolox-s-local-v1',decisionThreshold=_manifest['confidenceThreshold'],modelHash=_manifest['modelHash'],modelVersion=_manifest['modelVersion'],datasetLicense='CC-BY-4.0',evaluation=_manifest['evaluation'],runtimeVersions=_model_runtime,limitationCode='VISIBLE_SURFACE_ONLY_NOT_DIAGNOSIS',inputRegion='actual-inner-mouth-with-15-percent-source-margin')
 
 
 def analyze_dental(payload):
@@ -209,7 +209,7 @@ def analyze_dental(payload):
                 uncertainty=['capture-quality-failed'],referenceId=None,localMap=None,modelVersion=None,modelHash=None)
             views.append(dict(photoId=source_hash,pose=capture['pose'],sourceWidth=image.shape[1],sourceHeight=image.shape[0],quality=quality,
                 caries=dict(type='trained_prediction',unit='candidate-count',methodVersion='official-yolox-s-local-v1',candidates=[],**unavailable),
-                accumulation=dict(type='appearance_proxy',unit='percent-visible-border-area',methodVersion='dental-border-cv-v1',candidates=[],**unavailable),
+                accumulation=dict(type='appearance_proxy',unit='percent-visible-border-area',methodVersion='dental-border-cv-v2',candidates=[],**unavailable),
                 alignment=dict(type='appearance_proxy',unit='degrees-of-visible-axis-dispersion',methodVersion='marker-watershed-v1',rows=None,contours=[],**unavailable)));continue
         mouth,_,_,points=mouth_geometry(capture['landmarks'],image.shape);tooth,_,gum,_,_=dental_pixels(image,mouth,native_capture=True)
         deposits,area=calculus_candidates(image,tooth,gum)
@@ -225,26 +225,9 @@ def analyze_dental(payload):
         model_meta={**meta,**model}
         views.append(dict(photoId=source_hash,pose=capture['pose'],sourceWidth=image.shape[1],sourceHeight=image.shape[0],quality=quality,
             caries=dict(type='trained_prediction',value=len(caries) if model['quality']=='valid' else None,unit='candidate-count',candidates=caries,evaluatedArea=int(mouth.sum()),uncertainty=['dataset-domain-shift','visible-surface-only','confidence-is-not-severity'],**model_meta),
-            accumulation=dict(type='appearance_proxy',value=None,unit='percent-visible-border-area',candidateArea=sum(c['areaPixels'] for c in deposits),evaluatedArea=area,candidates=deposits,methodVersion='dental-border-cv-v1',quality='insufficient',limitationCode='MULTIVIEW_CONFIRMATION_REQUIRED',uncertainty=['stain-food-filling-confounders','visible-border-only'],**meta),
+            accumulation=dict(type='appearance_proxy',value=sum(c['areaPixels'] for c in deposits)/area*100 if area>100 else None,unit='percent-visible-border-area',candidateArea=sum(c['areaPixels'] for c in deposits),evaluatedArea=area,candidates=deposits,methodVersion='dental-border-cv-v2',quality='valid' if area>100 else 'insufficient',limitationCode=None if area>100 else 'GINGIVAL_BORDER_NOT_VISIBLE',viewSupport=1,evidenceScope='per-view-appearance-unconfirmed',uncertainty=['stain-food-filling-confounders','visible-border-only','not-multiview-confirmed'],**meta),
             alignment=dict(type='appearance_proxy',value={key:item['value'] for key,item in alignment.items()} if reason is None else None,unit='degrees-of-visible-axis-dispersion',rows=alignment,contours=contours,evaluatedArea=int(tooth.sum()),uncertainty=['view-perspective','visible-contour-separation','not-malocclusion'],quality='valid' if reason is None else 'insufficient',limitationCode=reason,methodVersion='marker-watershed-v1',**meta)))
-    supported=[v for v in views if (v.get('accumulation',{}).get('evaluatedArea') or 0)>100]
-    # Conservative session-level consistency across actually accepted views;
-    # don't call one-view yellow candidates calculus or fill all enamel.
-    if len(supported)>=2:
-        fractions=[v['accumulation']['candidateArea']/v['accumulation']['evaluatedArea'] for v in supported]
-        consistent=max(fractions)-min(fractions)<.08
-        original_candidates={id(v):list(v['accumulation']['candidates']) for v in supported}
-        no_candidates=all(not candidates for candidates in original_candidates.values())
-        for view in supported:
-            item=view['accumulation'];confirmed=[]
-            for candidate in item['candidates']:
-                support=[]
-                for other in supported:
-                    if other is view or other['pose']==view['pose']:continue
-                    for alternative in original_candidates[id(other)]:
-                        a=np.array(candidate['mouthPosition']);b=np.array(alternative['mouthPosition']);ratio=candidate['normalizedArea']/max(alternative['normalizedArea'],1e-8)
-                        if (a[1]>=0)==(b[1]>=0) and np.linalg.norm(a-b)<.18 and .25<=ratio<=4:support.append(other['pose']);break
-                if support:candidate['viewSupport']=sorted(set(support+[view['pose']]));confirmed.append(candidate)
-            usable=consistent and (bool(confirmed) or no_candidates)
-            item.update(quality='valid' if usable else 'insufficient',value=sum(c['areaPixels'] for c in confirmed)/item['evaluatedArea']*100 if usable else None,limitationCode=None if usable else 'VIEW_DISAGREEMENT',viewSupport=len(supported),unconfirmedCandidateCount=len(item['candidates'])-len(confirmed),candidates=confirmed if usable else [])
+    # A local border-appearance measure is valid from one accepted photograph.
+    # Relative mouth position/color is not tooth identity across perspective;
+    # do not invent multiview confirmation or suppress valid per-view evidence.
     return dict(methodVersion='dental-visible-v2',sourceType='camera',views=views,storage='volatile-memory-only',clinicalValidation=False)

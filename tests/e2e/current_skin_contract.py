@@ -57,6 +57,19 @@ with sync_playwright() as pw:
   assert len({v['photoId'] for v in p.evaluate('window.appearanceRequests')[-3:]})==3
   assert not model_requests and all(m['type'] not in ('initializeSegmentation','segment') for m in p.evaluate('window.workerMessages'))
   assert 'data:image' not in p.evaluate('JSON.stringify(Object.fromEntries(Object.entries(localStorage)))')
+  general=value['general'];assert general['analysisId']==value['id'] and general['pose']=='FRONT'
+  assert p.get_by_role('heading',name='Genel Bakış',exact=True).count()==1
+  assert p.locator('[data-skin-indicator]').count()==9 and p.locator('[data-skin-type]').count()==1
+  assert p.locator('[data-skin-mesh]').count()==0,'Overview must not stack six meshes'
+  assert '1 / 7' in p.locator('[data-skin-navigation]').inner_text()
+  overview_svg=p.locator('[data-skin-snapshot]');assert overview_svg.get_attribute('data-snapshot-photoid')==general['captureId']
+  overview_source=overview_svg.locator('image').first.get_attribute('href')
+  p.screenshot(path=str(OUT/f'overview-{n}.png'),full_page=True)
+  p.locator('[data-skin-indicator="redness"]').click()
+  assert p.locator('[data-skin-local-fill]').get_attribute('data-map-photo')==general['captureId']
+  assert p.locator('[data-skin-mesh]').count()==0 and overview_svg.locator('image').first.get_attribute('href')==overview_source
+  capture(p,c,OUT/f'overview-map-{n}.png',n==1)
+  p.get_by_role('button',name='Sonraki Bölge',exact=True).click()
   graphs=[];source_by_region={};photo_by_region={}
   for i in range(6):
    svg=p.locator('[data-skin-snapshot]');mesh=p.locator('[data-skin-mesh]');assert mesh.count()==1
@@ -166,6 +179,11 @@ with sync_playwright() as pw:
   # Client navigation preserves only the in-memory current session frames.
   p.get_by_role('link',name='Sağlık Geçmişim',exact=True).click();p.locator('[data-record-id="'+value['id']+'"]').get_by_role('button',name='Sonucu Aç',exact=True).click()
   dialog=p.get_by_role('dialog',name='Cilt Sağlığı sonucu',exact=True)
+  assert dialog.get_by_role('heading',name='Genel Bakış',exact=True).count()==1
+  assert dialog.locator('[data-skin-mesh]').count()==0
+  assert dialog.locator('[data-skin-snapshot]').get_attribute('data-snapshot-photoid')==general['captureId']
+  assert dialog.locator('[data-skin-snapshot] image').first.get_attribute('href')==overview_source
+  dialog.get_by_role('button',name='Sonraki Bölge',exact=True).click()
   for region in graphs:
    current=dialog.locator('[data-skin-snapshot]');assert current.get_attribute('data-snapshot-photoid')==photo_by_region[region]
    assert current.locator('image').first.get_attribute('href')==source_by_region[region]

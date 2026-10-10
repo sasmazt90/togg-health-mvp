@@ -2,14 +2,14 @@
 import type { HealthRecord } from './healthRecords';
 import { HEALTH_MODULE_IDS, type HealthModule } from './healthModules';
 import { performanceBySize, isLetterProtocol, type LetterTrial } from './spokenVision';
-import { SIGN_LABELS } from './skinIndicators';
+import { SIGN_LABELS, skinCriterionLabel } from './skinIndicators';
 import { skinDisplayKind } from './skinPresentation';
 
 export type HistoryRecords = Record<HealthModule, HealthRecord[]>;
 export type HistoryPoint = { id: string; recordId: string; time: number; value: number | null; detail: string; numerator?: number; denominator?: number };
 export type HistorySeries = { id: string; module: HealthModule; criterion: string; label: string; region: string; regionLabel: string; unit: string; method: string; source: string; points: HistoryPoint[] };
 export const EMPTY_HISTORY: HistoryRecords = { vision: [], skin: [], dental: [], hearing: [], mental: [] };
-export const REGION_LABELS: Record<string, string> = { forehead: 'Alın', rightCheek: 'Sağ yanak', leftCheek: 'Sol yanak', nose: 'T-Bölgesi', chin: 'Çene', periorbital: 'Göz çevresi', RIGHT: 'Sağ göz', LEFT: 'Sol göz', BOTH: 'İki göz', FRONT: 'Ön görünüm', BITE: 'Doğal kapanış', left: 'Sol kulak', right: 'Sağ kulak' };
+export const REGION_LABELS: Record<string, string> = { overview: 'Genel Bakış', forehead: 'Alın', rightCheek: 'Sağ yanak', leftCheek: 'Sol yanak', nose: 'T-Bölgesi', chin: 'Çene', periorbital: 'Göz çevresi', RIGHT: 'Sağ göz', LEFT: 'Sol göz', BOTH: 'İki göz', FRONT: 'Ön görünüm', BITE: 'Doğal kapanış', left: 'Sol kulak', right: 'Sağ kulak' };
 const number = (v: unknown): number | null => typeof v === 'number' && Number.isFinite(v) ? v : null;
 export function historyTime(record: HealthRecord) {
   const value = record.timestamp || record.date || record.completedAt;
@@ -67,12 +67,12 @@ export function buildHistorySeries(module: HealthModule, records: HealthRecord[]
         }
       }
     } else if (module === 'skin' && r.indicators && typeof r.indicators === 'object') {
-      for (const [region, entries] of Object.entries(r.indicators)) if (Array.isArray(entries)) for (const entry of entries) {
+      for (const [region, entries] of Object.entries({...r.indicators,...(r.general?.indicators?{overview:r.general.indicators}:{})})) if (Array.isArray(entries)) for (const entry of entries) {
         const a = entry.appearance, m = entry.measurement, kind = skinDisplayKind(entry), longitudinal = a?.type === 'longitudinal_measurement';
         const unit = longitudinal ? 'kontur farkı' : kind === 'percent' ? '%' : kind === 'count' ? 'aday' : m?.unit || entry.unit || '';
         const raw = longitudinal ? entry.referenceDelta : a ? a.value : m ? m.rawValue : entry.score;
         const valid = (!a || a.quality === 'valid') && (!m || m.quality === 'valid') && a?.limitationCode !== 'REFERENCE_CREATED';
-        add(r, { criterion: entry.id, label: SIGN_LABELS[entry.id] || entry.label, region, regionLabel: REGION_LABELS[region] || region, unit, method: `${a?.methodVersion || m?.methodVersion || entry.method || 'Eski yöntem'}${longitudinal ? ' · kişisel referans farkı' : ' · mevcut görünüm'}`, source: '' }, [a?.methodVersion || m?.methodVersion || entry.method, a?.type || m?.validation || 'legacy', a?.unit || m?.unit || entry.unit, m?.modelHash || a?.modelHash || null, m?.datasetHash || null, m?.evidenceHash || null, longitudinal ? a?.referenceId || r.referenceId || r.id : null], valid ? number(raw) : null, region + entry.id, valid ? '' : entry.reason || 'Bu kayıtta ölçülemiyor');
+        add(r, { criterion: entry.id, label: skinCriterionLabel(entry.id,region==="overview"?"whole-face":"regional"), region, regionLabel: REGION_LABELS[region] || region, unit, method: `${a?.methodVersion || m?.methodVersion || entry.method || 'Eski yöntem'}${longitudinal ? ' · kişisel referans farkı' : ' · mevcut görünüm'}`, source: '' }, [a?.methodVersion || m?.methodVersion || entry.method, a?.type || m?.validation || 'legacy', a?.unit || m?.unit || entry.unit, m?.modelHash || a?.modelHash || null, a?.normalizationVersion || null, m?.datasetHash || null, m?.evidenceHash || null, longitudinal ? a?.referenceId || r.referenceId || r.id : null], valid ? number(raw) : null, region + entry.id, valid ? '' : entry.reason || 'Bu kayıtta ölçülemiyor');
       }
     } else if (module === 'dental' && Array.isArray(r.measurements)) {
       const source = r.sourceType === 'upload' ? 'Yüklenen fotoğraf' : r.sourceType === 'camera' ? 'Kamera' : 'Kaynak kaydedilmemiş';

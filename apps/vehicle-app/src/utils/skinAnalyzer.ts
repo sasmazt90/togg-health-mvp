@@ -80,6 +80,9 @@ export interface RegionMetrics {
 }
 
 export interface SkinAnalysisResult {
+  general?:import('./skinOverview').SkinOverview;
+  analysisId?:string;
+  captures?:Partial<Record<'FRONT'|'RIGHT'|'LEFT',{captureId:string;pose:string;sourceWidth:number;sourceHeight:number}>>;
   schemaVersion?:3;
   indicatorContract?:string;
   indicators?:import('./skinIndicators').SkinIndicators;
@@ -137,12 +140,12 @@ export class SkinAnalyzer {
     this.isInitializing = true;
     try {
       const filesetResolver = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm'
+        '/mediapipe/wasm'
       );
       this.landmarkerInstance = await FaceLandmarker.createFromOptions(filesetResolver, {
         baseOptions: {
           modelAssetPath:
-            'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            '/mediapipe/models/face_landmarker.task',
           delegate: 'GPU'
         },
         runningMode: 'IMAGE',

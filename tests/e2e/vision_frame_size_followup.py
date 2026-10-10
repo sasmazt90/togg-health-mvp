@@ -32,7 +32,11 @@ def respond(page,correct=True):
     old=target(page);letter=PATHS[old['path']];rotation=int(re.search(r'rotate\((\d+)\)',old['transform'])[1])
     direction={0:'düz',90:'sağa yatmış',180:'baş aşağı',270:'sola yatmış'}[rotation]+(' ve aynalı' if 'scale(-1' in old['transform'] else '')
     page.evaluate('(text)=>probe.current.emit(text)',(letter if correct else ('F' if letter=='P' else 'P'))+' '+direction)
-    page.wait_for_function('(id)=>document.querySelector("[data-vision-trial]")?.dataset.visionTrial!==id',arg=old['id'])
+    try:page.wait_for_function('(id)=>document.querySelector("[data-vision-trial]")?.dataset.visionTrial!==id',arg=old['id'])
+    except Exception:
+        capture(page,'response-timeout.png',True)
+        (OUT/'response-timeout.json').write_text(json.dumps(dict(old=old,answer=(letter if correct else ('F' if letter=='P' else 'P'))+' '+direction,diagnostic=page.evaluate('({stage:document.querySelector("[data-vision-stage]")?.dataset,body:document.body.innerText,evidence:document.querySelector("canvas")?.dataset,recognitions:probe.recognitions.map(r=>({aborted:r.aborted,results:r.results})),calls:probe.calls})')),indent=2),'utf8')
+        raise
     if page.locator('[data-vision-stage]').get_attribute('data-vision-stage')=='result':return old,None
     active(page)
     return old,target(page)

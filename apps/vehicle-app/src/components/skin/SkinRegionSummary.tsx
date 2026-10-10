@@ -5,6 +5,7 @@ import { SkinIndicatorValue } from './SkinIndicatorValue';
 import { InformationButton } from '../InformationButton';
 import { TrendingUp, FileText, Lightbulb, ArrowRight } from 'lucide-react';
 import { SkinRegionData } from '../../data/skinDemoFixture';
+import { SKIN_TYPE_LABELS } from '../../utils/skinOverview';
 
 interface SkinRegionSummaryProps {
   currentRegion: SkinRegionData;
@@ -32,7 +33,8 @@ export const SkinRegionSummary: React.FC<SkinRegionSummaryProps> = ({
 
         </div>
 
-        {/* 4 Gerçek Engine Metriği Göstergeleri */}
+        {currentRegion.id === 'overview' && <div className="rounded-2xl border border-sky-400/15 bg-slate-900/60 p-4 flex flex-wrap justify-between gap-2" data-skin-type><span className="text-sm text-slate-300">Cilt tipi</span><strong className="text-base text-white">{currentRegion.skinType?.quality === 'valid' && currentRegion.skinType.value ? SKIN_TYPE_LABELS[currentRegion.skinType.value] : '—'}</strong></div>}
+        {/* Current source measurements only. */}
         {currentRegion.indicators ? <div className="space-y-4" data-skin-indicators>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {currentRegion.indicators.map(indicator=>{

@@ -1,6 +1,6 @@
 'use client';
 
-import {clearSkinPhotos,SKIN_PHOTO_PERMISSION} from '../../utils/skinPhotoHistory';
+import {clearSkinPhotos,SKIN_PHOTO_PERMISSION,SKIN_PHOTO_DELETE_PENDING} from '../../utils/skinPhotoHistory';
 import {clearSkinSnapshots} from '../../utils/skinVolatileHistory';
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
@@ -178,7 +178,7 @@ export default function PrivacyPage() {
   const handleWipeAllData = async () => {
     setWipeStatus('WIPING');
     let local = true;
-    const healthKeys = ['attune_skin_appearance_reference_v1','attune_skin_appearance_single_reference_v1',RECORD_JOURNAL, 'attune_dental_history_v1', 'attune_dental_latest_v1', 'attune_hearing_history_v1', 'attune_hearing_latest_v1', 'attune_skin_geometry_reference_v1', STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
+    const healthKeys = [SKIN_PHOTO_DELETE_PENDING,'attune_skin_appearance_reference_v1','attune_skin_appearance_single_reference_v1',RECORD_JOURNAL, 'attune_dental_history_v1', 'attune_dental_latest_v1', 'attune_hearing_history_v1', 'attune_hearing_latest_v1', 'attune_skin_geometry_reference_v1', STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
       STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
       STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
     try { await withRecordsLock(async () => {

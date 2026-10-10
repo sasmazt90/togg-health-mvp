@@ -37,7 +37,7 @@ export function useMentalConversation(parked: boolean) {
   const [history, setHistory] = useState<MentalHistoryItem[]>([]);
   const [summary, setSummary] = useState<MentalHistoryItem | null>(null);
   const [provider, setProvider] = useState({ apiKeyConfigured: false, providerName: 'Yerel Kural Motoru (Demo)' });
-  const runtime = useRef({ mounted: false, active: false, paused: false, pendingPause: false, epoch: 0, turn: 0, busy: false, failed: false,
+  const runtime = useRef({ mounted: false, active: false, paused: false, pendingPause: false, pendingFinish: false, epoch: 0, turn: 0, busy: false, failed: false,
     id: '', startedAt: '', transcript: [] as ConversationMessage[], recognition: null as any,
     audio: null as HTMLAudioElement | null,
     audioUrl: null as string | null, streamCancel: null as (()=>void) | null, controller: null as AbortController | null,
@@ -75,6 +75,7 @@ export function useMentalConversation(parked: boolean) {
   function resume(epoch: number) {
     if (!valid(epoch)) return;
     runtime.current.busy = false;
+    if (runtime.current.pendingFinish) { runtime.current.pendingFinish = false; void finish(); return; }
     if (runtime.current.pendingPause) { pause(); return; }
     if (runtime.current.paused) { setPhase('paused'); return; }
     if (settings.current.textMode) { setPhase('ready'); return; }
@@ -132,7 +133,7 @@ export function useMentalConversation(parked: boolean) {
     const current = () => valid(epoch) && r.audioEpoch === audioEpoch;
     r.voiceWaiting = true;
     const end = () => { if (!current()) return; timing('ended');stopAudio(); setVoiceState('ready'); if (!crisis) resume(epoch); else { r.active = false; setActive(false); setPhase('error'); } };
-    const fail = () => { if (!current()) return; timing('audio-error');stopAudio(); setVoiceState('failed'); setVoiceNotice('Microsoft tr-TR-EmelNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (r.pendingPause) pause(); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
+    const fail = () => { if (!current()) return; timing('audio-error');stopAudio(); setVoiceState('failed'); setVoiceNotice('Microsoft tr-TR-EmelNeural seslendirmesine ulaşılamadı. Sesli yanıt başarısız. Yanıtı metin olarak okuyabilirsiniz.'); setTextMode(true); r.busy = false; setPhase('ready'); if (r.pendingFinish) { r.pendingFinish=false; void finish(); } else if (r.pendingPause) pause(); if (crisis) { r.active = false; setActive(false); setPhase('error'); } };
     setVoiceState('loadingSpeech');
     {
       if (!settings.current.speechConsent) { fail(); return; }
@@ -194,6 +195,7 @@ export function useMentalConversation(parked: boolean) {
       if (data.providerType === 'LOCAL_DEMO_FALLBACK') setNotice('Canlı sağlayıcıya ulaşılamadı; bu yanıt yerel demo motorundan geldi.');
       if (data.isCrisis) { r.failed = true; setNotice('Normal görüşme durduruldu. Acil Kriz Destek: 112 Acil Çağrı.'); }
       r.pendingPause = !data.isCrisis && data.sessionAction === 'pause';
+      r.pendingFinish = !data.isCrisis && data.sessionAction === 'finish';
       await speak(spokenText(data.reply), epoch, !!data.isCrisis);
     } catch {
       if (!valid(epoch)) return;
@@ -205,7 +207,7 @@ export function useMentalConversation(parked: boolean) {
   function start(asText = settings.current.textMode) {
     if (!settings.current.parked || runtime.current.active || !settings.current.speechConsent) return;
     cleanup(); const r = runtime.current;
-    r.epoch++; r.active = true; r.paused = false; r.pendingPause = false; r.failed = false; r.busy = false; r.turn = 0; r.id = crypto.randomUUID(); r.startedAt = new Date().toISOString(); r.transcript = [];
+    r.epoch++; r.active = true; r.paused = false; r.pendingPause = false; r.pendingFinish = false; r.failed = false; r.busy = false; r.turn = 0; r.id = crypto.randomUUID(); r.startedAt = new Date().toISOString(); r.transcript = [];
     settings.current.textMode = asText;
     setActive(true); setTextMode(asText); setMessages([]); setSummary(null); setNotice(null); setVoiceNotice(null); setVoiceState('ready'); setPhase('ready');
     if (!asText) listen();

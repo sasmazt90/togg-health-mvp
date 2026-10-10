@@ -25,12 +25,12 @@ const edge=cameraCrop(points.map(p=>({x:p.x-.39,y:p.y-.29})));
 assert.equal(edge.x,0);assert.equal(edge.y,0);assert(edge.x+edge.width<=1&&edge.y+edge.height<=1);
 const {SkinRegionSummary}=load('apps/vehicle-app/src/components/skin/SkinRegionSummary.tsx',{'../InformationButton':{InformationButton:()=>null}});
 for(const [value,expected] of [[.4,0],[.5,1],[32.4,32],[32.5,33],[99.5,100]]) {
- const indicators=[{id:'redness',label:'Redness',score:value,reason:'Color index'},{id:'oil',label:'Oil',score:null,reason:'No validated measurement'}];
+ const indicators=[{id:'redness',label:'Redness',score:value,reason:'Color index',unit:'relative-color-index-0-100',appearance:{unit:'relative-color-index-0-100',type:'appearance_proxy'}},{id:'oil',label:'Oil',score:null,reason:'No validated measurement'}];
  const html=renderToStaticMarkup(React.createElement(SkinRegionSummary,{currentRegion:{nameTr:'Region',metrics:{},indicators},onOpenModal:()=>{},onNavigateToCare:()=>{}}));
- assert(new RegExp('data-skin-score="[^"]*"[^>]*>'+expected+'</span>').test(html));
- assert(html.includes('aria-valuenow="'+expected+'"'));
+ assert(new RegExp('data-skin-score="[^"]*"[^>]*>'+expected+'%</span>').test(html));
+ assert(html.includes('aria-valuenow="'+value+'"'));
  assert.equal((html.match(/role="meter"/g)||[]).length,1);
- assert(html.includes('No validated measurement'));assert.equal(indicators[0].score,value);
+ assert(html.includes('—'));assert.equal(indicators[0].score,value);
 }
 '''
  result=subprocess.run(['node','-e',"require('./tests/unit/ts_loader.js');\n"+script],cwd=ROOT,capture_output=True,text=True,encoding='utf8')

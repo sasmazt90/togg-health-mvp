@@ -5,6 +5,7 @@ import { cameraCrop, type Crop } from './cameraStability';
 /** Source photo contract. Numeric writers never receive it; the separate local
  * photo store requires explicit photo retention consent. */
 export interface SkinSnapshot {
+  general?:import('./skinOverview').SkinOverview;
   dataUrl:string; width:number; height:number; angle:SkinAngle;
   visualError?:string; segmentationMs?:number; maskWidth?:number; maskHeight?:number; meshes:Record<string,SkinMesh>;
   rois:{id:string;nameTr:string;x:number;y:number;w:number;h:number}[];

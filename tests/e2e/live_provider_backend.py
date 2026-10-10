@@ -5,13 +5,6 @@ import os
 from pathlib import Path
 import sys
 import time
-import uvicorn
-from live_provider_admission import LiveAdmission,live_run_output,claim_live_run
-from live_provider_transport import sdk_http_family
-import openai
-from openai import OpenAI, DefaultHttpxClient
-httpx=sdk_http_family(DefaultHttpxClient)
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--approved-additional-text-run', action='store_true')
 parser.add_argument('--run-id')
@@ -20,6 +13,14 @@ args = parser.parse_args()
 if not args.approved_additional_text_run:
     raise SystemExit('No authorization: no server or provider request')
 if not args.fixture:raise SystemExit('Historical OpenAI TTS harness superseded by Edge-only product; zero dispatch')
+# Reject unapproved execution before importing the SDK/runtime. This path
+# neither loads local credentials nor waits for provider dependencies.
+import uvicorn
+from live_provider_admission import LiveAdmission,live_run_output,claim_live_run
+from live_provider_transport import sdk_http_family
+import openai
+from openai import OpenAI, DefaultHttpxClient
+httpx=sdk_http_family(DefaultHttpxClient)
 RUN_ID = args.run_id
 ROOT = Path(__file__).resolve().parents[2]
 OUT = live_run_output(ROOT,args.run_id)

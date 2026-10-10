@@ -8,6 +8,10 @@ OUT=Path('audit-results/current-health-20261009/vision');OUT.mkdir(parents=True,
 with sync_playwright() as pw:
  b=pw.chromium.launch(channel='chrome',headless=True,args=['--use-fake-device-for-media-stream','--use-file-for-fake-video-capture='+str(Path('audit-fixtures/valid-face.y4m').resolve()),'--autoplay-policy=no-user-gesture-required','--enable-unsafe-swiftshader'])
  c=b.new_context(permissions=['camera'],viewport={'width':1600,'height':1100});p=c.new_page();errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
+ # Cold model startup must use the exact local model/runtime assets. Remote
+ # CDN availability is deliberately absent, not mocked as model success.
+ p.route('https://cdn.jsdelivr.net/**',lambda route:route.abort())
+ p.route('https://storage.googleapis.com/**',lambda route:route.abort())
  c.add_init_script("window.timings=[];window.starts=0;window.addEventListener('attune-vision-speech-timing',e=>window.timings.push(e.detail));const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(SR){SR.prototype.start=function(){window.starts++;throw Error('Physical mic not admitted in fixture');};}")
  voices=[];p.on('response',lambda r:voices.append({'status':r.status,'voice':r.headers.get('x-tts-voice'),'rate':r.headers.get('x-tts-rate'),'pitch':r.headers.get('x-tts-pitch')}) if '/api/vision/speech' in r.url else None)
  requested=[];p.on('request',lambda r:requested.append(r.post_data_json['text']) if '/api/vision/speech' in r.url and r.method=='POST' else None)

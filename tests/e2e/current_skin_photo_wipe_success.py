@@ -56,6 +56,10 @@ with tempfile.TemporaryDirectory(prefix='attune-photo-retention-') as profile,sy
    assert hashlib.sha256(Image.open(io.BytesIO(base64.b64decode(snapshot['dataUrl'].split(',')[1]))).convert('RGBA').tobytes()).hexdigest()==snapshot['photoId']
    assert all(m['photoId']==snapshot['photoId'] and m['pose']==pose for m in snapshot['localMaps'].values())
   proof=dict(id=record['id'],sourceByRegion={},shaByRegion={},poseByRegion={},storeBytes=entry['bytes'],seconds=time.monotonic()-start)
+  expect(p.get_by_role('heading',name='Genel Bakış',exact=True)).to_be_visible()
+  assert p.locator('[data-skin-mesh]').count()==0
+  assert p.locator('[data-skin-snapshot]').get_attribute('data-snapshot-photoid')==record['general']['captureId']
+  p.get_by_role('button',name='Sonraki Bölge',exact=True).click()
   for region in ['forehead','rightCheek','leftCheek','nose','chin','periorbital']:
    svg=p.locator('[data-skin-snapshot]');assert svg.locator('[data-skin-mesh]').get_attribute('data-skin-mesh')==region
    proof['sourceByRegion'][region]=svg.get_attribute('data-snapshot-photoid');proof['shaByRegion'][region]=hashlib.sha256(svg.locator('image').first.get_attribute('href').encode()).hexdigest()

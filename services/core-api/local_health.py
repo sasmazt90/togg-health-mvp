@@ -109,6 +109,7 @@ async def dental_upload(request: Request):
     from dental_upload import analyze_upload,UploadError
     from dental_analysis import DentalModelError
     try:
+        if value.get('photoLandmarks') is not None:landmarks(value['photoLandmarks'])
         async with _busy:
             result = await run_in_threadpool(analyze_upload, value)
         if not parked() or await request.is_disconnected():

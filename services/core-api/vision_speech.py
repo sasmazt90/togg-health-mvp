@@ -3,6 +3,8 @@ The vision route accepts fixed instructions only; mental text requires consent.
 """
 import asyncio
 import unicodedata
+import hashlib,json
+from pathlib import Path
 from time import monotonic
 import edge_tts
 from fastapi import HTTPException
@@ -46,8 +48,34 @@ class OwnedSpeechResponse(StreamingResponse):
   finally:await self.provider_iterator.aclose()
 
 _catalogue=(0.,frozenset())
+FIXED_BANK=Path(__file__).resolve().parents[2]/'apps/vehicle-app/public/audio/vision-speech'
 async def response(code,moving):
  if code not in PROMPTS:raise HTTPException(status_code=422,detail='FIXED_INSTRUCTION_REQUIRED')
+ if moving():raise HTTPException(status_code=409,detail='PARK_REQUIRED')
+ manifest=FIXED_BANK/'manifest.json'
+ if manifest.exists():
+  # These are the existing fixed prompts, generated once by the same approved
+  # Edge voice. Cache identity is checked against text/profile/actual bytes;
+  # a stale or damaged cache cannot silently become another voice or text.
+  try:
+   entry=json.loads(manifest.read_text('utf8'))['entries'][code]
+   assert entry['text']==PROMPTS[code] and entry['file']==code+'.mp3'
+   assert (entry['voice'],entry['rate'],entry['pitch'])==(VISION_TTS_PROFILE.voice,VISION_TTS_PROFILE.rate,VISION_TTS_PROFILE.pitch)
+   raw=(FIXED_BANK/entry['file']).read_bytes()
+   assert len(raw)==entry['bytes'] and hashlib.sha256(raw).hexdigest()==entry['sha256']
+  except (OSError,KeyError,ValueError,TypeError,AssertionError):
+   raise HTTPException(status_code=503,detail='FIXED_VISION_SPEECH_UNAVAILABLE') from None
+  async def cached():
+   for start in range(0,len(raw),16384):
+    if moving():return
+    yield raw[start:start+16384]
+    await asyncio.sleep(0)
+  iterator=cached()
+  result=OwnedSpeechResponse(iterator,media_type='audio/mpeg',headers={'Cache-Control':'no-store','X-TTS-Voice':VISION_TTS_PROFILE.voice,'X-TTS-Rate':VISION_TTS_PROFILE.rate,'X-TTS-Pitch':VISION_TTS_PROFILE.pitch,'X-TTS-Source':'verified-fixed-cache','X-Content-Type-Options':'nosniff'})
+  result.provider_iterator=iterator
+  return result
+ # An installation without the bank uses the original exact-profile provider
+ # path and its explicit failure. There is no alternate voice or silent audio.
  return await speech_response(PROMPTS[code],VISION_TTS_PROFILE,moving)
 
 async def mental_response(text,moving):
