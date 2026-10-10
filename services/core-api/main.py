@@ -7,20 +7,42 @@ Lisans: UNLICENSED
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from speech_stream import ProviderSpeechResponse, close_once
 from pydantic import BaseModel, Field, StrictBool
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from contextlib import asynccontextmanager
 import os
+from time import perf_counter
+from openai_client import get_openai_client, close_openai_client
+from pathlib import Path
 
-from mental_provider import get_active_mental_provider, check_mental_crisis, get_active_session_analyzer
+# Backend-only local configuration. CI has no local file and remains keyless.
+_local_env = Path(__file__).resolve().parents[2] / '.env.local'
+if os.getenv('ATTUNE_LOAD_LOCAL_ENV') == '1' and _local_env.is_file():
+    for _line in _local_env.read_text(encoding='utf-8').splitlines():
+        _name, _separator, _value = _line.partition('=')
+        if _separator and _name.strip() in ('OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_TTS_MODEL'):
+            os.environ[_name.strip()] = _value.strip().strip('\"').strip("'")
+
+from mental_provider import (get_active_mental_provider, check_mental_crisis, get_active_session_analyzer,
+                             LocalFallbackMentalProvider, LocalFallbackSessionAnalyzer, provider_error_category)
 from session_memory import SessionMemoryManager
 from care_provider import BrowserCareSearchProvider, DemoCareSearchProvider, CalendarProvider, TravelTimeProvider
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        close_openai_client()
 
 app = FastAPI(
     title="Togg Health MVP Core API",
     description="Togg araç içi önleyici sağlık, görme, cilt, sesli asistan ve randevu orkestrasyonu.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
@@ -41,8 +63,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=trusted_origins,
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
+    expose_headers=["Server-Timing"],
 )
 
 
@@ -53,7 +76,14 @@ async def enforce_browser_origin(request: Request, call_next):
     # they can mutate local health data, including simple POSTs without preflight.
     if request.method != "OPTIONS" and origin is not None and origin not in trusted_origins:
         return JSONResponse(status_code=403, content={"detail": "Untrusted browser origin"})
-    return await call_next(request)
+    started = perf_counter()
+    response = await call_next(request)
+    if request.url.path.startswith("/api/mental/"):
+        existing = response.headers.get("Server-Timing")
+        timing = f"app;dur={(perf_counter() - started) * 1000:.1f}"
+        response.headers["Server-Timing"] = f"{existing}, {timing}" if existing else timing
+    return response
+
 
 # ---------------------------------------------------------------------------
 # In-Memory State & Mock Data (Local-First)
@@ -118,19 +148,25 @@ class SpeedUpdatePayload(BaseModel):
     speedKmH: float = Field(ge=0, allow_inf_nan=False)
 
 class ConversePayload(BaseModel):
-    userMessage: str
+    userMessage: str = Field(min_length=1, max_length=6000)
     sessionId: Optional[str] = None
     history: Optional[List[Dict[str, str]]] = None
+    cloudConsent: StrictBool = False
 
 class AnalyzeSessionPayload(BaseModel):
     messages: List[Dict[str, str]]
+    cloudConsent: StrictBool = False
+
+class SpeechPayload(BaseModel):
+    text: str = Field(min_length=1, max_length=4096)
+    cloudConsent: StrictBool = False
 
 class CreateSessionPayload(BaseModel):
     summaryText: str
     recurringThemes: List[str]
-    durationSeconds: Optional[int] = 180
-    moodBefore: Optional[str] = "TIRED"
-    moodAfter: Optional[str] = "RELAXED"
+    durationSeconds: Optional[int] = None
+    moodBefore: Optional[str] = None
+    moodAfter: Optional[str] = None
     escalationSuggested: Optional[bool] = False
     suggestedAction: Optional[str] = None
     saveMentalSummaries: StrictBool = False
@@ -140,6 +176,9 @@ class AppointmentMatchPayload(BaseModel):
     preferredCity: Optional[str] = "İstanbul"
     maxTravelTimeMin: Optional[int] = 30
     useBrowserAgent: Optional[bool] = True
+    availableWindows: List[dict] = []
+    timeZone: str = "Europe/Istanbul"
+    durationMin: int = 45
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -157,7 +196,12 @@ def read_root():
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    import fastapi, starlette, aiohttp, PIL
+    modules = (fastapi, starlette, aiohttp, PIL)
+    isolated = Path(__file__).resolve().parents[2] / '.runtime/security-20261008'
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(),
+            "runtimeVersions": {module.__name__: module.__version__ for module in modules},
+            "runtimeIsolated": all(Path(module.__file__).resolve().is_relative_to(isolated) for module in modules)}
 
 # ---------------------------------------------------------------------------
 # Vehicle State
@@ -240,8 +284,15 @@ def converse_mental_assistant(payload: ConversePayload):
             "clinicalDisclaimer": crisis_check.get("clinicalDisclaimer")
         }
 
+    from conversation_control import conversation_control
+    control = conversation_control(user_msg) if not is_driving else None
+    if control:
+        return control
+
     # 2. Mental Conversation Provider (OpenAI veya LocalFallback)
-    provider = get_active_mental_provider()
+    if payload.cloudConsent and not os.getenv('OPENAI_API_KEY', '').strip():
+        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
+    provider = get_active_mental_provider() if payload.cloudConsent else LocalFallbackMentalProvider()
     history = payload.history or []
     driver_name = vehicle_state.get("driverName", "Ahmet Bey")
 
@@ -256,21 +307,59 @@ def converse_mental_assistant(payload: ConversePayload):
 
 @app.post("/api/mental/analyze-session")
 def analyze_mental_session(payload: AnalyzeSessionPayload):
-    analyzer = get_active_session_analyzer()
+    if not any(m.get('role') == 'user' and m.get('content', '').strip() for m in payload.messages):
+        raise HTTPException(status_code=422, detail='EMPTY_SESSION')
+    if payload.cloudConsent and not os.getenv('OPENAI_API_KEY', '').strip():
+        raise HTTPException(status_code=503, detail='PROVIDER_NOT_CONFIGURED')
+    analyzer = get_active_session_analyzer() if payload.cloudConsent else LocalFallbackSessionAnalyzer()
     return analyzer.analyze_session(payload.messages)
+
+from vision_speech import response as fixed_vision_speech
+from vision_speech import mental_response as edge_mental_speech
+
+@app.post('/api/mental/speech')
+async def mental_speech(payload: SpeechPayload):
+    if not payload.cloudConsent:
+        raise HTTPException(status_code=403, detail='CLOUD_CONSENT_REQUIRED')
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    return await edge_mental_speech(payload.text, lambda: vehicle_state['vehicleMoving'])
+
+@app.post('/api/vision/speech')
+async def vision_speech(payload: SpeechPayload):
+    if not payload.cloudConsent:
+        raise HTTPException(status_code=403, detail='CLOUD_CONSENT_REQUIRED')
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    return await fixed_vision_speech(payload.text, lambda: vehicle_state['vehicleMoving'])
 
 @app.get("/api/mental/sessions")
 def get_mental_sessions():
     return SessionMemoryManager.get_all_sessions()
+
+class DeleteSessionPayload(BaseModel):
+    deletionToken: str = Field(min_length=64, max_length=64)
+
+@app.delete('/api/mental/sessions/{session_id}')
+def delete_mental_session(session_id: str, payload: DeleteSessionPayload):
+    if vehicle_state['vehicleMoving']:
+        raise HTTPException(status_code=409, detail='PARK_REQUIRED')
+    try:
+        deleted = SessionMemoryManager.delete_session(session_id, payload.deletionToken)
+    except (OSError, ValueError, RuntimeError):
+        raise HTTPException(status_code=503, detail='DELETION_UNVERIFIED') from None
+    if not deleted:
+        raise HTTPException(status_code=404, detail='OWNED_RECORD_NOT_FOUND')
+    return {'deleted': True}
 
 @app.post("/api/mental/sessions")
 def record_mental_session(payload: CreateSessionPayload):
     return SessionMemoryManager.add_session(
         summary_text=payload.summaryText,
         recurring_themes=payload.recurringThemes,
-        duration_seconds=payload.durationSeconds or 180,
-        mood_before=payload.moodBefore or "TIRED",
-        mood_after=payload.moodAfter or "RELAXED",
+        duration_seconds=payload.durationSeconds,
+        mood_before=payload.moodBefore,
+        mood_after=payload.moodAfter,
         escalation_suggested=payload.escalationSuggested or False,
         suggested_action=payload.suggestedAction,
         save_mental_summaries=payload.saveMentalSummaries
@@ -295,24 +384,25 @@ def match_appointments(payload: AppointmentMatchPayload):
     search_result = provider.search_slots(specialty=specialty, city=city)
     slots = search_result.get("slots", [])
 
-    processed_slots = []
+    from care_provider import available_window_match
+    from zoneinfo import ZoneInfo,ZoneInfoNotFoundError
+    if not 15<=payload.durationMin<=120 or len(payload.availableWindows)>30:
+        raise HTTPException(422,'INVALID_MATCH_WINDOW')
+    try:ZoneInfo(payload.timeZone)
+    except ZoneInfoNotFoundError:raise HTTPException(422,'INVALID_TIME_ZONE') from None
+    try:available_window_match(None,payload.availableWindows,payload.durationMin,payload.timeZone)
+    except ValueError:raise HTTPException(422,'INVALID_MATCH_WINDOW') from None
+    processed_slots=[]
     for slot in slots:
-        date_time_str = slot.get("dateTime", "")
-        has_conflict = False
-        if date_time_str:
-            has_conflict = calendar_provider.has_conflict(date_time_str)
-
-        travel_info = TravelTimeProvider.calculate_travel_time_min(slot.get("locationLabel", ""))
-
-        processed_slots.append({
-            **slot,
-            "calendarConflict": has_conflict,
-            "calendarFits": not has_conflict if date_time_str else True,
-            "calendarBadge": "Demo Takvim (Yerel Simülasyon)",
-            "travelTimeMin": travel_info["estimatedMinutes"],
-            "trafficBadge": travel_info["trafficBadge"],
-            "matchScore": 95 if not has_conflict else 70
-        })
+        date_time_str=slot.get('dateTime','')
+        try:fits=available_window_match(date_time_str,payload.availableWindows,payload.durationMin,payload.timeZone)
+        except ValueError:raise HTTPException(422,'INVALID_MATCH_WINDOW') from None
+        if fits is False:continue
+        demo=slot.get('sourceType')=='DEMO'
+        conflict=calendar_provider.has_conflict(date_time_str,payload.durationMin) if demo and date_time_str else None
+        travel=TravelTimeProvider.calculate_travel_time_min(slot.get('locationLabel',''))
+        processed_slots.append({**slot,'calendarConflict':conflict,'calendarFits':fits,'calendarBadge':'Kullanıcının uygun zaman aralığı' if fits is not None else 'Saat doğrulanmadı',
+                                'travelTimeMin':travel['estimatedMinutes'],'trafficBadge':travel['trafficBadge'],'matchScore':None,'durationMin':payload.durationMin,'timeZone':payload.timeZone})
 
     return {
         "status": search_result.get("status", "SUCCESS"),
@@ -338,3 +428,8 @@ def wipe_user_health_data():
         "message": "Tüm yerel sağlık verisi, geçmiş seans kayıtları ve önbellekler başarıyla silindi.",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+# New routes share the same authoritative vehicle state and origin middleware.
+import local_health
+local_health.parked = lambda: vehicle_state["vehicleParked"] and not vehicle_state["vehicleMoving"]
+app.include_router(local_health.router)
