@@ -2,7 +2,8 @@ import { FaceAlignment, SkinAnalyzer } from './skinAnalyzer';
 import { SkinAngle } from './skinMultiAngle';
 import { buildSkinMesh, supportedSkinMesh, SkinMesh } from './skinMesh';
 import { cameraCrop, type Crop } from './cameraStability';
-/** Volatile only: never pass these objects to history/reference writers. */
+/** Source photo contract. Numeric writers never receive it; the separate local
+ * photo store requires explicit photo retention consent. */
 export interface SkinSnapshot {
   dataUrl:string; width:number; height:number; angle:SkinAngle;
   visualError?:string; segmentationMs?:number; maskWidth?:number; maskHeight?:number; meshes:Record<string,SkinMesh>;

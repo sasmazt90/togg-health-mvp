@@ -1,5 +1,7 @@
 'use client';
 
+import {clearSkinPhotos,SKIN_PHOTO_PERMISSION} from '../../utils/skinPhotoHistory';
+import {clearSkinSnapshots} from '../../utils/skinVolatileHistory';
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { RECORD_JOURNAL, readHealthRecords, withRecordsLock } from '../../utils/healthRecords';
@@ -46,6 +48,8 @@ export default function PrivacyPage() {
   const [micStatus, setMicStatus] = useState<'GRANTED' | 'DENIED' | 'PROMPT'>('PROMPT');
   const [saveTranscript, setSaveTranscript] = useState(false);
   const [saveSkin,setSaveSkin]=useState(false);
+  const [saveSkinPhotos,setSaveSkinPhotos]=useState(false);
+  const [photoBusy,setPhotoBusy]=useState(false);
   const [saveHearing,setSaveHearing]=useState(true);
   const [saveVision, setSaveVision] = useState(false);
   const [saveMentalSummaries, setSaveMentalSummaries] = useState<boolean>(true);
@@ -103,6 +107,7 @@ export default function PrivacyPage() {
 
       setSaveTranscript(localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED) === 'true');
       setSaveSkin(localStorage.getItem('attune_privacy_skin_save_allowed')==='true');
+      setSaveSkinPhotos(localStorage.getItem(SKIN_PHOTO_PERMISSION)==='true');
       setSaveHearing(localStorage.getItem('attune_privacy_hearing_save_allowed')!=='false');
       setSaveVision(localStorage.getItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED) === 'true');
       const mentalPref = localStorage.getItem(STORAGE_KEYS.PRIVACY_MENTAL_SAVE_ALLOWED);
@@ -176,7 +181,8 @@ export default function PrivacyPage() {
     const healthKeys = ['attune_skin_appearance_reference_v1','attune_skin_appearance_single_reference_v1',RECORD_JOURNAL, 'attune_dental_history_v1', 'attune_dental_latest_v1', 'attune_hearing_history_v1', 'attune_hearing_latest_v1', 'attune_skin_geometry_reference_v1', STORAGE_KEYS.SKIN_SIGNS_BASELINE, STORAGE_KEYS.SKIN_SINGLE_SIGNS_BASELINE, 'togg_health_vision_history', STORAGE_KEYS.LATEST_VISION, STORAGE_KEYS.LATEST_SKIN,
       STORAGE_KEYS.SKIN_BASELINE, STORAGE_KEYS.SKIN_BASELINE_META, STORAGE_KEYS.SKIN_MULTI_BASELINE, STORAGE_KEYS.SKIN_REMINDER, STORAGE_KEYS.SKIN_HISTORY, STORAGE_KEYS.LATEST_MENTAL, STORAGE_KEYS.MENTAL_HISTORY,
       STORAGE_KEYS.REFERRAL_CONTEXT, STORAGE_KEYS.DEMO_SKIN_RESULT, STORAGE_KEYS.DEMO_REFERRAL];
-    try { await withRecordsLock(() => {
+    try { await withRecordsLock(async () => {
+    await clearSkinPhotos();clearSkinSnapshots();
     for (const key of healthKeys) {
       try {
         localStorage.removeItem(key);
@@ -348,15 +354,17 @@ export default function PrivacyPage() {
       <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3">
         <div className="flex items-center justify-between gap-3"><h2 className="font-bold">Konuşma dökümü</h2><InformationButton title="Konuşma dökümü saklama"><p>Varsayılan kapalıdır. Açarsanız, ayrıca özet saklama tercihiniz açıkken tamamlanmış görüşmenin kullanıcı/asistan metinleri ve gerçek mesaj zamanları bu tarayıcıda aynı oturum kaydına eklenir. Ham mikrofon sesi saklanmaz. Bu tercih yeni bir backend veya dış sağlayıcı döküm kaydı oluşturmaz.</p><p>Görüşme hizmet onayı kapsamındaki yanıt/özet metin aktarımı ayrıdır. Yerel Sil eylemi dökümü ve özeti birlikte temizler; sağlayıcının tarihsel saklama veya silme durumunu doğrulamaz. Tercihi kapatmak eski kayıtları otomatik silmez.</p></InformationButton></div>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveTranscript} aria-label="Tam konuşma dökümünü bu cihazda sakla" onChange={e=>{try{localStorage.setItem(STORAGE_KEYS.PRIVACY_MENTAL_TRANSCRIPT_ALLOWED,String(e.target.checked));setSaveTranscript(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Tam konuşma dökümünü bu cihazda sakla</label>
-        <p className="text-xs text-slate-400">Fotoğraflar yalnız açık cilt sonucu sayfasının belleğindedir; kalıcı fotoğraf saklama yapılmaz.</p>
+        <p className="text-xs text-slate-400">Fotoğraf saklama tercihi aşağıda Cilt Sağlığı için ayrıca yönetilir.</p>
         <div className="flex items-center justify-between gap-3"><h2 className="font-bold">Görme ön değerlendirmesi</h2><InformationButton title="Yön hizalama sonucu saklama"><p>Varsayılan kapalıdır. Açarsanız tamamlanan yön hizalama denemeleri, görünürlük yanıtları, açı hataları, tarih ve hazırlık/doğrulama sınırları yalnız bu tarayıcıdaki geçmişe kaydedilir. Kamera karesi veya klinik keskinlik kaydı oluşturulmaz. Kapatmak eski kayıtları silmez; Sil ile tek kayıt kaldırılabilir.</p></InformationButton></div>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveVision} aria-label="Yön hizalama sonuçlarını bu cihazda sakla" onChange={e=>{try{localStorage.setItem(STORAGE_KEYS.PRIVACY_VISION_SAVE_ALLOWED,String(e.target.checked));setSaveVision(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Yön hizalama sonuçlarını bu cihazda sakla</label>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3">
         <h2 className="font-bold">Cilt görünümü ve kişisel referans</h2>
+        <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveSkinPhotos} disabled={photoBusy} onChange={async e=>{const enabled=e.target.checked;setPhotoBusy(true);try{await withRecordsLock(async()=>{localStorage.setItem(SKIN_PHOTO_PERMISSION,String(enabled));setSaveSkinPhotos(enabled);window.dispatchEvent(new Event('attune-privacy'));if(!enabled){clearSkinSnapshots();await clearSkinPhotos();}});setSaveSkinPhotos(enabled);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);setSaveSkinPhotos(localStorage.getItem(SKIN_PHOTO_PERMISSION)==='true');}finally{setPhotoBusy(false);}}}/>Yeni cilt kayıtlarının fotoğraflarını bu cihazda sakla</label>
+        <p className="text-xs text-slate-400">Varsayılan kapalıdır. Sayısal kayıt izni de açıksa yeni taramaların fotoğraf ve seçilebilir görüntü katmanları uygulama yeniden açıldığında korunur. Kapatınca saklanan cilt fotoğrafları silinir; sayısal kayıtlar kalır. En fazla 128 MB saklanır; dolunca eski kayıtlar silinmez, yeni fotoğraf kaydedilemez.</p>
         <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveSkin} onChange={e=>{try{localStorage.setItem('attune_privacy_skin_save_allowed',String(e.target.checked));setSaveSkin(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Cilt ölçümlerini ve kişisel sayısal referansı bu tarayıcıda sakla</label>
-        <p className="text-xs text-slate-400">Varsayılan kapalıdır; çekim izninden ayrıdır. Fotoğraf ve dolgu yalnız açık sonuç oturumunun belleğindedir. Diş sonuçlarında ayrıca Kaydet onayı verilir. Kapatmak eski kayıtları silmez; kayıt Sil veya Tüm Yerel Verileri Sil ile kaldırılır.</p>
+        <p className="text-xs text-slate-400">Varsayılan kapalıdır; çekim izninden ayrıdır. Fotoğraf saklama tercihi aşağıda ayrıca yönetilir. Diş sonuçlarında ayrıca Kaydet onayı verilir. Kapatmak eski kayıtları silmez; kayıt Sil veya Tüm Yerel Verileri Sil ile kaldırılır.</p>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-cockpit-surface p-6 space-y-3"><h2 className="font-bold">İşitme Sağlığı sonuçları</h2><label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={saveHearing} onChange={e=>{try{localStorage.setItem('attune_privacy_hearing_save_allowed',String(e.target.checked));setSaveHearing(e.target.checked);window.dispatchEvent(new Event('attune-privacy'));}catch{setStorageUnavailable(true);}}}/>Tamamlanan sayısal işitme sonuçlarını bu cihazda sakla</label></section>

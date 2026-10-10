@@ -23,7 +23,7 @@ export function validMeasurement(row:SkinIndicator,region:string) {
  const appearance=row.appearance;
  if(appearance){
   const m=row.measurement;
-  return appearance.region===region&&['appearance_proxy','longitudinal_measurement'].includes(appearance.type)&&['appearance-cv-1','appearance-cv-2','appearance-cv-3'].includes(appearance.methodVersion)&&
+  return appearance.region===region&&['appearance_proxy','longitudinal_measurement'].includes(appearance.type)&&['appearance-cv-1','appearance-cv-2','appearance-cv-3','appearance-cv-4'].includes(appearance.methodVersion)&&
    !!m&&m.validation==='appearance-proxy'&&m.region===region&&m.rawValue===appearance.value&&row.score===appearance.value&&
    ['percent-visible-area','candidate-count','relative-color-index-0-100','directional-line-index-0-100','normalized-contour-ratio','contour-fold-index-0-100'].includes(appearance.unit)&&
    ['valid','invalid','insufficient'].includes(appearance.quality)&&

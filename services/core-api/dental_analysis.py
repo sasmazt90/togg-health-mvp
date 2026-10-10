@@ -25,23 +25,28 @@ def mouth_geometry(points,shape):
     return mask>0,width,opening,p
 
 
-def dental_pixels(image,mouth):
+def dental_pixels(image,mouth,native_capture=False):
     hsv=cv2.cvtColor(image,cv2.COLOR_BGR2HSV).astype(np.float32)
     gray=cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
     # White/ivory within actual inner mouth; never equate open lips with teeth.
-    tooth=mouth&(hsv[:,:,1]<100)&(hsv[:,:,2]>100)&(gray>90)
+    b,g,r=[image[:,:,i].astype(np.float32) for i in range(3)]
+    pink=(hsv[:,:,1]>60)&(r>g*1.10)&(g-b<np.maximum.reduce([r,g,b])*.08)
+    tooth=mouth&(hsv[:,:,1]<( .58*255 if native_capture else 100))&(hsv[:,:,2]>100)&(gray>90)
+    if native_capture:tooth&=(r<g*1.25)&(g>b*.85)&~pink
     tooth=cv2.morphologyEx(tooth.astype(np.uint8),cv2.MORPH_OPEN,np.ones((3,3),np.uint8))>0
     glare=tooth&(hsv[:,:,2]>=250)&(hsv[:,:,1]<20)
     tooth&=~cv2.dilate(glare.astype(np.uint8),np.ones((3,3),np.uint8)).astype(bool)
     gum=mouth&(hsv[:,:,1]>60)&(image[:,:,2]>image[:,:,1]*1.10)&(gray>40)
+    if native_capture:gum&=pink # Yellow/ivory enamel cannot also be tongue support.
     tongue=cv2.erode(gum.astype(np.uint8),np.ones((7,7),np.uint8))>0
     return tooth,glare,gum,tongue,gray
 
 
 def dental_quality(image,points,bite=False):
     mouth,width,opening,p=mouth_geometry(points,image.shape)
-    tooth,glare,gum,tongue,gray=dental_pixels(image,mouth)
-    count=int(tooth.sum());area=int(mouth.sum());fraction=count/max(area,1)
+    tooth,glare,gum,tongue,gray=dental_pixels(image,mouth,native_capture=True)
+    count=int(tooth.sum());area=int(mouth.sum());area_fraction=count/max(area,1)
+    columns=int(np.sum(tooth.sum(axis=0)>=max(2,width*.015)));fraction=columns/max(width,1)
     # The same native inner-mouth neighbourhood as the live capture gate.
     # Rectangular crop/background edges must not supply artificial sharpness.
     interior=cv2.erode(mouth.astype(np.uint8),np.array([[0,1,0],[1,1,1],[0,1,0]],np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0)>0
@@ -52,13 +57,13 @@ def dental_quality(image,points,bite=False):
     if width<65:reasons.append('INSUFFICIENT_TOOTH_DETAIL')
     if not bite and opening<.12:reasons.append('MOUTH_CLOSED')
     if bite and opening>.32:reasons.append('NATURAL_BITE_REQUIRED')
-    if count<150 or fraction<.15:reasons.append('TEETH_NOT_VISIBLE')
+    if count<max(150,width*width*.008) or fraction<.30:reasons.append('TEETH_NOT_VISIBLE')
     if light<45 or light>230:reasons.append('LIGHT_INVALID')
     if sharp<12:reasons.append('BLURRY')
     if glare.sum()/max(count+glare.sum(),1)>.12:reasons.append('SALIVA_OR_GLARE')
     if tongue.sum()/max(area,1)>.7:reasons.append('TONGUE_OCCLUSION')
     return dict(valid=not reasons,reasons=reasons,mouthOpeningRatio=opening,mouthWidthPixels=width,
-                visibleToothPixels=count,toothFraction=fraction,sharpness=sharp,light=light,clippedPixels=int(glare.sum()))
+                visibleToothPixels=count,toothFraction=fraction,enamelAreaFraction=area_fraction,supportedEnamelColumns=columns,sharpness=sharp,light=light,clippedPixels=int(glare.sum()))
 
 
 def projected_contour_overlap(contours,axis):
@@ -206,7 +211,7 @@ def analyze_dental(payload):
                 caries=dict(type='trained_prediction',unit='candidate-count',methodVersion='official-yolox-s-local-v1',candidates=[],**unavailable),
                 accumulation=dict(type='appearance_proxy',unit='percent-visible-border-area',methodVersion='dental-border-cv-v1',candidates=[],**unavailable),
                 alignment=dict(type='appearance_proxy',unit='degrees-of-visible-axis-dispersion',methodVersion='marker-watershed-v1',rows=None,contours=[],**unavailable)));continue
-        mouth,_,_,points=mouth_geometry(capture['landmarks'],image.shape);tooth,_,gum,_,_=dental_pixels(image,mouth)
+        mouth,_,_,points=mouth_geometry(capture['landmarks'],image.shape);tooth,_,gum,_,_=dental_pixels(image,mouth,native_capture=True)
         deposits,area=calculus_candidates(image,tooth,gum)
         mouth_width=max(float(np.linalg.norm(points[308]-points[78])),1);horizontal=(points[308]-points[78])/mouth_width;vertical=np.array([-horizontal[1],horizontal[0]]);center=(points[13]+points[14])/2
         for candidate in deposits:
@@ -242,4 +247,4 @@ def analyze_dental(payload):
                 if support:candidate['viewSupport']=sorted(set(support+[view['pose']]));confirmed.append(candidate)
             usable=consistent and (bool(confirmed) or no_candidates)
             item.update(quality='valid' if usable else 'insufficient',value=sum(c['areaPixels'] for c in confirmed)/item['evaluatedArea']*100 if usable else None,limitationCode=None if usable else 'VIEW_DISAGREEMENT',viewSupport=len(supported),unconfirmedCandidateCount=len(item['candidates'])-len(confirmed),candidates=confirmed if usable else [])
-    return dict(methodVersion='dental-visible-v1',sourceType='camera',views=views,storage='volatile-memory-only',clinicalValidation=False)
+    return dict(methodVersion='dental-visible-v2',sourceType='camera',views=views,storage='volatile-memory-only',clinicalValidation=False)

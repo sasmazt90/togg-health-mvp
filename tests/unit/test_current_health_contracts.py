@@ -37,7 +37,7 @@ def test_exif_same_oriented_pixels_and_limits(monkeypatch):
 def test_actual_current_skin_determinism_quality_not_historical_refs():
  im=np.full((400,500,3),(100,130,175),np.uint8);payload=skin_input(im)
  first=analyze_skin(payload);second=analyze_skin({**payload,'historicalReference':{'corrupt':'ignored'}})
- assert first==second and first['methodVersion']=='appearance-cv-3'
+ assert first==second and first['methodVersion']=='appearance-cv-4'
  for rows in first['measurements'].values():
   assert all(r['referenceId'] is None and r['type']=='appearance_proxy' for r in rows)
  invalid=analyze_skin({**payload,'qualityValid':False})

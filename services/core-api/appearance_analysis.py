@@ -15,7 +15,7 @@ from skimage.filters import gabor
 from skin_scan_baseline.oiliness import oiliness_map
 from skin_scan_baseline.blemishes import blemish_map
 
-VERSION = 'appearance-cv-3'
+VERSION = 'appearance-cv-4'
 LIMITS = {'minFacePixels': 180, 'analysisFacePixels': 320, 'maxClippedFraction': .03}
 
 
@@ -296,7 +296,7 @@ def analyze_skin(payload):
             for x,y,w,h,count,blob in assigned[region]:
                 signal[blob] = np.clip(red_center[blob]/.15, 0, 1)
                 boxes.append(dict(x=float(x/scale+x0), y=float(y/scale+y0), width=float(w/scale), height=float(h/scale),areaPixels=float(count/scale**2)))
-            add('acne', len(boxes), 'candidate-count', components={'bounds': boxes, 'evaluatedArea': area,'candidateAreaPercent':100*sum(b['areaPixels'] for b in boxes)/max(area['sourcePixels'],1)})
+            add('acne', len(boxes), 'candidate-count', signal, components={'bounds': boxes, 'evaluatedArea': area,'candidateAreaPercent':100*sum(b['areaPixels'] for b in boxes)/max(area['sourcePixels'],1)})
         detail_reason = reason or ('INSUFFICIENT_SOURCE_DETAIL' if face_pixels < LIMITS['minFacePixels'] else None)
         regional_flakes=eligible_flake_components(flakes,valid)
         add('dry', np.mean(regional_flakes[valid] > .04)*100 if valid.any() else 0, 'percent-visible-area', regional_flakes,

@@ -250,7 +250,7 @@ def test_controlled_positive_local_signals_execute_without_painting_source(crite
  assert measurement['quality']=='valid' and measurement['value']>0
  assert measurement['type']=='appearance_proxy' and result['photoId']==payload['photoId']
  if criterion=='acne':
-  assert 'forehead:acne' not in result['maps'] and measurement['localMap'] is None
+  assert result['maps']['forehead:acne']['photoId']==payload['photoId'] and measurement['localMap']['key']=='forehead:acne'
   assert measurement['value']==1 and len(measurement['components']['bounds'])==1
   box=measurement['components']['bounds'][0];assert 240<box['x']<260 and 85<box['y']<105
   # Overlapping region supports cannot report the same candidate twice.

@@ -21,7 +21,8 @@ import {
   buildSkinRegionViewModel
 } from '../../data/skinDemoFixture';
 import { isDemoMode, STORAGE_KEYS, isCameraAllowed } from '../../utils/attuneMode';
-import { appendHealthRecord } from '../../utils/healthRecords';
+import { appendHealthRecord,withRecordsLock } from '../../utils/healthRecords';
+import {saveSkinPhotos} from '../../utils/skinPhotoHistory';
 import { rememberSkinSnapshots } from '../../utils/skinVolatileHistory';
 import { InformationButton } from '../../components/InformationButton';
 import { SkinInference } from '../../utils/skinInference';
@@ -63,6 +64,8 @@ export default function SkinPage() {
   const [preparationPhase,setPreparationPhase]=useState<string|null>(null);
   const [preparationSeconds,setPreparationSeconds]=useState(0);
   useEffect(()=>{if(!preparationPhase || scanState!=='CAMERA_ACTIVE'){setPreparationSeconds(0);if(scanState!=='CAMERA_ACTIVE')setPreparationPhase(null);return;}setPreparationSeconds(0);const started=performance.now();const timer=setInterval(()=>setPreparationSeconds(Math.floor((performance.now()-started)/1000)),1000);return()=>clearInterval(timer);},[preparationPhase,scanState]);
+  const [photoNotice,setPhotoNotice]=useState('');
+  const persistPhotos=async(id:string,frames:Partial<Record<SkinAngle,SkinSnapshot>>,isCurrent:()=>boolean)=>{if(!isCurrent())return;setPhotoNotice('');try{await withRecordsLock(()=>saveSkinPhotos(id,frames,isCurrent));}catch{if(isCurrent())setPhotoNotice('Cilt fotoğrafı kaydedilemedi. Sayısal sonuçlar korunuyor.');}};
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scanProgress, setScanProgress] = useState<number>(0);
   const [multiAngle, setMultiAngle] = useState(true);
@@ -445,7 +448,7 @@ export default function SkinPage() {
     }
 
     const snapshot = acceptedSnapshot;
-    snapshotFrames.current = { FRONT: snapshot }; rememberSkinSnapshots(finalResult.id,{FRONT:snapshot}); setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
+    snapshotFrames.current = { FRONT: snapshot }; rememberSkinSnapshots(finalResult.id,{FRONT:snapshot}); await persistPhotos(finalResult.id,{FRONT:snapshot},validCapture); if(!validCapture())return; setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ FRONT: snapshot });
     setMediaStream(null); setIsLiveVideo(false);
     setAnalysisResult(finalResult);
     // En yüksek değişimin olduğu bölgeye odaklan veya varsayılan sağ yanak
@@ -473,11 +476,11 @@ export default function SkinPage() {
         clinicalNoteTr: 'Mevcut taramanın bölgesel renk ve görünüm vekilleri. Hastalık tanısı veya kalibre edilmiş klinik şiddet değildir; eski ölçümler yeni yönteme dönüştürülmez.'
       };
       if (!validSkinIndicators(indicators) || !SkinAnalyzer.canPersistResult(finalResult)) throw new Error('Invalid metrics');
-      // Store metrics and pose metadata only. Face pixels remain in volatile canvas memory.
+      // Numeric history never contains pixels; photo retention has separate consent.
       resultPersisted.current=storageAllowed();
       if(resultPersisted.current)await appendHealthRecord('skin', finalResult, {}, () => validCapture() && storageAllowed());
       if (!validCapture()) return;
-      rememberSkinSnapshots(finalResult.id,snapshotFrames.current); setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
+      rememberSkinSnapshots(finalResult.id,snapshotFrames.current); await persistPhotos(finalResult.id,snapshotFrames.current,validCapture); if(!validCapture())return; setSelectedRegionId('forehead'); snapshotRecord.current = finalResult.id; setSnapshots({ ...snapshotFrames.current });
       setMediaStream(null); setIsLiveVideo(false);
       setAnalysisResult(finalResult); setScanProgress(100); setScanState('COMPLETED');
     } catch {
@@ -850,7 +853,7 @@ export default function SkinPage() {
       {/* SCREEN 1: SKIN START VIEW (REFERANS 1 & 2)                  */}
       {/* ============================================================ */}
       {scanState === 'READY' && (
-        <><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm text-slate-300">{multiAngle ? "Ön ve iki yan pozda kısa bir tarama." : "Yalnız ön pozda kısa bir tarama."}</p><InformationButton title="Cilt taraması"><p>Görüntü bu cihazda işlenir. Sonuç fotoğrafı yalnız bu açık sayfanın belleğinde kalır; kamera sonuçta kapanır. Yenileme, çıkış, izin geri çekme veya silme sonrasında fotoğraf gösterilmez; kalıcı kayıtta yalnız sayısal metrikler bulunur. İlk uygun tarama referans olur. Işık, netlik ve poz uyumsuzsa karşılaştırma yapılmaz. Sonuç klinik tanı değildir.</p><label className="flex min-h-11 items-center gap-3"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Ön, sağ ve sol pozlarda tara. Kapalıyken yalnız ön poz kullanılır.</label></InformationButton></div><SkinStartView onStart={startCamera} /></>
+        <><div className="flex items-center justify-between gap-3 mb-3"><p className="text-sm text-slate-300">{multiAngle ? "Ön ve iki yan pozda kısa bir tarama." : "Yalnız ön pozda kısa bir tarama."}</p><InformationButton title="Cilt taraması"><p>Görüntü bu cihazda işlenir; sonuçta kamera kapanır. Sayısal kayıt ve fotoğraf saklama tercihleri Gizlilik & İzinler alanından ayrı yönetilir. Fotoğraf saklama kapalıysa görüntü yalnız açık oturumda kalır. Fotoğrafı saklanmamış eski kayıtlar sayısal olarak gösterilir. Sonuç klinik tanı değildir.</p><label className="flex min-h-11 items-center gap-3"><input type="checkbox" aria-label="Üç açılı tarama" checked={multiAngle} onChange={e => setMultiAngle(e.target.checked)} />Ön, sağ ve sol pozlarda tara. Kapalıyken yalnız ön poz kullanılır.</label></InformationButton></div><SkinStartView onStart={startCamera} /></>
       )}
 
       {/* ============================================================ */}
@@ -881,6 +884,7 @@ export default function SkinPage() {
       {scanState === 'COMPLETED' && (isDemoMode() || !!analysisResult) && (
         <>
 
+        {photoNotice&&<p role="status" className="text-sm text-amber-200">{photoNotice}</p>}
         <SkinResultView
           currentRegion={currentRegionData}
           snapshot={snapshots[snapshotAngleForRegion(selectedRegionId, analysisResult?.comparisonScope === 'three-angle-v2')]}

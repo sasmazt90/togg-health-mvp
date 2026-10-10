@@ -23,6 +23,7 @@ export function rememberSkinSnapshots(id:string,snapshots:Frames){
  while(frames.size>2)frames.delete(frames.keys().next().value!);
  prune();notify();
 }
+export const clearSkinSnapshots=()=>{frames.clear();notify();};
 export const skinSnapshotVersion=()=>version;
 export const subscribeSkinSnapshots=(listener:()=>void)=>{listeners.add(listener);return()=>{listeners.delete(listener);};};
 export const readSkinSnapshots=(id:string)=>frames.get(id);

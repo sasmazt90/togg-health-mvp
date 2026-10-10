@@ -1,3 +1,4 @@
+import {deleteSkinPhotos} from './skinPhotoHistory';
 import { HEALTH_MODULES } from './healthModules';
 import { STORAGE_KEYS } from './attuneMode';
 
@@ -197,6 +198,7 @@ export async function deleteHealthRecord(category: HealthCategory, id: string): 
     }
     const referral = JSON.parse(localStorage.getItem(STORAGE_KEYS.REFERRAL_CONTEXT) || 'null');
     if (referral?.sourceModule === category.toUpperCase()) changes[STORAGE_KEYS.REFERRAL_CONTEXT] = null;
+    if(category==='skin')await deleteSkinPhotos(id);
     try { commit(changes); }
     catch { throw new Error(record.backendSessionId ? 'Sunucu silindi; yerel kopya silinemedi. Yerel kayıt için tekrar deneyin.' : 'Yerel kayıt silinemedi veya doğrulanamadı. Tekrar deneyebilirsiniz.'); }
     window.dispatchEvent(new Event('attune-records')); window.dispatchEvent(new Event('attune-reminder'));
