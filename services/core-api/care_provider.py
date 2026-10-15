@@ -17,9 +17,26 @@ Lisans: UNLICENSED
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import urllib.parse
 import re
+
+def verified_source_slot_time(node):
+    """Only a complete source timestamp can establish provider availability.
+    A clock label alone has no date. This Turkish provider's naive timestamps
+    use Europe/Istanbul; the user's timezone is never substituted for it.
+    """
+    candidates=[node.get_attribute(k) for k in ('datetime','data-start','data-datetime')]
+    child=node.query_selector('time[datetime]')
+    if child:candidates.append(child.get_attribute('datetime'))
+    for raw in candidates:
+        if not isinstance(raw,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?',raw):continue
+        try:
+            value=datetime.fromisoformat(raw.replace('Z','+00:00'))
+            return (value.replace(tzinfo=ZoneInfo('Europe/Istanbul')) if value.tzinfo is None else value).isoformat()
+        except ValueError:continue
+    return None
 
 class CareSearchProvider(ABC):
     @abstractmethod
@@ -62,7 +79,7 @@ class DemoCareSearchProvider(CareSearchProvider):
                 "sourceType": "DEMO",
                 "sourceBadge": "Demo Randevu Verisi",
                 "bookingUrl": "https://www.doktortakvimi.com",
-                "bookingStatus": "AVAILABLE"
+                "bookingStatus": "DISCOVERED_ONLY"
             },
             {
                 "id": f"demo-slot-{specialty[:3].lower()}-02",
@@ -78,7 +95,7 @@ class DemoCareSearchProvider(CareSearchProvider):
                 "sourceType": "DEMO",
                 "sourceBadge": "Demo Randevu Verisi",
                 "bookingUrl": "https://www.doktortakvimi.com",
-                "bookingStatus": "AVAILABLE"
+                "bookingStatus": "DISCOVERED_ONLY"
             },
             {
                 "id": f"demo-slot-{specialty[:3].lower()}-03",
@@ -94,7 +111,7 @@ class DemoCareSearchProvider(CareSearchProvider):
                 "sourceType": "DEMO",
                 "sourceBadge": "Demo Randevu Verisi",
                 "bookingUrl": "https://www.doktortakvimi.com",
-                "bookingStatus": "AVAILABLE"
+                "bookingStatus": "DISCOVERED_ONLY"
             }
         ]
         return {
@@ -160,10 +177,11 @@ class BrowserCareSearchProvider(CareSearchProvider):
                     cards = page.query_selector_all(".search-item, [data-doctor-id], .card, [data-qa-id='doctor-card']")
                     for idx, card in enumerate(cards[:3]):
                         name_elem = card.query_selector("h3, .doctor-name, a.text-body, [data-qa-id='doctor-name']")
-                        name = name_elem.inner_text().strip() if name_elem else f"Hekim #{idx+1}"
+                        name = name_elem.inner_text().strip() if name_elem else ""
+                        if not name:continue
 
                         clinic_elem = card.query_selector(".address, .clinic-name, .text-muted, [data-qa-id='doctor-address']")
-                        clinic = clinic_elem.inner_text().strip() if clinic_elem else f"{city} Kliniği"
+                        clinic = clinic_elem.inner_text().strip() if clinic_elem else "Klinik bilgisi kaynakta bulunamadı"
 
                         profile_elem = card.query_selector("a[href*='/doktor/'], a.doctor-link, a")
                         profile_href = profile_elem.get_attribute("href") if profile_elem else ""
@@ -174,6 +192,7 @@ class BrowserCareSearchProvider(CareSearchProvider):
                         if slot_btn and slot_btn.inner_text().strip():
                             # Gerçek DOM slot zamanı bulundu
                             raw_slot_text = slot_btn.inner_text().strip()
+                            source_time=verified_source_slot_time(slot_btn)
                             extracted_providers.append({
                                 "id": f"live-slot-{idx+1}",
                                 "specialty": specialty,
@@ -183,10 +202,11 @@ class BrowserCareSearchProvider(CareSearchProvider):
                                 "locationLabel": f"{city} (Doğrulanan Web Kaynağı)",
                                 "isOnline": False,
                                 "rawExtractedTime": raw_slot_text,
-                                "sourceType": "LIVE_AVAILABILITY",
-                                "sourceBadge": "Canlı Müsaitlik (Web Kaynağı)",
+                                "dateTime":source_time,
+                                "sourceType": "LIVE_AVAILABILITY" if source_time else "LIVE_PROVIDER_ONLY",
+                                "sourceBadge": "Kaynakta doğrulanan tarih ve saat" if source_time else "Hekim profili (tam tarih ve saat doğrulanmadı)",
                                 "bookingUrl": profile_url,
-                                "bookingStatus": "AVAILABLE"
+                                "bookingStatus": "DISCOVERED_ONLY"
                             })
                         else:
                             # Hekim profili bulundu ama müsaitlik saatleri DOM'da açık değil
@@ -214,18 +234,7 @@ class BrowserCareSearchProvider(CareSearchProvider):
 
         if is_blocked or not extracted_providers:
             # Şeffaf Fallback
-            demo_prov = DemoCareSearchProvider()
-            demo_data = demo_prov.search_slots(specialty, city)
-            return {
-                "status": "FALLBACK_BLOCKED",
-                "providerType": "BROWSER_WITH_DEMO_FALLBACK",
-                "sourceBadge": "Demo Randevu Verisi (Canlı Site Korumalı)",
-                "liveSearchUrl": target_url,
-                "handoffNote": error_message or "Canlı web araması kısıtlandı; güvenli handoff linki hazırlandı.",
-                "specialty": specialty,
-                "city": city,
-                "slots": demo_data["slots"]
-            }
+            return dict(status='FALLBACK_BLOCKED',providerType='BROWSER_NO_AVAILABILITY',sourceBadge='Canlı uygunluk doğrulanamadı',liveSearchUrl=target_url,handoffNote=error_message or 'Canlı uzman uygunluğu doğrulanamadı.',specialty=specialty,city=city,slots=[])
 
         return {
             "status": "SUCCESS",
@@ -296,3 +305,20 @@ class TravelTimeProvider:
             "provider": "MockTravelTimeProvider",
             "trafficBadge": "Tahmini Süre — Demo Model"
         }
+
+
+def available_window_match(slot_iso,windows,duration_min=45,time_zone='Europe/Istanbul'):
+    """Aware UTC interval containment; missing/unparseable real slot time stays unknown."""
+    zone=ZoneInfo(time_zone)
+    def aware(value):
+        parsed=datetime.fromisoformat(value.replace('Z','+00:00'))
+        return (parsed.replace(tzinfo=zone) if parsed.tzinfo is None else parsed).astimezone(timezone.utc)
+    try:
+        intervals=[(aware(v['start']),aware(v['end'])) for v in windows]
+        if any(b<=a for a,b in intervals):raise ValueError('INVALID_AVAILABLE_WINDOW')
+    except (KeyError,TypeError,ValueError):raise ValueError('INVALID_AVAILABLE_WINDOW') from None
+    if not slot_iso or not windows:return None
+    try:start=aware(slot_iso)
+    except (TypeError,ValueError):return None
+    end=start+timedelta(minutes=duration_min)
+    return any(a<=start and end<=b for a,b in intervals)

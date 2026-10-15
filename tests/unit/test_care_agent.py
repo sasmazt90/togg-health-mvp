@@ -72,7 +72,8 @@ def test_care_browser_search_bot_block_provides_safe_handoff():
     assert "status" in result
     assert result["status"] in ["SUCCESS", "FALLBACK_BLOCKED"]
     assert "slots" in result
-    assert len(result["slots"]) > 0
+    if result["status"] == "FALLBACK_BLOCKED":
+        assert result["slots"] == []  # No invented provider/availability fallback.
     assert "liveSearchUrl" in result
     assert "https://www.doktortakvimi.com" in result["liveSearchUrl"]
 

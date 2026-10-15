@@ -117,4 +117,15 @@ scripts/capture_*.py
 # Controlled browser audit artifacts and generated fixtures
 audit-results/
 audit-fixtures/
+output/playwright/
 
+
+# Large, locally trained dental artifact (manifest is tracked).
+services/core-api/models/*.onnx
+!services/core-api/models/dental-yolox-s.onnx
+services/core-api/models/*.npz
+!apps/vehicle-app/public/audio/hearing-bank/*.wav
+.runtime/
+
+!apps/vehicle-app/public/audio/guidance/*.mp3
+!apps/vehicle-app/public/audio/vision-speech/*.mp3

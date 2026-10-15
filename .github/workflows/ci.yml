@@ -14,6 +14,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # The preserved-layout regression reads its actual historical baseline.
+        fetch-depth: 0
 
     - name: Set up Node.js 22
       uses: actions/setup-node@v4
@@ -34,6 +37,9 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r services/core-api/requirements.txt
+        # Import-only research/math regressions; no training or model export.
+        pip install psutil==7.2.2
+        pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cpu
 
     - name: Run deterministic unit test suite
       run: |
